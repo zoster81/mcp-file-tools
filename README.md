@@ -91,7 +91,7 @@ claude mcp add --scope user file-tools -- ~/.local/bin/mcp-file-tools ~/Projects
 ### Go Install (All Platforms)
 
 ```bash
-# Install with Go (requires Go 1.23+)
+# Install with Go (requires Go 1.26+)
 go install github.com/dimitar-grigorov/mcp-file-tools/cmd/mcp-file-tools@latest
 # Add to Claude Code + VSCode (Linux/macOS)
 claude mcp add --scope user file-tools -- $(go env GOPATH)/bin/mcp-file-tools ~/Projects
@@ -301,7 +301,7 @@ The original encoding is preserved - files remain compatible with legacy tools.
 
 ## Development
 
-**Prerequisites:** Go 1.23+
+**Prerequisites:** Go 1.26+
 
 ```bash
 # Run tests
