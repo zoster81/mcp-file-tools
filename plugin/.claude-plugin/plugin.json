@@ -7,11 +7,5 @@
     "url": "https://github.com/dimitar-grigorov/mcp-file-tools"
   },
   "homepage": "https://github.com/dimitar-grigorov/mcp-file-tools",
-  "license": "GPL-3.0",
-  "mcpServers": {
-    "file-tools": {
-      "command": "bash",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/run.sh"]
-    }
-  }
+  "license": "GPL-3.0"
 }

@@ -39,7 +39,9 @@ a fallback for clients that don't send roots. Smithery prompts via configSchema.
 
 Files:
 - .claude-plugin/marketplace.json lets users run `/plugin marketplace add dimitar-grigorov/mcp-file-tools`
-- plugin/.claude-plugin/plugin.json declares the MCP server, launched as `bash bin/run.sh`
+- plugin/.mcp.json declares the MCP server, launched as `bash bin/run.sh`
+  (plugin/.claude-plugin/plugin.json holds only the metadata; an inline mcpServers
+  block there is not picked up, the server must live in .mcp.json)
 - plugin/bin/run.sh downloads the pinned release binary on first run, verifies its
   SHA-256, caches it under CLAUDE_PLUGIN_DATA, and execs it
 - plugin/bin/run.ps1 is the PowerShell equivalent (not wired up by default)

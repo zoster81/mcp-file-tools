@@ -15,7 +15,7 @@ The server provides filesystem operations with non-UTF-8 encoding support
 
 ## How it works
 
-`plugin.json` declares one MCP server (`file-tools`) launched as
+`.mcp.json` declares one MCP server (`file-tools`) launched as
 `bash ${CLAUDE_PLUGIN_ROOT}/bin/run.sh`. On first launch the script downloads the
 pinned release binary for your OS/arch, verifies its SHA-256 against the release
 `checksums.txt`, caches it, then runs it. Later launches reuse the cache.
