@@ -39,22 +39,18 @@ a fallback for clients that don't send roots. Smithery prompts via configSchema.
 
 Files:
 - .claude-plugin/marketplace.json lets users run `/plugin marketplace add dimitar-grigorov/mcp-file-tools`
-- plugin/.mcp.json declares the MCP server, launched as `bash bin/run.sh`
+- plugin/.mcp.json declares the MCP server, launched as `node bin/run.js`
   (plugin/.claude-plugin/plugin.json holds only the metadata; an inline mcpServers
   block there is not picked up, the server must live in .mcp.json)
-- plugin/bin/run.sh downloads the pinned release binary on first run, verifies its
-  SHA-256, caches it under CLAUDE_PLUGIN_DATA, and execs it
-- plugin/bin/run.ps1 is the PowerShell equivalent (not wired up by default)
+- plugin/bin/run.js downloads the pinned release binary on first run, verifies its
+  SHA-256, caches it under CLAUDE_PLUGIN_DATA, and hands stdio to it
 
-The server can't ship binaries in a git repo, so the launcher downloads them. Claude
-Code spawns MCP servers without a shell and can't run a bare .sh, so plugin.json calls
-`bash bin/run.sh`. That works on macOS/Linux and on Windows with Git Bash on PATH.
-
-Tested on Windows: both launchers do download + checksum + exec on a cold cache and
-reuse the cache when warm. `claude plugin validate` passes.
-
-Not yet done: an end-to-end `/plugin install` from the marketplace, and a run on
-macOS/Linux.
+The server can't ship binaries in a git repo, so the launcher downloads them. The
+launcher is Node, not bash: Claude Code spawns MCP servers without a shell, and on
+Windows `bash` resolves to the WSL/WindowsApps stub (not Git Bash), which fails with
+"Connection closed". Node is already required by Claude Code and resolves the same on
+every OS, so `node bin/run.js` is the reliable cross-platform launcher. The Go server
+binary itself has no Node or other runtime dependency.
 
 ## Self-update
 
@@ -72,7 +68,8 @@ build real auto-update for a filesystem server.
 1. Run `/plugin marketplace add` + `/plugin install` end to end; verify on macOS/Linux.
 2. Make self-update opt-in.
 3. Optional: ship a .mcpb bundle for one-click Claude Desktop installs.
-4. Bump VERSION in plugin.json, marketplace.json, and both launcher scripts each release.
+4. Bump the version in plugin.json, marketplace.json, and the VERSION constant in
+   bin/run.js each release.
 
 ## Notes
 

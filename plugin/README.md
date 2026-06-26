@@ -16,19 +16,18 @@ The server provides filesystem operations with non-UTF-8 encoding support
 ## How it works
 
 `.mcp.json` declares one MCP server (`file-tools`) launched as
-`bash ${CLAUDE_PLUGIN_ROOT}/bin/run.sh`. On first launch the script downloads the
+`node ${CLAUDE_PLUGIN_ROOT}/bin/run.js`. On first launch the script downloads the
 pinned release binary for your OS/arch, verifies its SHA-256 against the release
-`checksums.txt`, caches it, then runs it. Later launches reuse the cache.
+`checksums.txt`, caches it, then hands stdio to it. Later launches reuse the cache.
 
 No directory configuration is needed: Claude Code sends the workspace folder via the
 MCP roots protocol and the server allows it automatically.
 
 ## Requirements
 
-- macOS / Linux: `bash` and `curl` or `wget` (already present).
-- Windows: Git Bash on `PATH` (ships with Git for Windows), since the server is
-  launched via `bash`. A PowerShell launcher (`bin/run.ps1`) is included if you prefer
-  to avoid the Git Bash dependency.
+None beyond Claude Code itself. The launcher runs on `node`, which Claude Code already
+requires, so it works the same on Windows, macOS, and Linux. The server binary is a
+standalone Go executable with no runtime dependencies.
 
 ## Alternative without the plugin
 
