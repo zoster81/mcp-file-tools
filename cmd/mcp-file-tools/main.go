@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/dimitar-grigorov/mcp-file-tools/filetoolsserver"
 	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
@@ -14,6 +16,19 @@ import (
 var version = "dev"
 
 func main() {
+	// Logs go to stderr; stdout is reserved for the MCP stdio protocol.
+	// MCP_LOG_LEVEL (debug/warn/error) sets verbosity; defaults to info.
+	level := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("MCP_LOG_LEVEL")) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+
 	// Set version from build
 	filetoolsserver.Version = version
 
@@ -35,6 +50,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+		slog.Debug("normalized allowed directories", "dirs", normalized)
 	}
 
 	// Create MCP server with allowed directories (can be empty, directories can be added dynamically)
