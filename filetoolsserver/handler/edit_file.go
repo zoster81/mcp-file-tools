@@ -221,16 +221,6 @@ func createUnifiedDiff(original, modified, filepath string) string {
 	return text
 }
 
-// formatDiffOutput wraps diff in a markdown code fence, escaping backticks if needed.
-func formatDiffOutput(diff string) string {
-	numBackticks := 3
-	for strings.Contains(diff, strings.Repeat("`", numBackticks)) {
-		numBackticks++
-	}
-	fence := strings.Repeat("`", numBackticks)
-	return fmt.Sprintf("%sdiff\n%s%s\n\n", fence, diff, fence)
-}
-
 // atomicWriteFileWithEncoding encodes UTF-8 content to the target encoding and writes atomically.
 func atomicWriteFileWithEncoding(path, content, encodingName, lineEndingStyle string, mode os.FileMode) error {
 	content = ConvertLineEndings(content, lineEndingStyle)

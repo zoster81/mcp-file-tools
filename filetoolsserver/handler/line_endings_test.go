@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -195,7 +196,7 @@ func TestHandleDetectLineEndings(t *testing.T) {
 			}
 
 			input := DetectLineEndingsInput{Path: testFile}
-			result, output, err := h.HandleDetectLineEndings(nil, nil, input)
+			result, output, err := h.HandleDetectLineEndings(context.Background(), nil, input)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -228,7 +229,7 @@ func TestHandleDetectLineEndings_PathValidation(t *testing.T) {
 
 	// Test path outside allowed directory
 	input := DetectLineEndingsInput{Path: "/not/allowed/path.txt"}
-	result, _, err := h.HandleDetectLineEndings(nil, nil, input)
+	result, _, err := h.HandleDetectLineEndings(context.Background(), nil, input)
 	if err != nil {
 		t.Fatal(err)
 	}
