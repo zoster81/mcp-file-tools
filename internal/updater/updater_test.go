@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -51,16 +52,16 @@ func TestParseVersion(t *testing.T) {
 
 func TestCheckDisabled(t *testing.T) {
 	t.Setenv("MCP_NO_UPDATE_CHECK", "1")
-	if msg := Check(nil, "1.0.0", false); msg != "" {
+	if msg := Check(context.Background(), "1.0.0", false); msg != "" {
 		t.Errorf("Check with disabled should return empty, got %q", msg)
 	}
 }
 
 func TestCheckDevVersion(t *testing.T) {
-	if msg := Check(nil, "dev", false); msg != "" {
+	if msg := Check(context.Background(), "dev", false); msg != "" {
 		t.Errorf("Check with dev version should return empty, got %q", msg)
 	}
-	if msg := Check(nil, "", false); msg != "" {
+	if msg := Check(context.Background(), "", false); msg != "" {
 		t.Errorf("Check with empty version should return empty, got %q", msg)
 	}
 }
