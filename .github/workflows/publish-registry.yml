@@ -1,7 +1,9 @@
 name: Publish to MCP Registry
 
 on:
-  workflow_dispatch:
+  release:
+    types: [published]   # auto-publish after GoReleaser creates the release
+  workflow_dispatch:     # manual re-publish of a specific tag
     inputs:
       version:
         description: 'Version tag to publish (e.g., v1.4.8)'
@@ -15,18 +17,20 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      VERSION_TAG: ${{ inputs.version || github.event.release.tag_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Download checksums
         run: |
-          curl -sL "https://github.com/${{ github.repository }}/releases/download/${{ inputs.version }}/checksums.txt" -o checksums.txt
+          curl -sL "https://github.com/${{ github.repository }}/releases/download/${VERSION_TAG}/checksums.txt" -o checksums.txt
           cat checksums.txt
 
       - name: Update server.json with new version and checksums
         run: |
-          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION_TAG}"
           VERSION="${VERSION#v}"  # Remove 'v' prefix if present
 
           # Update version
