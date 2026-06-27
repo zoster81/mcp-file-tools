@@ -51,54 +51,74 @@ See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
 ## Installation
 
+### Claude Code plugin (recommended)
+
+The simplest way to use this with Claude Code:
+
+```
+/plugin marketplace add dimitar-grigorov/mcp-file-tools
+/plugin install mcp-file-tools
+```
+
+On first launch the plugin downloads the right binary for your OS, verifies its
+SHA-256, caches it, and keeps it pinned to a known version. The server is
+automatically scoped to the folder you have open (via the MCP roots protocol), so
+there is nothing to configure. It needs nothing beyond Claude Code itself; the
+launcher runs on Node, which Claude Code already uses, so it works the same on
+Windows, macOS, and Linux.
+
+The plugin only accesses your current workspace. To grant access to directories
+outside it, use a manual install (below).
+
+**Already added the server the manual way?** Remove the old `claude mcp add` entry so
+you are not running two copies:
+
+```
+claude mcp remove file-tools
+```
+
 ### MCP Registry
 
-This server is listed in the [Official MCP Registry](https://registry.modelcontextprotocol.io/?search=mcp-file-tools) for discovery.
+This server is listed in the [Official MCP Registry](https://registry.modelcontextprotocol.io/?search=mcp-file-tools) for discovery by any MCP client.
 
-### Windows x64
-**Note:** Run these commands in **PowerShell**, not in CMD.
+### Manual install (other MCP clients, or access outside your workspace)
+
+Download the binary for your platform, then register it with the directories it may access.
+
+| Platform | Release asset | Suggested path |
+|----------|---------------|----------------|
+| Windows x64 | `mcp-file-tools_windows_amd64.exe` | `%LOCALAPPDATA%\Programs\mcp-file-tools\mcp-file-tools.exe` |
+| Linux x64 | `mcp-file-tools_linux_amd64` | `~/.local/bin/mcp-file-tools` |
+| macOS ARM64 | `mcp-file-tools_darwin_arm64` | `~/.local/bin/mcp-file-tools` |
+
+Windows (PowerShell, not CMD):
 
 ```powershell
-# Download
 mkdir -Force "$env:LOCALAPPDATA\Programs\mcp-file-tools"
 iwr "https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools.exe"
-# Install with Claude Code + VSCode (allows access to D:\Projects)
 claude mcp add --scope user file-tools -- "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools.exe" "D:\Projects"
 ```
 
-### Linux x64
+Linux / macOS (swap the asset name from the table for your platform):
 
 ```bash
-# Download
 mkdir -p ~/.local/bin
 curl -L "https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest/download/mcp-file-tools_linux_amd64" -o ~/.local/bin/mcp-file-tools
 chmod +x ~/.local/bin/mcp-file-tools
-# Install with Claude Code + VSCode (allows access to ~/Projects)
 claude mcp add --scope user file-tools -- ~/.local/bin/mcp-file-tools ~/Projects
 ```
 
-### macOS ARM64
+### Go install (all platforms)
 
 ```bash
-# Download
-mkdir -p ~/.local/bin
-curl -L "https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest/download/mcp-file-tools_darwin_arm64" -o ~/.local/bin/mcp-file-tools
-chmod +x ~/.local/bin/mcp-file-tools
-# Install with Claude Code + VSCode (allows access to ~/Projects)
-claude mcp add --scope user file-tools -- ~/.local/bin/mcp-file-tools ~/Projects
-```
-
-### Go Install (All Platforms)
-
-```bash
-# Install with Go (requires Go 1.26+)
+# Requires Go 1.26+
 go install github.com/dimitar-grigorov/mcp-file-tools/cmd/mcp-file-tools@latest
-# Add to Claude Code + VSCode (Linux/macOS)
+# Linux / macOS
 claude mcp add --scope user file-tools -- $(go env GOPATH)/bin/mcp-file-tools ~/Projects
 ```
 
 ```powershell
-# Add to Claude Code + VSCode (Windows PowerShell)
+# Windows PowerShell
 claude mcp add --scope user file-tools -- "$(go env GOPATH)\bin\mcp-file-tools.exe" "D:\Projects"
 ```
 
@@ -237,11 +257,14 @@ To disable update checks, set the environment variable `MCP_NO_UPDATE_CHECK=1`.
 ### Verify & Uninstall
 
 ```bash
-# Check if the server is configured
+# Check which file-tools server is connected (plugin or manual)
 claude mcp list
 
-# Remove the server
+# Remove a manual install
 claude mcp remove file-tools
+
+# Remove the plugin
+claude plugin uninstall mcp-file-tools
 ```
 
 ## How to Use
