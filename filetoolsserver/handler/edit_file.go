@@ -99,7 +99,8 @@ func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, 
 	}, output, nil
 }
 
-// applyEdits applies edits sequentially, trying exact match then whitespace-flexible match.
+// applyEdits applies edits sequentially, trying exact then whitespace-flexible match.
+// On failure it returns ErrEditNoMatch with a hint pointing at the closest match.
 func applyEdits(content string, edits []EditOperation) (string, error) {
 	modifiedContent := content
 
@@ -124,10 +125,51 @@ func applyEdits(content string, edits []EditOperation) (string, error) {
 			continue
 		}
 
-		return "", fmt.Errorf("%w:\n%s", ErrEditNoMatch, edit.OldText)
+		return "", noMatchError(modifiedContent, normalizedOld, edit.OldText)
 	}
 
 	return modifiedContent, nil
+}
+
+// noMatchError wraps ErrEditNoMatch, appending the closest matching block if found.
+func noMatchError(content, normalizedOld, rawOld string) error {
+	line, count := longestMatchingBlock(content, normalizedOld)
+	if count == 0 {
+		return fmt.Errorf("%w:\n%s", ErrEditNoMatch, rawOld)
+	}
+
+	lines := strings.Split(content, "\n")
+	start := max(0, line-1)
+	end := min(len(lines), line+count+1)
+	snippet := strings.Join(lines[start:end], "\n")
+
+	return fmt.Errorf("%w:\n%s\n\n"+
+		"HINT: the closest match starts at line %d (%d consecutive lines matched, ignoring whitespace).\n"+
+		"Actual file content there:\n%s\n\n"+
+		"Copy the snippet above into oldText and retry.",
+		ErrEditNoMatch, rawOld, line+1, count, snippet)
+}
+
+// longestMatchingBlock returns the start line and length of the longest run of
+// consecutive lines (ignoring whitespace) shared by content and oldText, or (-1, 0).
+func longestMatchingBlock(content, oldText string) (startLine, length int) {
+	contentLines := strings.Split(content, "\n")
+	oldLines := strings.Split(oldText, "\n")
+
+	startLine, length = -1, 0
+	for i := range contentLines {
+		for j := range oldLines {
+			n := 0
+			for i+n < len(contentLines) && j+n < len(oldLines) &&
+				strings.TrimSpace(contentLines[i+n]) == strings.TrimSpace(oldLines[j+n]) {
+				n++
+			}
+			if n > length {
+				startLine, length = i, n
+			}
+		}
+	}
+	return startLine, length
 }
 
 // tryFlexibleMatch matches oldText ignoring whitespace differences, preserving file indentation.

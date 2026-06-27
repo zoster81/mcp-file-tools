@@ -273,6 +273,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 		Description: "Replace text in a file with whitespace-flexible matching. Returns unified diff. Supports non-UTF-8 via encoding param. " +
 			"In 'ask before edits' mode: ALWAYS call with dryRun=true first, show the diff, then dryRun=false after user confirms. " +
 			"With auto-edit permissions: call directly with dryRun=false. " +
+			"On no match, the error hints the closest matching content — use it to fix oldText and retry. " +
 			"Parameters: path, edits [{oldText, newText}], dryRun (false), encoding (auto).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Edit File",

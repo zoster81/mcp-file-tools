@@ -365,3 +365,58 @@ func TestEditFile_CP1251Encoding(t *testing.T) {
 		t.Errorf("file content mismatch.\ngot bytes: %v\nwant bytes: %v", modifiedData, expectedCP1251)
 	}
 }
+
+func TestLongestMatchingBlock(t *testing.T) {
+	content := "alpha\nbeta\ngamma\ndelta"
+
+	tests := []struct {
+		name      string
+		oldText   string
+		wantLine  int
+		wantCount int
+	}{
+		{"middle block", "beta\ngamma", 1, 2},
+		{"whitespace-insensitive", "  beta  \n\tgamma", 1, 2},
+		{"single line", "delta", 3, 1},
+		{"no match", "zzz\nyyy", -1, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			line, count := longestMatchingBlock(content, tt.oldText)
+			if line != tt.wantLine || count != tt.wantCount {
+				t.Errorf("longestMatchingBlock = (%d, %d), want (%d, %d)", line, count, tt.wantLine, tt.wantCount)
+			}
+		})
+	}
+}
+
+func TestApplyEdits_NoMatchHint(t *testing.T) {
+	content := "func main() {\n\tfmt.Println(\"hi\")\n}\n"
+
+	// oldText whose first line is wrong but the rest matches, so a partial block exists.
+	_, err := applyEdits(content, []EditOperation{{
+		OldText: "func run() {\n\tfmt.Println(\"hi\")",
+		NewText: "x",
+	}})
+	if err == nil {
+		t.Fatal("expected an error for non-matching edit")
+	}
+
+	msg := err.Error()
+	if !strings.Contains(msg, "HINT") {
+		t.Errorf("error should include a hint, got: %s", msg)
+	}
+	if !strings.Contains(msg, "fmt.Println(\"hi\")") {
+		t.Errorf("hint should quote the closest matching file content, got: %s", msg)
+	}
+}
+
+func TestApplyEdits_NoMatchNoHintWhenNothingMatches(t *testing.T) {
+	_, err := applyEdits("a\nb\nc\n", []EditOperation{{OldText: "totally\ndifferent", NewText: "x"}})
+	if err == nil {
+		t.Fatal("expected an error for non-matching edit")
+	}
+	if strings.Contains(err.Error(), "HINT") {
+		t.Errorf("no hint expected when no lines match, got: %s", err.Error())
+	}
+}
