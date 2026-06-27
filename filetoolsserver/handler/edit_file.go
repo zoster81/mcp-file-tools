@@ -146,7 +146,7 @@ func noMatchError(content, normalizedOld, rawOld string) error {
 	return fmt.Errorf("%w:\n%s\n\n"+
 		"HINT: the closest match starts at line %d (%d consecutive lines matched, ignoring whitespace).\n"+
 		"Actual file content there:\n%s\n\n"+
-		"Copy the snippet above into oldText and retry.",
+		"Copy the snippet above into oldText and retry",
 		ErrEditNoMatch, rawOld, line+1, count, snippet)
 }
 
