@@ -2,15 +2,16 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// WithRecovery wraps a tool handler with panic recovery.
-// If a panic occurs, it returns an error result instead of crashing the server.
+// WithRecovery turns a panic into an error result instead of crashing the server.
 func WithRecovery[In, Out any](handler mcp.ToolHandlerFor[In, Out]) mcp.ToolHandlerFor[In, Out] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, args In) (result *mcp.CallToolResult, output Out, err error) {
 		defer func() {
@@ -23,8 +24,7 @@ func WithRecovery[In, Out any](handler mcp.ToolHandlerFor[In, Out]) mcp.ToolHand
 	}
 }
 
-// WithLogging wraps a tool handler with request/response logging.
-// Logs tool name, duration, and any errors.
+// WithLogging logs the tool name and outcome of each call.
 func WithLogging[In, Out any](logger *slog.Logger, toolName string, handler mcp.ToolHandlerFor[In, Out]) mcp.ToolHandlerFor[In, Out] {
 	if logger == nil {
 		return handler
@@ -37,7 +37,6 @@ func WithLogging[In, Out any](logger *slog.Logger, toolName string, handler mcp.
 		if err != nil {
 			logger.Error("tool_call_error", "tool", toolName, "error", err)
 		} else if result != nil && result.IsError {
-			// Extract error message from result content
 			var errMsg string
 			if len(result.Content) > 0 {
 				if tc, ok := result.Content[0].(*mcp.TextContent); ok {
@@ -53,10 +52,8 @@ func WithLogging[In, Out any](logger *slog.Logger, toolName string, handler mcp.
 	}
 }
 
-// Wrap applies recovery and optional logging to a tool handler.
-// This is the main entry point for wrapping handlers.
+// Wrap applies recovery (outermost) and optional logging to a tool handler.
 func Wrap[In, Out any](logger *slog.Logger, toolName string, handler mcp.ToolHandlerFor[In, Out]) mcp.ToolHandlerFor[In, Out] {
-	// Apply recovery first (outermost), then logging
 	wrapped := WithRecovery(handler)
 	if logger != nil {
 		wrapped = WithLogging(logger, toolName, wrapped)
@@ -64,8 +61,51 @@ func Wrap[In, Out any](logger *slog.Logger, toolName string, handler mcp.ToolHan
 	return wrapped
 }
 
-// WrapContentOnly wraps a handler so the SDK skips StructuredContent,
-// returning only the handler's Content text (e.g. a readable diff).
+// RepairStringifiedArrayArgs decodes array/object tool args that some MCP
+// clients send as a JSON-encoded string, so schema validation succeeds.
+func RepairStringifiedArrayArgs(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+		if r, ok := req.(*mcp.CallToolRequest); ok && r.Params != nil {
+			r.Params.Arguments = unstringifyJSONArgs(r.Params.Arguments)
+		}
+		return next(ctx, method, req)
+	}
+}
+
+// unstringifyJSONArgs decodes top-level fields whose value is a JSON string
+// wrapping an array or object. Returns input unchanged if nothing needs repair.
+func unstringifyJSONArgs(raw json.RawMessage) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return raw
+	}
+
+	changed := false
+	for name, val := range fields {
+		var s string
+		if json.Unmarshal(val, &s) != nil {
+			continue // not a JSON string
+		}
+		if t := strings.TrimSpace(s); len(t) == 0 || (t[0] != '[' && t[0] != '{') {
+			continue // not a wrapped array/object
+		}
+		if !json.Valid([]byte(s)) {
+			continue
+		}
+		fields[name] = json.RawMessage(s)
+		changed = true
+	}
+
+	if !changed {
+		return raw
+	}
+	if repaired, err := json.Marshal(fields); err == nil {
+		return repaired
+	}
+	return raw
+}
+
+// WrapContentOnly drops StructuredContent, returning only the handler's text (e.g. a diff).
 func WrapContentOnly[In, Out any](logger *slog.Logger, toolName string, handler mcp.ToolHandlerFor[In, Out]) mcp.ToolHandlerFor[In, any] {
 	wrapped := Wrap(logger, toolName, handler)
 	return func(ctx context.Context, req *mcp.CallToolRequest, input In) (*mcp.CallToolResult, any, error) {

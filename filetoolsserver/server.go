@@ -58,6 +58,9 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	}
 	server := mcp.NewServer(impl, serverOpts)
 
+	// Repair array/object args some MCP clients send as JSON-encoded strings.
+	server.AddReceivingMiddleware(handler.RepairStringifiedArrayArgs)
+
 	// Register all tools using the new AddTool API with annotations
 	// All handlers are wrapped with recovery middleware (and logging if logger is provided)
 
