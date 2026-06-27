@@ -21,6 +21,11 @@ func TestGet(t *testing.T) {
 		{"utf-16-be", true, false},
 		{"utf16le", true, false},
 		{"utf16be", true, false},
+		{"gbk", true, false},
+		{"gb2312", true, false},
+		{"gb-2312", true, false},
+		{"cp936", true, false},
+		{"gb18030", true, false},
 		{"invalid", false, false},
 	}
 
@@ -51,6 +56,8 @@ func TestIsUTF8(t *testing.T) {
 		{"ascii", true},
 		{"cp1251", false},
 		{"windows-1251", false},
+		{"gbk", false},
+		{"gb18030", false},
 	}
 
 	for _, tt := range tests {

@@ -54,7 +54,7 @@ var encodings = map[string]EncodingInfo{
 	"windows-874":  {charmap.Windows874, "Windows-874", []string{"cp874", "tis-620"}, "Windows Thai"},
 
 	// Chinese (Simplified)
-	"gbk":     {simplifiedchinese.GBK, "GBK", []string{"cp936", "gb2312"}, "Chinese Simplified (GBK)"},
+	"gbk":     {simplifiedchinese.GBK, "GBK", []string{"cp936", "gb2312", "gb-2312"}, "Chinese Simplified (GBK)"},
 	"gb18030": {simplifiedchinese.GB18030, "GB18030", []string{"gb-18030"}, "Chinese Simplified (GB18030, full Unicode)"},
 }
 

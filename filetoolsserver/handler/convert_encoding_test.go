@@ -141,3 +141,59 @@ func TestHandleConvertEncoding_OutsideAllowed(t *testing.T) {
 		t.Error("expected error for path outside allowed directories")
 	}
 }
+
+func TestHandleConvertEncoding_GBKRoundTrip(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+
+	const chinese = "你好，世界" // "Hello, world"
+	testFile := filepath.Join(tempDir, "zh.txt")
+	if err := os.WriteFile(testFile, []byte(chinese), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// UTF-8 -> GBK
+	_, out, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: testFile, From: "utf-8", To: "gbk",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.TargetEncoding != "gbk" {
+		t.Errorf("target encoding = %q, want gbk", out.TargetEncoding)
+	}
+	if encoded, _ := os.ReadFile(testFile); string(encoded) == chinese {
+		t.Error("file should differ from UTF-8 after GBK encoding")
+	}
+
+	// GBK -> UTF-8 round-trips back to the original text
+	if _, _, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: testFile, From: "gbk", To: "utf-8",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if back, _ := os.ReadFile(testFile); string(back) != chinese {
+		t.Errorf("round-trip mismatch: got %q, want %q", back, chinese)
+	}
+}
+
+func TestHandleConvertEncoding_GB2312AliasResolves(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+
+	testFile := filepath.Join(tempDir, "zh.txt")
+	if err := os.WriteFile(testFile, []byte("编码"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// gb2312 is an alias for gbk; conversion should succeed.
+	result, _, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: testFile, From: "utf-8", To: "gb2312",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Error("expected gb2312 alias to resolve, got error")
+	}
+}
