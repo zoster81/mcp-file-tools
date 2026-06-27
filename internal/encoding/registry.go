@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/encoding/unicode"
 )
 
@@ -51,6 +52,10 @@ var encodings = map[string]EncodingInfo{
 	"windows-1257": {charmap.Windows1257, "Windows-1257", []string{"cp1257"}, "Windows Baltic"},
 	"windows-1258": {charmap.Windows1258, "Windows-1258", []string{"cp1258"}, "Windows Vietnamese"},
 	"windows-874":  {charmap.Windows874, "Windows-874", []string{"cp874", "tis-620"}, "Windows Thai"},
+
+	// Chinese (Simplified)
+	"gbk":     {simplifiedchinese.GBK, "GBK", []string{"cp936", "gb2312"}, "Chinese Simplified (GBK)"},
+	"gb18030": {simplifiedchinese.GB18030, "GB18030", []string{"gb-18030"}, "Chinese Simplified (GB18030, full Unicode)"},
 }
 
 // registry maps all names (canonical + aliases) to EncodingInfo for fast lookup.

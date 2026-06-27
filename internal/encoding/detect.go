@@ -18,6 +18,16 @@ const (
 	MinConfidenceThreshold  = 50         // Minimum confidence to trust detection
 )
 
+// GBK two-byte ranges: lead 0x81–0xFE, trail 0x40–0xFE except 0x7F.
+const (
+	gbkLeadMin       = 0x81
+	gbkLeadMax       = 0xFE
+	gbkTrailMin      = 0x40
+	gbkTrailMax      = 0xFE
+	gbkTrailGap      = 0x7F
+	gbkConfidenceCap = 85 // cap when GBK is recovered from a Latin guess
+)
+
 // DetectionResult holds encoding detection result.
 type DetectionResult struct {
 	Charset    string
@@ -115,10 +125,44 @@ func Detect(data []byte) DetectionResult {
 		return DetectionResult{}
 	}
 
-	return DetectionResult{
-		Charset:    strings.ToLower(detected.Encoding),
-		Confidence: int(detected.Confidence * 100),
+	charset := strings.ToLower(detected.Encoding)
+	confidence := int(detected.Confidence * 100)
+
+	switch charset {
+	case "gb2312", "hz-gb-2312":
+		charset = "gbk" // GBK is the superset real-world files use
+	case "iso-8859-1", "latin-1", "latin1", "windows-1252", "cp1252":
+		// chardet often mislabels GBK as single-byte Latin; correct it.
+		if looksLikeGBK(data) {
+			return DetectionResult{Charset: "gbk", Confidence: min(confidence, gbkConfidenceCap)}
+		}
 	}
+
+	return DetectionResult{Charset: charset, Confidence: confidence}
+}
+
+// looksLikeGBK reports whether data holds enough valid GBK two-byte sequences,
+// biased toward the common-hanzi lead range (0xB0–0xD7), to trust it over Latin.
+func looksLikeGBK(data []byte) bool {
+	const minSequences = 5
+	const minCommonRatio = 0.2
+
+	var total, common int
+	for i := 0; i+1 < len(data); {
+		lead, trail := data[i], data[i+1]
+		if lead >= gbkLeadMin && lead <= gbkLeadMax &&
+			trail >= gbkTrailMin && trail <= gbkTrailMax && trail != gbkTrailGap {
+			total++
+			if lead >= 0xB0 && lead <= 0xD7 {
+				common++
+			}
+			i += 2
+			continue
+		}
+		i++
+	}
+
+	return total >= minSequences && float64(common)/float64(total) > minCommonRatio
 }
 
 // DetectSample detects encoding by sampling beginning, middle, and end of data.

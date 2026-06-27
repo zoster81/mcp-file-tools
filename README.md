@@ -7,7 +7,7 @@
 
 Claude sees `Настройки` — not `????` or `Íàñòðîéêè`.
 
-MCP server for file operations with non-UTF-8 encoding support. Auto-detects and converts 22 encodings (Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16) so AI assistants can read and write legacy files without corrupting data.
+MCP server for file operations with non-UTF-8 encoding support. Auto-detects and converts 24 encodings (Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16, GBK/GB18030) so AI assistants can read and write legacy files without corrupting data.
 
 **Perfect for:** Delphi/Pascal projects, legacy VB6 apps, old PHP/HTML sites, config files with non-UTF-8 text.
 

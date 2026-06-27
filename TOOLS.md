@@ -527,7 +527,7 @@ Detect, strip, or add Unicode BOM (Byte Order Mark). UTF-8 BOM breaks PHP/shell 
 
 ### list_encodings
 
-Returns all 22 supported encodings with name, aliases, and description.
+Returns all 24 supported encodings with name, aliases, and description.
 
 ### list_allowed_directories
 

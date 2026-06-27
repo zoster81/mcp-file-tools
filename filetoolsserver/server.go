@@ -12,7 +12,7 @@ import (
 var Version = "dev"
 
 // Server instructions for AI assistants
-const serverInstructions = `MCP filesystem server with non-UTF-8 encoding support (22 encodings: CP1251, KOI8-R, ISO-8859-x, etc).
+const serverInstructions = `MCP filesystem server with non-UTF-8 encoding support (24 encodings: CP1251, KOI8-R, ISO-8859-x, GBK/GB18030, etc).
 
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
@@ -94,7 +94,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_encodings",
-		Description: "List all 22 supported encodings with name, aliases, and description. Use this to find the correct encoding name for read/write/convert operations.",
+		Description: "List all 24 supported encodings with name, aliases, and description. Use this to find the correct encoding name for read/write/convert operations.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "List Encodings",
 			ReadOnlyHint:  true,

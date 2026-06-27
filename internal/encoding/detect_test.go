@@ -402,3 +402,49 @@ func TestDetectFromFile_SampleMode_LowConfidenceForceFullSampling(t *testing.T) 
 	}
 }
 
+// --- GBK / GB18030 detection tests ---
+
+// gbkEncode encodes a UTF-8 string to GBK bytes for test fixtures.
+func gbkEncode(t *testing.T, s string) []byte {
+	t.Helper()
+	enc, ok := Get("gbk")
+	if !ok {
+		t.Fatal("gbk encoding not registered")
+	}
+	out, err := enc.NewEncoder().Bytes([]byte(s))
+	if err != nil {
+		t.Fatalf("encoding to GBK failed: %v", err)
+	}
+	return out
+}
+
+func TestDetect_GBKChinese(t *testing.T) {
+	// A run of common Chinese characters so chardet has enough signal.
+	data := gbkEncode(t, "你好，世界！这是一个用于测试编码检测的中文字符串。")
+
+	result := Detect(data)
+	if result.Charset != "gbk" {
+		t.Errorf("Charset = %q, want gbk", result.Charset)
+	}
+}
+
+func TestLooksLikeGBK(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want bool
+	}{
+		{"chinese text", gbkEncode(t, "汉字编码检测测试内容字符串样例"), true},
+		{"plain ascii", []byte("Hello, World! This is plain ASCII."), false},
+		{"too short", []byte{0xB0, 0xA1}, false}, // valid pair but below minSequences
+		{"empty", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := looksLikeGBK(tt.data); got != tt.want {
+				t.Errorf("looksLikeGBK = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
