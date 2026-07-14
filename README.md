@@ -77,6 +77,16 @@ you are not running two copies:
 claude mcp remove file-tools
 ```
 
+### Updating the plugin
+
+```
+claude plugin marketplace update mcp-file-tools
+claude plugin update mcp-file-tools@mcp-file-tools
+```
+
+Use the full `plugin@marketplace` id, not the bare name. Or enable auto-update in
+`/plugin` → **Marketplaces**.
+
 ### MCP Registry
 
 This server is listed in the [Official MCP Registry](https://registry.modelcontextprotocol.io/?search=mcp-file-tools) for discovery by any MCP client.
