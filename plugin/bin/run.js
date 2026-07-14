@@ -13,7 +13,8 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 
 const REPO = 'dimitar-grigorov/mcp-file-tools';
-const VERSION = 'v1.7.3'; // bump on each plugin release
+// Single source of truth: plugin.json (shipped alongside this launcher).
+const VERSION = 'v' + require('../.claude-plugin/plugin.json').version;
 
 const OS = { win32: 'windows', darwin: 'darwin', linux: 'linux' }[process.platform];
 const ARCH = { x64: 'amd64', arm64: 'arm64' }[process.arch];
