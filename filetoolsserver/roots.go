@@ -19,6 +19,18 @@ func createInitializedHandler(h *handler.Handler) func(context.Context, *mcp.Ini
 		// Async update check — runs regardless of roots support.
 		go handler.CheckForUpdatesAsync(req.Session, Version)
 
+		// If directories were already supplied through CLI arguments, use them
+		// directly. Some MCP clients (including the tunnel transport in this
+		// setup) do not support server-initiated roots/list requests.
+		currentDirs := h.GetAllowedDirectories()
+		if len(currentDirs) > 0 {
+			slog.Debug(
+				"skipping MCP roots request because CLI directories are configured",
+				"dirs", currentDirs,
+			)
+			return
+		}
+
 		result, err := req.Session.ListRoots(ctx, &mcp.ListRootsParams{})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to request roots from client: %v\n", err)
@@ -28,17 +40,25 @@ func createInitializedHandler(h *handler.Handler) func(context.Context, *mcp.Ini
 		if len(result.Roots) > 0 {
 			updateAllowedDirectoriesFromRoots(h, result.Roots)
 		} else {
-			currentDirs := h.GetAllowedDirectories()
-			if len(currentDirs) == 0 {
-				fmt.Fprintf(os.Stderr, "Warning: No allowed directories configured. File operations will fail.\n")
-				fmt.Fprintf(os.Stderr, "Provide directories via CLI arguments or ensure MCP client supports roots protocol.\n")
-			}
+			fmt.Fprintf(os.Stderr, "Warning: No allowed directories configured. File operations will fail.\n")
+			fmt.Fprintf(os.Stderr, "Provide directories via CLI arguments or ensure MCP client supports roots protocol.\n")
 		}
 	}
 }
 
 func createRootsListChangedHandler(h *handler.Handler) func(context.Context, *mcp.RootsListChangedRequest) {
 	return func(ctx context.Context, req *mcp.RootsListChangedRequest) {
+		// Keep CLI-provided directories authoritative and avoid roots/list on
+		// clients that do not implement the roots capability.
+		currentDirs := h.GetAllowedDirectories()
+		if len(currentDirs) > 0 {
+			slog.Debug(
+				"ignoring roots/list_changed because CLI directories are configured",
+				"dirs", currentDirs,
+			)
+			return
+		}
+
 		result, err := req.Session.ListRoots(ctx, &mcp.ListRootsParams{})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to request updated roots from client: %v\n", err)

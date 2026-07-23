@@ -272,7 +272,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	// WrapContentOnly: returns readable diff text instead of StructuredContent JSON.
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "edit_file",
+		Name:        "edit_file",
 		Description: "Replace text in a file with whitespace-flexible matching. Returns unified diff. Supports non-UTF-8 via encoding param. " +
 			"In 'ask before edits' mode: ALWAYS call with dryRun=true first, show the diff, then dryRun=false after user confirms. " +
 			"With auto-edit permissions: call directly with dryRun=false. " +
@@ -299,31 +299,6 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 		},
 	}, handler.Wrap(logger, "convert_encoding", h.HandleConvertEncoding))
 
-	// Execution tools. Paths and working directories are validated against the
-	// directories supplied when the MCP server starts.
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "run_script",
-		Description: "Execute a script located inside an allowed directory. The script path and optional cwd are validated against the directories passed when the server starts. Supported: .ps1, .bat, .cmd, .py, .js, .mjs, .cjs, .sh, .exe, .com. Parameters: path, args, cwd, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_RUN_SCRIPT=1 or MCP_ENABLE_EXECUTION=1.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Run Script",
-			ReadOnlyHint:    false,
-			IdempotentHint:  false,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(true),
-		},
-	}, handler.Wrap(logger, "run_script", h.HandleRunScript))
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "shell",
-		Description: "Execute an arbitrary shell command. The optional cwd must be inside a directory passed when the server starts; if omitted, the first allowed directory is used. WARNING: the command itself is unrestricted and can access resources outside cwd. On Windows shell may be powershell (default), pwsh, or cmd. Parameters: command, cwd, shell, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_SHELL=1 or MCP_ENABLE_EXECUTION=1.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Shell Command",
-			ReadOnlyHint:    false,
-			IdempotentHint:  false,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(true),
-		},
-	}, handler.Wrap(logger, "shell", h.HandleShell))
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "check_for_updates",
 		Description: "Check if a newer version of mcp-file-tools is available. Returns current version, latest version, and update instructions if outdated. Uses cached result (max 1 GitHub API call per 2h). Call once at the start of each session.",
