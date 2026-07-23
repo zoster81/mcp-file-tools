@@ -1,4 +1,4 @@
-name: Publish to MCP Registry
+name: Publish upstream MCP Registry metadata
 
 on:
   release:
@@ -16,6 +16,9 @@ permissions:
 
 jobs:
   publish:
+    # server.json still describes the upstream registry identity and hashes.
+    # Never publish it from the custom fork.
+    if: github.repository == 'dimitar-grigorov/mcp-file-tools'
     runs-on: ubuntu-latest
     env:
       VERSION_TAG: ${{ inputs.version || github.event.release.tag_name }}

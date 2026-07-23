@@ -1,44 +1,54 @@
-# mcp-file-tools (Claude Code plugin)
+# mcp-file-tools fork (Claude Code plugin)
 
-Installs the [`mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools)
-MCP server into Claude Code via `/plugin install`.
+Installs the [`zoster81/mcp-file-tools`](https://github.com/zoster81/mcp-file-tools)
+fork into Claude Code via `/plugin install`.
 
-The server provides filesystem operations with non-UTF-8 encoding support
-(CP1251, CP1252, KOI8-R, ISO-8859, ...) plus auto-detection and UTF-8 conversion.
+The server provides encoding-aware filesystem operations plus the fork-specific
+stdio tunnel compatibility and optional execution tools documented in the main
+[README](../README.md) and [TOOLS reference](../TOOLS.md).
+
+> The plugin launcher downloads a matching GitHub Release from this fork. It will
+> not work until the requested plugin version has been published as a fork release
+> with the expected binaries and `checksums.txt` asset.
 
 ## Install
 
-```
-/plugin marketplace add dimitar-grigorov/mcp-file-tools
+```text
+/plugin marketplace add zoster81/mcp-file-tools
 /plugin install mcp-file-tools
 ```
 
 ## How it works
 
 `.mcp.json` declares one MCP server (`file-tools`) launched as
-`node ${CLAUDE_PLUGIN_ROOT}/bin/run.js`. On first launch the script downloads the
-pinned release binary for your OS/arch, verifies its SHA-256 against the release
-`checksums.txt`, caches it, then hands stdio to it. Later launches reuse the cache.
+`node ${CLAUDE_PLUGIN_ROOT}/bin/run.js`. On first launch, the script downloads the
+pinned fork release binary for the current OS and architecture, verifies its
+SHA-256 against `checksums.txt`, caches it, and hands stdio directly to the server.
+Later launches reuse the cached binary.
 
-No directory configuration is needed: Claude Code sends the workspace folder via the
-MCP roots protocol and the server allows it automatically.
+Claude Code can provide the workspace through the MCP roots protocol. CLI directory
+arguments remain authoritative when the server is launched by a transport such as
+the OpenAI Secure MCP Tunnel.
 
 ## Requirements
 
-None beyond Claude Code itself. The launcher runs on `node`, which Claude Code already
-requires, so it works the same on Windows, macOS, and Linux. The server binary is a
-standalone Go executable with no runtime dependencies.
+The plugin requires Claude Code and its bundled Node runtime. The downloaded Go
+server binary has no runtime dependency.
 
 ## Alternative without the plugin
 
-Install the binary with `go install
-github.com/dimitar-grigorov/mcp-file-tools/cmd/mcp-file-tools@latest` (or download it
-from Releases), then add to `.mcp.json`:
+Clone and build the fork directly:
 
-```json
-{
-  "mcpServers": {
-    "file-tools": { "command": "mcp-file-tools" }
-  }
-}
+```bash
+git clone https://github.com/zoster81/mcp-file-tools.git
+cd mcp-file-tools
+go test ./...
+go build -o mcp-file-tools ./cmd/mcp-file-tools
 ```
+
+Then reference the built executable from a stdio MCP client configuration or use
+the OpenAI Tunnel example in
+[`examples/start-openai-tunnel.ps1`](../examples/start-openai-tunnel.ps1).
+
+The original project and upstream plugin are maintained at
+[`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools).

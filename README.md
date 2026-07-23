@@ -1,9 +1,9 @@
 # MCP File Tools
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/dimitar-grigorov/mcp-file-tools)](https://goreportcard.com/report/github.com/dimitar-grigorov/mcp-file-tools)
+[![Go Report Card](https://goreportcard.com/badge/github.com/zoster81/mcp-file-tools)](https://goreportcard.com/report/github.com/zoster81/mcp-file-tools)
 [![Release](https://img.shields.io/github/v/release/zoster81/mcp-file-tools)](https://github.com/zoster81/mcp-file-tools/releases/latest)
-[![License: GPL-3.0](https://img.shields.io/github/license/dimitar-grigorov/mcp-file-tools)](LICENSE)
-[![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io/?search=mcp-file-tools)
+[![License: GPL-3.0](https://img.shields.io/github/license/zoster81/mcp-file-tools)](LICENSE)
+[![Upstream MCP Registry](https://img.shields.io/badge/Upstream-MCP_Registry-blue)](https://registry.modelcontextprotocol.io/?search=mcp-file-tools)
 
 ChatGPT Web sees `Настройки` — not `????` or `Íàñòðîéêè`.
 
@@ -88,245 +88,147 @@ See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific change
 
 ## Installation
 
-> **Fork deployment note:** the custom tunnel and execution changes are not present in upstream release binaries. Until this fork publishes its own GitHub releases, build the fork locally and launch that binary through the OpenAI tunnel client.
+### ChatGPT Web through the OpenAI Secure MCP Tunnel
 
-### Upstream Claude Code plugin (reference)
+The currently validated deployment is Windows plus the OpenAI tunnel client. The tunnel launches this fork as a local stdio MCP process and bridges it to the remote connector used by ChatGPT Web.
 
-The upstream project can be installed in Claude Code as follows:
+Requirements:
 
-```
-/plugin marketplace add dimitar-grigorov/mcp-file-tools
-/plugin install mcp-file-tools
-```
+- Windows PowerShell 5.1 or later;
+- `tunnel-client.exe` from the OpenAI Secure MCP Tunnel setup;
+- a Windows build of this fork;
+- an OpenAI Runtime API key with the tunnel permissions required by your OpenAI configuration;
+- a valid Tunnel ID;
+- one explicit local directory to expose to the MCP server.
 
-On first launch the plugin downloads the right binary for your OS, verifies its
-SHA-256, caches it, and keeps it pinned to a known version. The server is
-automatically scoped to the folder you have open (via the MCP roots protocol), so
-there is nothing to configure. It needs nothing beyond Claude Code itself; the
-launcher runs on Node, which Claude Code already uses, so it works the same on
-Windows, macOS, and Linux.
-
-The plugin only accesses your current workspace. To grant access to directories
-outside it, use a manual install (below).
-
-**Already added the server the manual way?** Remove the old `claude mcp add` entry so
-you are not running two copies:
-
-```
-claude mcp remove file-tools
-```
-
-### Updating the plugin
-
-```
-claude plugin marketplace update mcp-file-tools
-claude plugin update mcp-file-tools@mcp-file-tools
-```
-
-Use the full `plugin@marketplace` id, not the bare name. Or enable auto-update in
-`/plugin` → **Marketplaces**.
-
-### MCP Registry
-
-This server is listed in the [Official MCP Registry](https://registry.modelcontextprotocol.io/?search=mcp-file-tools) for discovery by any MCP client.
-
-### Manual install (other MCP clients, or access outside your workspace)
-
-Download the binary for your platform, then register it with the directories it may access.
-
-| Platform | Release asset | Suggested path |
-|----------|---------------|----------------|
-| Windows x64 | `mcp-file-tools_windows_amd64.exe` | `%LOCALAPPDATA%\Programs\mcp-file-tools\mcp-file-tools.exe` |
-| Linux x64 | `mcp-file-tools_linux_amd64` | `~/.local/bin/mcp-file-tools` |
-| macOS ARM64 | `mcp-file-tools_darwin_arm64` | `~/.local/bin/mcp-file-tools` |
-
-Windows (PowerShell, not CMD):
+#### Build the fork locally
 
 ```powershell
-mkdir -Force "$env:LOCALAPPDATA\Programs\mcp-file-tools"
-iwr "https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools.exe"
-claude mcp add --scope user file-tools -- "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools.exe" "D:\Projects"
+git clone https://github.com/zoster81/mcp-file-tools.git
+Set-Location .\mcp-file-tools
+go test ./...
+go build -o mcp-file-tools_windows_amd64.exe ./cmd/mcp-file-tools
 ```
 
-Linux / macOS (swap the asset name from the table for your platform):
+The Go module currently retains the upstream module path for source compatibility. For that reason, use clone-and-build for the fork; `go install github.com/dimitar-grigorov/...` installs the upstream project and does not include the fork-specific tunnel and execution changes.
 
-```bash
-mkdir -p ~/.local/bin
-curl -L "https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest/download/mcp-file-tools_linux_amd64" -o ~/.local/bin/mcp-file-tools
-chmod +x ~/.local/bin/mcp-file-tools
-claude mcp add --scope user file-tools -- ~/.local/bin/mcp-file-tools ~/Projects
-```
+#### Download a fork release
 
-### Go install (all platforms)
-
-```bash
-# Requires Go 1.26+
-go install github.com/dimitar-grigorov/mcp-file-tools/cmd/mcp-file-tools@latest
-# Linux / macOS
-claude mcp add --scope user file-tools -- $(go env GOPATH)/bin/mcp-file-tools ~/Projects
-```
+After this fork publishes its first GitHub Release, the Windows binary can be downloaded with:
 
 ```powershell
-# Windows PowerShell
-claude mcp add --scope user file-tools -- "$(go env GOPATH)\bin\mcp-file-tools.exe" "D:\Projects"
+New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Programs\mcp-file-tools" | Out-Null
+Invoke-WebRequest `
+    "https://github.com/zoster81/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" `
+    -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools_windows_amd64.exe"
 ```
 
-### Other Clients
+Until a fork release exists, build from source as shown above.
 
-For Claude Desktop, VSCode, or Cursor, use the downloaded binary path in your config:
+#### OpenAI Tunnel quick start
 
-**Claude Desktop** (`%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+A sanitized English example is provided at [`examples/start-openai-tunnel.ps1`](examples/start-openai-tunnel.ps1).
 
-Windows:
+Place these files in the same private working directory:
+
+```text
+tunnel-client.exe
+mcp-file-tools_windows_amd64.exe
+start-openai-tunnel.ps1
+```
+
+Copy the example outside the Git checkout before entering credentials:
+
+```powershell
+$runDirectory = "$env:LOCALAPPDATA\OpenAI-Mcp-Tunnel"
+New-Item -ItemType Directory -Force $runDirectory | Out-Null
+Copy-Item .\examples\start-openai-tunnel.ps1 $runDirectory
+Copy-Item .\mcp-file-tools_windows_amd64.exe $runDirectory
+# Copy tunnel-client.exe from your OpenAI tunnel installation into the same directory.
+notepad "$runDirectory\start-openai-tunnel.ps1"
+```
+
+Replace only the placeholders:
+
+```powershell
+$RuntimeApiKey = "REPLACE_WITH_RUNTIME_API_KEY"
+$TunnelId = "tunnel_REPLACE_WITH_ID"
+$AllowedDirectory = "C:\Path\To\AllowedProject"
+```
+
+Never commit the edited script. The example keeps `run_script` and `shell` disabled by default. Enable either capability only after reviewing the security boundaries in [TOOLS.md](TOOLS.md#execution-tools).
+
+Run the test from Windows PowerShell:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
+    -File "$env:LOCALAPPDATA\OpenAI-Mcp-Tunnel\start-openai-tunnel.ps1"
+```
+
+The script validates paths and placeholders, runs `tunnel-client doctor --explain`, then starts the tunnel with the local operator UI at `http://127.0.0.1:8080/ui`. The MCP server itself remains stdio-only; the tunnel is the bridge to ChatGPT Web.
+
+### Other stdio MCP clients
+
+The same binary can be used directly by clients that launch local stdio MCP servers. Supply every allowed directory as a command-line argument.
+
 ```json
 {
   "mcpServers": {
     "file-tools": {
-      "command": "C:\\Users\\YOUR_NAME\\AppData\\Local\\Programs\\mcp-file-tools\\mcp-file-tools.exe",
+      "type": "stdio",
+      "command": "C:\\Tools\\mcp-file-tools_windows_amd64.exe",
       "args": ["D:\\Projects", "C:\\Users\\YOUR_NAME\\Documents"]
     }
   }
 }
 ```
 
-macOS / Linux:
-```json
-{
-  "mcpServers": {
-    "file-tools": {
-      "command": "/Users/YOUR_NAME/.local/bin/mcp-file-tools",
-      "args": ["/Users/YOUR_NAME/Projects", "/Users/YOUR_NAME/Documents"]
-    }
-  }
-}
-```
+A roots-capable client may also provide workspace directories dynamically. CLI-provided directories remain the authoritative baseline in this fork.
 
-The `args` array specifies allowed directories the server can access. Add as many directories as you need.
+### Updating the fork
 
-**VSCode / Cursor (Claude Code extension)**
+The update checker is notification-only and checks releases from `zoster81/mcp-file-tools`. It never downloads or replaces a binary.
 
-If you already ran `claude mcp add --scope user` from the installation steps above, the server is already available in VSCode — no extra config needed.
+To update a manual Windows installation:
 
-To configure separately for VSCode only:
-```powershell
-claude mcp add --scope user file-tools -- "%LOCALAPPDATA%\Programs\mcp-file-tools\mcp-file-tools.exe" "D:\Projects"
-```
-
-Alternatively, create a **per-project config** by adding `.mcp.json` to your project root:
-```json
-{
-  "mcpServers": {
-    "file-tools": {
-      "type": "stdio",
-      "command": "C:\\Users\\YOUR_NAME\\AppData\\Local\\Programs\\mcp-file-tools\\mcp-file-tools.exe",
-      "args": ["D:\\Projects", "D:\\Other\\Directory"]
-    }
-  }
-}
-```
-
-**Note:** The `type: "stdio"` field is required. The `args` array specifies allowed directories — the VSCode extension does not automatically add the workspace directory, so you must list all directories you want to access. To add more directories later, re-run the `claude mcp add` command with all directories listed (it overwrites the previous config).
-
-**OpenAI Codex CLI**
-
-Codex does not have an `mcp add` command -- you need to edit `~/.codex/config.toml` manually.
-
-Windows (PowerShell):
-```powershell
-# Download
-mkdir -Force "$env:LOCALAPPDATA\Programs\mcp-file-tools"
-iwr "https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools.exe"
-```
-
-Then add to `~/.codex/config.toml`:
-```toml
-[mcp_servers.file-tools]
-command = "C:\\Users\\YOUR_NAME\\AppData\\Local\\Programs\\mcp-file-tools\\mcp-file-tools.exe"
-args = ["D:\\Projects"]
-```
-
-### Auto-approve All Tools (Claude Code)
-
-To skip permission prompts for all file-tools commands, create `.claude/settings.local.json` in your project root:
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash(ls *)",
-      "Bash(grep *)",
-      "Bash(sort *)",
-      "Bash(wc *)",
-      "Bash(find *)",
-      "Bash(echo *)",
-      "Grep",
-      "Glob",
-      "WebSearch",
-      "mcp__file-tools__read_text_file",
-      "mcp__file-tools__read_multiple_files",
-      "mcp__file-tools__write_file",
-      "mcp__file-tools__edit_file",
-      "mcp__file-tools__copy_file",
-      "mcp__file-tools__list_directory",
-      "mcp__file-tools__tree",
-      "mcp__file-tools__directory_tree",
-      "mcp__file-tools__search_files",
-      "mcp__file-tools__grep_text_files",
-      "mcp__file-tools__detect_encoding",
-      "mcp__file-tools__convert_encoding",
-      "mcp__file-tools__detect_line_endings",
-      "mcp__file-tools__change_line_endings",
-      "mcp__file-tools__manage_bom",
-      "mcp__file-tools__list_encodings",
-      "mcp__file-tools__get_file_info",
-      "mcp__file-tools__create_directory",
-      "mcp__file-tools__list_allowed_directories",
-      "mcp__file-tools__check_for_updates"
-    ]
-  }
-}
-```
-
-This auto-approves safe read-only and editing file-tools operations plus common shell commands and web search. Destructive operations (`delete_file`, `move_file`) and `WebFetch` are intentionally excluded — Claude will ask before using them. Adjust to your needs.
-
-### Update
-
-The server checks for updates automatically and notifies you through tool responses when a newer version is available. To update:
-
-1. Close all Claude Code sessions (the binary is locked while running)
-2. Re-download the binary:
+1. stop the OpenAI tunnel or other MCP client using the binary;
+2. download the latest fork release;
+3. replace the executable;
+4. restart the tunnel and run its diagnostics.
 
 ```powershell
-iwr "https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" `
-    -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools.exe"
+Invoke-WebRequest `
+    "https://github.com/zoster81/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" `
+    -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools_windows_amd64.exe"
 ```
 
-To disable update checks, set the environment variable `MCP_NO_UPDATE_CHECK=1`.
+Set `MCP_NO_UPDATE_CHECK=1` before starting the server to disable release checks.
 
-### Verify & Uninstall
+### Upstream integrations and registry
 
-```bash
-# Check which file-tools server is connected (plugin or manual)
-claude mcp list
+This fork originates from [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). The existing MCP Registry entry and the original Claude Code marketplace integration belong to the upstream project and do not represent this fork or its additional tools.
 
-# Remove a manual install
-claude mcp remove file-tools
+The fork retains upstream plugin files for compatibility work, but they require a matching fork release before they can download fork binaries successfully. The upstream plugin can still be installed separately with:
 
-# Remove the plugin
-claude plugin uninstall mcp-file-tools
+```text
+/plugin marketplace add dimitar-grigorov/mcp-file-tools
+/plugin install mcp-file-tools
 ```
+
+That command installs the upstream implementation, not this fork.
 
 ## How to Use
 
-Once installed, just ask Claude:
-- "List all .pas files in this directory"
+Once the connector is active, ask ChatGPT Web or the connected MCP client:
+- "List all .pas files in the allowed project directory"
 - "Read config.ini and detect its encoding"
 - "Show all supported encodings"
 - "Read MainForm.dfm using CP1251 encoding"
 
-**Security:** The server only accesses directories you explicitly allow:
-- **Automatic:** Claude Desktop/Code provide workspace directories automatically
-- **Manual:** Specify directories in config `args: ["/path/to/project"]`
+**Security:** File tools access only explicitly allowed directories:
+- **OpenAI Tunnel:** the directory arguments embedded in `MCP_COMMAND` are the authoritative baseline;
+- **roots-capable stdio clients:** client-provided roots may augment that baseline;
+- **execution tools:** `run_script` validates its script and working-directory paths, while `shell` validates only its working directory and is otherwise unrestricted.
 
 ## Configuration
 
@@ -340,12 +242,12 @@ The server can be configured via environment variables:
 | `MCP_ENABLE_SHELL` | Enables only the unrestricted `shell` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_EXECUTION` | Enables both `run_script` and `shell`; use only in a trusted environment. | disabled |
 
-To override, set environment variables in your config (Claude Desktop example):
+To override, set environment variables in the tunnel launcher or another stdio client configuration:
 ```json
 {
   "mcpServers": {
     "file-tools": {
-      "command": "C:\\Users\\YOUR_NAME\\AppData\\Local\\Programs\\mcp-file-tools\\mcp-file-tools.exe",
+      "command": "C:\\Tools\\mcp-file-tools_windows_amd64.exe",
       "args": ["D:\\Projects"],
       "env": {
         "MCP_DEFAULT_ENCODING": "utf-8"

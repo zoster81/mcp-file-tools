@@ -12,7 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const REPO = 'dimitar-grigorov/mcp-file-tools';
+const REPO = 'zoster81/mcp-file-tools';
 // Single source of truth: plugin.json (shipped alongside this launcher).
 const VERSION = 'v' + require('../.claude-plugin/plugin.json').version;
 

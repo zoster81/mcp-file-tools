@@ -6,8 +6,16 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ## Unreleased
 
+### Added
+
+- Added `examples/start-openai-tunnel.ps1`, a sanitized English Windows PowerShell 5.1 quick start for ChatGPT Web through the OpenAI Secure MCP Tunnel.
+
 ### Changed
 
+- Updated fork installation, download, update, plugin, and release commands to target `zoster81/mcp-file-tools`.
+- Kept upstream references only where they represent attribution, the retained Go module path, or the existing upstream MCP Registry entry.
+- Configured GoReleaser and the plugin launcher to download and publish fork releases.
+- Guarded the upstream MCP Registry workflow so it cannot publish upstream metadata from this fork.
 - Documented the fork-specific execution tools, environment flags, limits, result fields, and security boundaries.
 - Added an explicit summary of differences from the upstream project to `README.md`.
 - Added the previously missing `check_for_updates` reference and corrected its exposed cache interval from two hours to the implemented 30 minutes.

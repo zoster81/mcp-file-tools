@@ -17,6 +17,7 @@ builds:
     goarch:
       - amd64
       - arm64
+    # The Go module path intentionally remains upstream-compatible.
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -27,7 +28,10 @@ archives:
     formats: ['tar.gz', 'zip']
     files:
       - README.md
+      - TOOLS.md
+      - CHANGELOG.md
       - LICENSE
+      - examples/start-openai-tunnel.ps1
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 # Also publish raw binaries for MCP registry (GoReleaser adds .exe automatically for Windows)
@@ -49,7 +53,7 @@ changelog:
 
 release:
   github:
-    owner: dimitar-grigorov
+    owner: zoster81
     name: mcp-file-tools
 
 # MCP Registry publishing
@@ -57,18 +61,18 @@ release:
 # See: https://github.com/orgs/goreleaser/discussions/6251
 # TODO: Re-enable when GoReleaser adds checksum support for mcpb registry type
 # mcp:
-#   name: io.github.dimitar-grigorov/mcp-file-tools
+#   name: io.github.zoster81/mcp-file-tools
 #   title: MCP File Tools
 #   description: "MCP server for reading/writing legacy-encoded files (CP1251, Windows-1251, etc.)"
-#   homepage: https://github.com/dimitar-grigorov/mcp-file-tools
+#   homepage: https://github.com/zoster81/mcp-file-tools
 #   repository:
-#     url: https://github.com/dimitar-grigorov/mcp-file-tools
+#     url: https://github.com/zoster81/mcp-file-tools
 #     source: github
 #   auth:
 #     type: github-oidc
 #   disable: auto
 #   packages:
 #     - registry_type: mcpb
-#       identifier: "https://github.com/dimitar-grigorov/mcp-file-tools/releases/download/v{{ .Version }}/mcp-file-tools_windows_amd64.exe"
+#       identifier: "https://github.com/zoster81/mcp-file-tools/releases/download/v{{ .Version }}/mcp-file-tools_windows_amd64.exe"
 #       transport:
 #         type: stdio
