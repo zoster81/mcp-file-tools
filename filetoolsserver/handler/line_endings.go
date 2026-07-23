@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -78,27 +79,15 @@ func ConvertLineEndings(text string, targetStyle string) string {
 	return strings.ReplaceAll(text, "\r\n", "\n")
 }
 
-// HandleDetectLineEndings detects line ending style and returns inconsistent line numbers.
-func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallToolRequest, input DetectLineEndingsInput) (*mcp.CallToolResult, DetectLineEndingsOutput, error) {
-	v := h.ValidatePath(input.Path)
-	if !v.Ok() {
-		return v.Result, DetectLineEndingsOutput{}, nil
-	}
+type detectedLineEnding struct {
+	lineNum int
+	isCRLF  bool
+}
 
-	f, err := os.Open(v.Path)
-	if err != nil {
-		return errorResult("failed to open file: " + err.Error()), DetectLineEndingsOutput{}, nil
-	}
-	defer f.Close()
-
-	// Track each line's ending type
-	type lineEnding struct {
-		lineNum int
-		isCRLF  bool
-	}
-	var lineEndings []lineEnding
-
-	br := bufio.NewReader(f)
+// analyzeLineEndings reads decoded UTF-8 text and reports its line-ending style.
+func analyzeLineEndings(r io.Reader) (string, int, []int, error) {
+	var lineEndings []detectedLineEnding
+	br := bufio.NewReader(r)
 	lineNum := 1
 	prevWasCR := false
 
@@ -108,52 +97,66 @@ func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallTool
 			break
 		}
 		if err != nil {
-			return errorResult("failed to read file: " + err.Error()), DetectLineEndingsOutput{}, nil
+			return "", 0, nil, err
 		}
 
 		if b == '\n' {
-			lineEndings = append(lineEndings, lineEnding{lineNum: lineNum, isCRLF: prevWasCR})
+			lineEndings = append(lineEndings, detectedLineEnding{lineNum: lineNum, isCRLF: prevWasCR})
 			lineNum++
 		}
-		prevWasCR = (b == '\r')
+		prevWasCR = b == '\r'
 	}
 
-	// Count totals
 	crlfCount := 0
 	lfCount := 0
-	for _, le := range lineEndings {
-		if le.isCRLF {
+	for _, ending := range lineEndings {
+		if ending.isCRLF {
 			crlfCount++
 		} else {
 			lfCount++
 		}
 	}
 
-	// Determine style and find inconsistent lines
 	style := determineStyle(crlfCount, lfCount)
-	var inconsistentLines []int
-
+	inconsistentLines := make([]int, 0)
 	if style == LineEndingMixed {
-		// Dominant is the one with more occurrences
 		dominantIsCRLF := crlfCount >= lfCount
-		for _, le := range lineEndings {
-			if le.isCRLF != dominantIsCRLF {
-				inconsistentLines = append(inconsistentLines, le.lineNum)
+		for _, ending := range lineEndings {
+			if ending.isCRLF != dominantIsCRLF {
+				inconsistentLines = append(inconsistentLines, ending.lineNum)
 			}
 		}
 	}
 
-	// Total lines = last line number (includes last line even without trailing newline)
-	totalLines := lineNum
-	if len(lineEndings) > 0 {
-		totalLines = lineNum // lineNum is 1 more than number of newlines found
-	} else {
-		totalLines = 1 // File has content but no newlines = 1 line
+	return style, lineNum, inconsistentLines, nil
+}
+
+// HandleDetectLineEndings detects line ending style and returns inconsistent line numbers.
+func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallToolRequest, input DetectLineEndingsInput) (*mcp.CallToolResult, DetectLineEndingsOutput, error) {
+	v := h.ValidatePath(input.Path)
+	if !v.Ok() {
+		return v.Result, DetectLineEndingsOutput{}, nil
 	}
 
-	// Ensure we don't return nil slice (return empty array for JSON)
-	if inconsistentLines == nil {
-		inconsistentLines = []int{}
+	encResult, err := h.resolveEncoding(input.Encoding, v.Path)
+	if err != nil {
+		return errorResult(err.Error()), DetectLineEndingsOutput{}, nil
+	}
+
+	f, err := os.Open(v.Path)
+	if err != nil {
+		return errorResult("failed to open file: " + err.Error()), DetectLineEndingsOutput{}, nil
+	}
+	defer f.Close()
+
+	var reader io.Reader = f
+	if !fileEncoding.IsUTF8(encResult.name) {
+		reader = encResult.encoder.NewDecoder().Reader(f)
+	}
+
+	style, totalLines, inconsistentLines, err := analyzeLineEndings(reader)
+	if err != nil {
+		return errorResult("failed to decode or read file: " + err.Error()), DetectLineEndingsOutput{}, nil
 	}
 
 	return &mcp.CallToolResult{}, DetectLineEndingsOutput{

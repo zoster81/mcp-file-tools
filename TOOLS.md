@@ -405,15 +405,17 @@ Convert a file from one encoding to another. Reads in source encoding, writes in
 
 ### detect_line_endings
 
-Detect line ending style (CRLF/LF/mixed) and find lines with inconsistent endings. Useful for diagnosing mixed line ending issues in legacy codebases.
+Detect line ending style (CRLF/LF/mixed) after decoding the file with encoding support, and find lines with inconsistent endings. Useful for diagnosing mixed line ending issues in legacy codebases, including UTF-16 source files.
 
 **Parameters:**
 - `path` (required): Path to the file to analyze
+- `encoding` (optional): File encoding; auto-detected if omitted. Use an explicit value for ambiguous legacy encodings.
 
 **Example:**
 ```json
 {
-  "path": "/path/to/file.pas"
+  "path": "/path/to/file.mq5",
+  "encoding": "utf-16-le"
 }
 ```
 
@@ -434,17 +436,19 @@ Detect line ending style (CRLF/LF/mixed) and find lines with inconsistent ending
 
 ### change_line_endings
 
-Convert line endings in a file to LF or CRLF. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style.
+Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style.
 
 **Parameters:**
 - `path` (required): Path to the file
 - `style` (required): Target line ending style (`"lf"` or `"crlf"`)
+- `encoding` (optional): File encoding; auto-detected if omitted. Use an explicit value for ambiguous legacy encodings.
 
 **Example:**
 ```json
 {
-  "path": "/path/to/file.pas",
-  "style": "lf"
+  "path": "/path/to/file.mq5",
+  "style": "lf",
+  "encoding": "utf-16-le"
 }
 ```
 

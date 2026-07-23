@@ -208,21 +208,21 @@ func buildScriptCommand(scriptPath string, scriptArgs []string) (string, []strin
 		}
 		program, err := firstExecutable("python.exe", "python3", "python")
 		if err != nil {
-			return "", nil, fmt.Errorf("Python was not found: %w", err)
+			return "", nil, fmt.Errorf("python was not found: %w", err)
 		}
 		return program, append([]string{scriptPath}, scriptArgs...), nil
 
 	case ".js", ".mjs", ".cjs":
 		program, err := firstExecutable("node.exe", "node")
 		if err != nil {
-			return "", nil, fmt.Errorf("Node.js was not found: %w", err)
+			return "", nil, fmt.Errorf("node.js was not found: %w", err)
 		}
 		return program, append([]string{scriptPath}, scriptArgs...), nil
 
 	case ".sh":
 		program, err := firstExecutable("bash.exe", "bash")
 		if err != nil {
-			return "", nil, fmt.Errorf("Bash was not found: %w", err)
+			return "", nil, fmt.Errorf("bash was not found: %w", err)
 		}
 		return program, append([]string{scriptPath}, scriptArgs...), nil
 
@@ -245,7 +245,7 @@ func buildShellCommand(requestedShell, command string) (string, []string, error)
 		case "powershell", "windows-powershell":
 			program, err := firstExecutable("powershell.exe", "powershell")
 			if err != nil {
-				return "", nil, fmt.Errorf("Windows PowerShell was not found: %w", err)
+				return "", nil, fmt.Errorf("windows powershell was not found: %w", err)
 			}
 			return program, []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command}, nil
 		case "pwsh", "powershell-core":
