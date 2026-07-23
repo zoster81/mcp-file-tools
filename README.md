@@ -13,7 +13,7 @@ MCP server for file operations with non-UTF-8 encoding support. Auto-detects and
 
 ## What It Does
 
-Provides 21 tools for file operations with automatic encoding conversion:
+Provides 24 tools for file operations, encoding conversion, update checks, and optional local execution:
 - [`read_text_file`](TOOLS.md#read_text_file) - Read files with encoding auto-detection and conversion
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read multiple files concurrently with encoding support
 - [`write_file`](TOOLS.md#write_file) - Write files in specific encodings
@@ -35,6 +35,9 @@ Provides 21 tools for file operations with automatic encoding conversion:
 - [`create_directory`](TOOLS.md#create_directory) - Create directories recursively (mkdir -p)
 - [`move_file`](TOOLS.md#move_file) - Move or rename files and directories
 - [`list_allowed_directories`](TOOLS.md#list_allowed_directories) - Show accessible directories
+- [`run_script`](TOOLS.md#run_script) - Execute a supported script or executable inside an allowed directory when explicitly enabled
+- [`shell`](TOOLS.md#shell) - Execute an unrestricted shell command when explicitly enabled
+- [`check_for_updates`](TOOLS.md#check_for_updates) - Check the latest upstream release with a cached GitHub request
 
 **Supported encodings (22 total):**
 - **Unicode:** UTF-8, UTF-16 LE, UTF-16 BE (with BOM detection for UTF-16 and UTF-32)
@@ -47,7 +50,17 @@ Provides 21 tools for file operations with automatic encoding conversion:
 
 See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
-**Security:** All operations restricted to allowed directories only.
+**Security:** File operations and `run_script` paths are restricted to allowed directories. The optional `shell` tool validates only its working directory; the command itself is unrestricted and runs with the operating-system permissions of the MCP server process.
+
+## Custom Fork Changes
+
+This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). Compared with the upstream project, this fork currently adds:
+
+- optional `run_script` and `shell` MCP tools, disabled by default;
+- CLI-provided allowed directories as the authoritative fallback for tunnel clients that do not implement MCP roots requests;
+- correct validation of descendants when a Windows drive root such as `D:\` is allowed.
+
+See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 
 ## Installation
 
@@ -297,6 +310,9 @@ The server can be configured via environment variables:
 |----------|-------------|---------|
 | `MCP_DEFAULT_ENCODING` | Default encoding for `write_file` when none specified | `cp1251` |
 | `MCP_MEMORY_THRESHOLD` | Memory threshold in bytes. Files smaller are loaded into memory for faster I/O; larger files use streaming. Also affects encoding detection mode. | `67108864` (64MB) |
+| `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
+| `MCP_ENABLE_SHELL` | Enables only the unrestricted `shell` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
+| `MCP_ENABLE_EXECUTION` | Enables both `run_script` and `shell`; use only in a trusted environment. | disabled |
 
 To override, set environment variables in your config (Claude Desktop example):
 ```json

@@ -1,0 +1,40 @@
+# Changelog
+
+This file records changes maintained in the `zoster81/mcp-file-tools` fork relative to the upstream `dimitar-grigorov/mcp-file-tools` project.
+
+The upstream baseline for the first fork-specific changes is commit `52665aa080b24f6427e3fc485df76cc0a8ce1238`.
+
+## Unreleased
+
+### Changed
+
+- Documented the fork-specific execution tools, environment flags, limits, result fields, and security boundaries.
+- Added an explicit summary of differences from the upstream project to `README.md`.
+- Added the previously missing `check_for_updates` reference and corrected its exposed cache interval from two hours to the implemented 30 minutes.
+
+### Removed
+
+- Removed source backup files that were not part of the runtime implementation.
+
+## 2026-07-23
+
+### Added
+
+- Added the optional `run_script` MCP tool for executing supported script and executable files inside an allowed directory.
+- Added the optional `shell` MCP tool for unrestricted shell commands with an allowed working directory.
+- Added independent `MCP_ENABLE_RUN_SCRIPT` and `MCP_ENABLE_SHELL` feature flags, plus the combined `MCP_ENABLE_EXECUTION` flag.
+- Added bounded stdout and stderr capture, execution timeouts, cancellation reporting, and process-tree termination attempts.
+
+### Changed
+
+- CLI-provided allowed directories remain authoritative when an MCP client does not support server-initiated roots requests.
+- MCP roots updates augment rather than replace the CLI directory baseline.
+
+### Fixed
+
+- Fixed Windows drive-root validation so an allowed root such as `D:\` also permits its descendants while continuing to reject paths on other drives.
+
+### Commits
+
+- `e0ef0d8026c615ba055918d04c0b498d3692aa5a` — execution tools and tunnel-compatible roots handling.
+- `db2360e2041b6fc1065d3e89743ab016a8b6f748` — Windows drive-root path validation.

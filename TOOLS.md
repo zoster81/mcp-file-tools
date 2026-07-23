@@ -533,6 +533,121 @@ Returns all 24 supported encodings with name, aliases, and description.
 
 Returns directories the server is allowed to access. If empty, add paths as args in config.
 
+### check_for_updates
+
+Checks the latest upstream GitHub release and returns the current version, latest version, and an update message when applicable.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `force` | boolean | no | When `true`, bypasses the cached result and performs a fresh request |
+
+Without `force`, the result is cached for 30 minutes to avoid repeated GitHub API calls. A background update check also runs once when the MCP server initializes.
+
+## Execution Tools
+
+The execution tools are fork-specific and disabled by default. Enable only the capability that is required:
+
+| Variable | Effect |
+|----------|--------|
+| `MCP_ENABLE_RUN_SCRIPT=1` | Enables `run_script` only |
+| `MCP_ENABLE_SHELL=1` | Enables `shell` only |
+| `MCP_ENABLE_EXECUTION=1` | Enables both tools |
+
+Accepted true values are `1`, `true`, `yes`, `on`, and `enabled`, matched case-insensitively.
+
+Both tools run as child processes of the MCP server, inherit its environment and operating-system permissions, receive closed standard input, and capture stdout and stderr separately. The default timeout is 60 seconds, the maximum is 600 seconds, and each output stream is limited to 256 KiB. On timeout or cancellation, the implementation attempts to terminate the process tree; on Windows it uses `taskkill /T /F`.
+
+### run_script
+
+Executes a script or executable whose path is inside an allowed directory. The optional working directory is also validated. When `cwd` is omitted, the script's parent directory is used.
+
+**Security boundary:** validating the script path does not sandbox the script. Once launched, it runs with the full permissions and environment of the MCP server process and may access resources that the operating system allows.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | yes | Script or executable path inside an allowed directory |
+| `args` | string[] | no | Arguments passed without shell interpolation |
+| `cwd` | string | no | Working directory inside an allowed directory; defaults to the script directory |
+| `timeoutSeconds` | integer | no | Timeout from 1 to 600 seconds; defaults to 60 |
+
+**Supported file types and interpreter selection:**
+
+| Extension | Execution behavior |
+|-----------|--------------------|
+| `.ps1` | `pwsh` when available, otherwise Windows PowerShell; uses `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File` |
+| `.bat`, `.cmd` | `cmd.exe /d /s /c` on Windows |
+| `.py` | `py -3` when available, otherwise `python`/`python3` |
+| `.js`, `.mjs`, `.cjs` | `node` |
+| `.sh` | `bash` |
+| `.exe`, `.com` | Executed directly |
+
+**Example:**
+
+```json
+{
+  "path": "D:\\Dev\\project\\verify.ps1",
+  "args": ["-Mode", "Fast"],
+  "cwd": "D:\\Dev\\project",
+  "timeoutSeconds": 120
+}
+```
+
+### shell
+
+Executes an arbitrary command through a selected shell.
+
+**Critical security warning:** only `cwd` is checked against the allowed directories. The command text is intentionally unrestricted and can read, modify, execute, or access anything permitted to the MCP server's Windows or Unix identity, including paths outside the allowed directories and network resources. Do not enable this tool for untrusted clients or prompts.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | string | yes | Non-empty command interpreted by the selected shell |
+| `cwd` | string | no | Working directory inside an allowed directory; defaults to the first allowed directory |
+| `shell` | string | no | Shell selector described below |
+| `timeoutSeconds` | integer | no | Timeout from 1 to 600 seconds; defaults to 60 |
+
+**Shell selectors:**
+
+| Platform | Default | Accepted values |
+|----------|---------|-----------------|
+| Windows | Windows PowerShell | `powershell`, `windows-powershell`, `pwsh`, `powershell-core`, `cmd` |
+| Other platforms | `sh` | `sh`, `bash`, `pwsh`, `powershell` |
+
+**Example:**
+
+```json
+{
+  "command": "git status --short",
+  "cwd": "D:\\Dev\\project",
+  "shell": "powershell",
+  "timeoutSeconds": 60
+}
+```
+
+### Execution result
+
+Both tools return the same result shape:
+
+```json
+{
+  "workingDirectory": "D:\\Dev\\project",
+  "exitCode": 0,
+  "stdout": "...",
+  "stderr": "...",
+  "timedOut": false,
+  "outputTruncated": false,
+  "durationMillis": 125,
+  "executionCancelled": false
+}
+```
+
+A non-zero exit code, timeout, or cancellation marks the MCP tool result as an error while preserving the structured execution output.
+
 ## Supported Encodings
 
 | Name | Aliases | Description |
