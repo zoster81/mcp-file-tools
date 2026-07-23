@@ -16,11 +16,11 @@ func TestIsPathWithinAllowedDirectories_BasicCases(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		path         string
-		allowedDirs  []string
-		expected     bool
-		description  string
+		name        string
+		path        string
+		allowedDirs []string
+		expected    bool
+		description string
 	}{
 		{
 			name:        "exact match",
@@ -145,6 +145,16 @@ func TestIsPathWithinAllowedDirectories_SecurityVulnerabilities(t *testing.T) {
 	}
 }
 
+func TestIsPathWithinAllowedDirectories_RootDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows roots require a drive letter and are covered separately")
+	}
+
+	if !IsPathWithinAllowedDirectories("/tmp/project/file.txt", []string{"/"}) {
+		t.Fatal("the filesystem root should allow an absolute descendant")
+	}
+}
+
 func TestIsPathWithinAllowedDirectories_WindowsPaths(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("skipping Windows-specific tests")
@@ -163,6 +173,20 @@ func TestIsPathWithinAllowedDirectories_WindowsPaths(t *testing.T) {
 			allowedDirs: []string{"C:\\Users\\user\\project"},
 			expected:    true,
 			description: "Windows path should be allowed",
+		},
+		{
+			name:        "Windows drive root descendant",
+			path:        "D:\\OpenAI-Tunnel\\start-tunnel.ps1",
+			allowedDirs: []string{"D:\\"},
+			expected:    true,
+			description: "a drive root should allow every descendant on that drive",
+		},
+		{
+			name:        "Windows different drive",
+			path:        "E:\\OpenAI-Tunnel\\start-tunnel.ps1",
+			allowedDirs: []string{"D:\\"},
+			expected:    false,
+			description: "a drive root must not allow another drive",
 		},
 		{
 			name:        "Windows prefix attack",
@@ -530,4 +554,3 @@ func TestNormalizeAllowedDirs(t *testing.T) {
 		})
 	}
 }
-

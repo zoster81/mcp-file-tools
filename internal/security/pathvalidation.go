@@ -31,8 +31,12 @@ func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) b
 			return true
 		}
 
-		sep := string(filepath.Separator)
-		if strings.HasPrefix(normalized, cleanAllowed+sep) {
+		separator := string(filepath.Separator)
+		allowedPrefix := cleanAllowed
+		if !strings.HasSuffix(allowedPrefix, separator) {
+			allowedPrefix += separator
+		}
+		if strings.HasPrefix(normalized, allowedPrefix) {
 			return true
 		}
 	}
