@@ -14,11 +14,14 @@ import (
 )
 
 const (
-	// UpdateCheckURL is the GitHub API endpoint for latest release
-	UpdateCheckURL = "https://api.github.com/repos/dimitar-grigorov/mcp-file-tools/releases/latest"
+	// UpdateCheckURL is the GitHub API endpoint for the latest fork release.
+	UpdateCheckURL = "https://api.github.com/repos/zoster81/mcp-file-tools/releases/latest"
 
-	// RepoURL is the GitHub repository URL
-	RepoURL = "https://github.com/dimitar-grigorov/mcp-file-tools"
+	// RepoURL is the custom fork repository URL.
+	RepoURL = "https://github.com/zoster81/mcp-file-tools"
+
+	// ReleaseURL is the human-facing latest release page for this fork.
+	ReleaseURL = RepoURL + "/releases/latest"
 
 	// CheckInterval is the minimum time between API calls (respects GitHub rate limits)
 	CheckInterval = 30 * time.Minute
@@ -29,6 +32,7 @@ const (
 
 // cache stores the last check result to avoid excessive API calls
 type cache struct {
+	Source        string    `json:"source"`
 	LastCheck     time.Time `json:"lastCheck"`
 	LatestVersion string    `json:"latestVersion"`
 }
@@ -47,7 +51,7 @@ func Check(ctx context.Context, currentVersion string, force bool) string {
 
 	// Use cached result if within check interval (unless forced)
 	if !force {
-		if c := readCache(cacheFile); c != nil && time.Since(c.LastCheck) < CheckInterval {
+		if c := readCache(cacheFile); cacheMatchesSource(c) && time.Since(c.LastCheck) < CheckInterval {
 			latestVersion = c.LatestVersion
 		}
 	}
@@ -65,11 +69,7 @@ func Check(ctx context.Context, currentVersion string, force bool) string {
 	}
 
 	if isNewerVersion(latestVersion, currentVersion) {
-		return fmt.Sprintf(
-			"mcp-file-tools update available: %s → %s\n"+
-				"To update, close all Claude Code sessions, then re-download the binary.\n"+
-				"Instructions: %s#update",
-			currentVersion, latestVersion, RepoURL)
+		return updateMessage(currentVersion, latestVersion)
 	}
 	return ""
 }
@@ -128,10 +128,22 @@ func readCache(path string) *cache {
 
 // CachedLatestVersion returns the latest version from the cache file, if available.
 func CachedLatestVersion() string {
-	if c := readCache(getCacheFile()); c != nil {
+	if c := readCache(getCacheFile()); cacheMatchesSource(c) {
 		return c.LatestVersion
 	}
 	return ""
+}
+
+func cacheMatchesSource(c *cache) bool {
+	return c != nil && c.Source == UpdateCheckURL
+}
+
+func updateMessage(currentVersion, latestVersion string) string {
+	return fmt.Sprintf(
+		"mcp-file-tools fork update available: %s → %s\n"+
+			"Stop the tunnel or MCP client using the binary before replacing it.\n"+
+			"Release: %s",
+		currentVersion, latestVersion, ReleaseURL)
 }
 
 func writeCache(path, version string) {
@@ -139,7 +151,7 @@ func writeCache(path, version string) {
 		return
 	}
 	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	data, _ := json.Marshal(cache{LastCheck: time.Now(), LatestVersion: version})
+	data, _ := json.Marshal(cache{Source: UpdateCheckURL, LastCheck: time.Now(), LatestVersion: version})
 	_ = os.WriteFile(path, data, 0644)
 }
 

@@ -66,10 +66,41 @@ func TestCheckDevVersion(t *testing.T) {
 	}
 }
 
+func TestForkUpdateSource(t *testing.T) {
+	const expectedAPI = "https://api.github.com/repos/zoster81/mcp-file-tools/releases/latest"
+	const expectedRepo = "https://github.com/zoster81/mcp-file-tools"
+
+	if UpdateCheckURL != expectedAPI {
+		t.Fatalf("UpdateCheckURL = %q, want %q", UpdateCheckURL, expectedAPI)
+	}
+	if RepoURL != expectedRepo {
+		t.Fatalf("RepoURL = %q, want %q", RepoURL, expectedRepo)
+	}
+	if ReleaseURL != expectedRepo+"/releases/latest" {
+		t.Fatalf("ReleaseURL = %q", ReleaseURL)
+	}
+}
+
+func TestCacheMatchesCurrentSource(t *testing.T) {
+	if cacheMatchesSource(nil) {
+		t.Fatal("nil cache must not match")
+	}
+	if cacheMatchesSource(&cache{Source: "https://example.com/releases/latest"}) {
+		t.Fatal("cache from another release source must not match")
+	}
+	if !cacheMatchesSource(&cache{Source: UpdateCheckURL}) {
+		t.Fatal("cache from the configured fork must match")
+	}
+}
+
 func TestUpdateMessageFormat(t *testing.T) {
-	// Just verify the format string works
-	msg := "Update available: 1.0.0 → 1.1.0\nDownload: https://example.com"
-	if !strings.Contains(msg, "1.0.0") || !strings.Contains(msg, "1.1.0") {
-		t.Error("message format incorrect")
+	msg := updateMessage("1.0.0", "1.1.0")
+	for _, expected := range []string{"1.0.0", "1.1.0", ReleaseURL, "tunnel or MCP client"} {
+		if !strings.Contains(msg, expected) {
+			t.Errorf("message %q does not contain %q", msg, expected)
+		}
+	}
+	if strings.Contains(strings.ToLower(msg), "claude") {
+		t.Errorf("message must be client-neutral: %q", msg)
 	}
 }

@@ -535,7 +535,7 @@ Returns directories the server is allowed to access. If empty, add paths as args
 
 ### check_for_updates
 
-Checks the latest upstream GitHub release and returns the current version, latest version, and an update message when applicable.
+Checks the latest GitHub release of the `zoster81/mcp-file-tools` fork and returns the current version, latest version, and an update message when applicable.
 
 **Parameters:**
 
@@ -543,7 +543,9 @@ Checks the latest upstream GitHub release and returns the current version, lates
 |-----------|------|----------|-------------|
 | `force` | boolean | no | When `true`, bypasses the cached result and performs a fresh request |
 
-Without `force`, the result is cached for 30 minutes to avoid repeated GitHub API calls. A background update check also runs once when the MCP server initializes.
+Without `force`, the result is cached for 30 minutes to avoid repeated GitHub API calls. The cache records the configured release source, so cache data from the upstream repository is ignored. A background update check also runs once when the MCP server initializes.
+
+The checker is notification-only: it never downloads, replaces, installs, or restarts the MCP server. It requires at least one published GitHub Release in the fork; if the fork has no release, the GitHub endpoint returns no latest version and the checker remains silent.
 
 ## Execution Tools
 

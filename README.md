@@ -1,15 +1,39 @@
 # MCP File Tools
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/dimitar-grigorov/mcp-file-tools)](https://goreportcard.com/report/github.com/dimitar-grigorov/mcp-file-tools)
-[![Release](https://img.shields.io/github/v/release/dimitar-grigorov/mcp-file-tools)](https://github.com/dimitar-grigorov/mcp-file-tools/releases/latest)
+[![Release](https://img.shields.io/github/v/release/zoster81/mcp-file-tools)](https://github.com/zoster81/mcp-file-tools/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/github/license/dimitar-grigorov/mcp-file-tools)](LICENSE)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io/?search=mcp-file-tools)
 
-Claude sees `Настройки` — not `????` or `Íàñòðîéêè`.
+ChatGPT Web sees `Настройки` — not `????` or `Íàñòðîéêè`.
 
 MCP server for file operations with non-UTF-8 encoding support. Auto-detects and converts 24 encodings (Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16, GBK/GB18030) so AI assistants can read and write legacy files without corrupting data.
 
-**Perfect for:** Delphi/Pascal projects, legacy VB6 apps, old PHP/HTML sites, config files with non-UTF-8 text.
+**Perfect for:** exposing local Windows project files and controlled execution tools to ChatGPT Web through the OpenAI Secure MCP Tunnel, including legacy Delphi/Pascal projects, VB6 applications, old PHP/HTML sites, and non-UTF-8 configuration files.
+
+## Purpose of This Fork
+
+This fork is maintained primarily to use a local MCP server from **ChatGPT Web through the OpenAI Secure MCP Tunnel**.
+
+The server currently exposes **stdio transport only**. ChatGPT Web does not connect directly to this process: the OpenAI tunnel client launches the local stdio server and bridges it to the remote MCP connector.
+
+The currently validated deployment model is:
+
+```text
+ChatGPT Web
+    -> OpenAI remote MCP connector
+    -> OpenAI Secure MCP Tunnel
+    -> local mcp-file-tools stdio process
+    -> explicitly allowed Windows directories
+```
+
+The fork does not require Claude Code, Codex, or another local AI application. The upstream integrations for those clients may still work and are retained as reference, but they are not the primary deployment target of this fork.
+
+Another browser-hosted LLM could use the current server only if its MCP connector infrastructure provides an equivalent gateway capable of launching and bridging a local stdio MCP process. Native HTTP/JSON or Streamable HTTP transport is **not implemented yet**.
+
+A future compatibility phase may add an optional native HTTP/JSON transport while preserving stdio support. That work requires a separate security, authentication, binding, and deployment design before implementation.
+
+The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, and optional local execution tools. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## What It Does
 
@@ -37,7 +61,7 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`list_allowed_directories`](TOOLS.md#list_allowed_directories) - Show accessible directories
 - [`run_script`](TOOLS.md#run_script) - Execute a supported script or executable inside an allowed directory when explicitly enabled
 - [`shell`](TOOLS.md#shell) - Execute an unrestricted shell command when explicitly enabled
-- [`check_for_updates`](TOOLS.md#check_for_updates) - Check the latest upstream release with a cached GitHub request
+- [`check_for_updates`](TOOLS.md#check_for_updates) - Check the latest release of this fork with a cached GitHub request
 
 **Supported encodings (22 total):**
 - **Unicode:** UTF-8, UTF-16 LE, UTF-16 BE (with BOM detection for UTF-16 and UTF-32)
@@ -64,9 +88,11 @@ See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific change
 
 ## Installation
 
-### Claude Code plugin (recommended)
+> **Fork deployment note:** the custom tunnel and execution changes are not present in upstream release binaries. Until this fork publishes its own GitHub releases, build the fork locally and launch that binary through the OpenAI tunnel client.
 
-The simplest way to use this with Claude Code:
+### Upstream Claude Code plugin (reference)
+
+The upstream project can be installed in Claude Code as follows:
 
 ```
 /plugin marketplace add dimitar-grigorov/mcp-file-tools

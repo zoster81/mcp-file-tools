@@ -11,6 +11,11 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Documented the fork-specific execution tools, environment flags, limits, result fields, and security boundaries.
 - Added an explicit summary of differences from the upstream project to `README.md`.
 - Added the previously missing `check_for_updates` reference and corrected its exposed cache interval from two hours to the implemented 30 minutes.
+- Redirected update checks and release links from the upstream project to `zoster81/mcp-file-tools`.
+- Made update notifications client-neutral for OpenAI Tunnel and other MCP connector transports instead of referring specifically to Claude Code.
+- Added the ChatGPT Web/OpenAI Secure MCP Tunnel deployment purpose to `README.md`, explicitly documenting that the current server transport is stdio and requires a compatible bridge.
+- Recorded native HTTP/JSON or Streamable HTTP transport as a future compatibility direction, not as an implemented capability.
+- Invalidated cached release data when it belongs to a different repository source.
 
 ### Removed
 
