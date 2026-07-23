@@ -12,7 +12,9 @@ import (
 var Version = "dev"
 
 // Server instructions for AI assistants
-const serverInstructions = `MCP filesystem server with non-UTF-8 encoding support (24 encodings: CP1251, KOI8-R, ISO-8859-x, GBK/GB18030, etc).
+const serverInstructions = `MCP filesystem server with non-UTF-8 encoding support (24 encodings, including CP1251, KOI8-R/U, ISO-8859-x, UTF-16 LE/BE, GBK, and GB18030).
+
+MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh) are commonly UTF-16 LE with BOM and CRLF line endings. Use auto-detection for BOM-bearing files or pass encoding=utf-16-le when deterministic handling is required.
 
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
@@ -20,11 +22,14 @@ PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encodi
 - edit_file: in-place edits with encoding support, returns unified diff. Use dryRun=true to preview changes before applying.
 - grep_text_files: encoding-aware regex search across files
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
+- detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
+- change_line_endings: preserve encoding, BOM state, and non-line-ending bytes while converting LF/CRLF
 
 Workflow for non-UTF-8 files:
 1. detect_encoding - identify file encoding
-2. read_text_file or edit_file - read/modify with correct encoding
-3. write_file with encoding param - preserves original encoding
+2. detect_line_endings - inspect line endings using the detected or explicit encoding
+3. read_text_file or edit_file - read/modify with correct encoding
+4. change_line_endings when needed, or write_file with encoding param to preserve the intended encoding
 
 If "no allowed directories configured" error: add directory paths as args in .mcp.json.
 
@@ -177,7 +182,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "detect_line_endings",
-		Description: "Detect line ending style (crlf/lf/mixed/none) after decoding the file with encoding support, and find inconsistent lines. Useful for diagnosing mixed line ending issues in cross-platform legacy codebases. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
+		Description: "Detect line ending style (crlf/lf/mixed/none) after decoding any of the 24 registered encodings, including UTF-16 LE/BE. Suitable for MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh), which are commonly UTF-16 LE with BOM and CRLF endings. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Detect Line Endings",
 			ReadOnlyHint:  true,
@@ -200,7 +205,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "change_line_endings",
-		Description: "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Use after detect_line_endings to fix mixed or wrong line endings. Returns original style, new style, and number of lines changed. No-op if file already uses the target style. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
+		Description: "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Handles UTF-16 LE/BE code units separately and supports MetaTrader MQL sources (.mq4, .mq5, .mqh). Use after detect_line_endings to fix mixed or wrong line endings. Returns original style, new style, and number of lines changed. No-op if file already uses the target style. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Change Line Endings",
 			ReadOnlyHint:    false,

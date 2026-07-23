@@ -7,9 +7,9 @@
 
 ChatGPT Web sees `Настройки` — not `????` or `Íàñòðîéêè`.
 
-MCP server for file operations with non-UTF-8 encoding support. Auto-detects and converts 24 encodings (Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16, GBK/GB18030) so AI assistants can read and write legacy files without corrupting data.
+MCP server for file operations with non-UTF-8 encoding support. Auto-detects and converts 24 encodings (Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030) and provides encoding-aware CRLF/LF detection and conversion for UTF-16 files.
 
-**Perfect for:** exposing local Windows project files and controlled execution tools to ChatGPT Web through the OpenAI Secure MCP Tunnel, including legacy Delphi/Pascal projects, VB6 applications, old PHP/HTML sites, and non-UTF-8 configuration files.
+**Perfect for:** exposing local Windows project files and controlled execution tools to ChatGPT Web through the OpenAI Secure MCP Tunnel, including legacy Delphi/Pascal projects, VB6 applications, old PHP/HTML sites, non-UTF-8 configuration files, and MetaTrader 4/5 MQL sources (`.mq4`, `.mq5`, `.mqh`) commonly stored as UTF-16 LE with BOM and CRLF line endings.
 
 ## Purpose of This Fork
 
@@ -51,8 +51,8 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`grep_text_files`](TOOLS.md#grep_text_files) - Regex search in file contents with encoding support
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
 - [`convert_encoding`](TOOLS.md#convert_encoding) - Convert file between encodings
-- [`detect_line_endings`](TOOLS.md#detect_line_endings) - Detect line ending style (CRLF/LF/mixed)
-- [`change_line_endings`](TOOLS.md#change_line_endings) - Convert line endings to LF or CRLF
+- [`detect_line_endings`](TOOLS.md#detect_line_endings) - Detect CRLF/LF/mixed endings after decoding UTF-8, legacy, or UTF-16 text
+- [`change_line_endings`](TOOLS.md#change_line_endings) - Convert LF/CRLF while preserving encoding, BOM state, and non-line-ending bytes
 - [`manage_bom`](TOOLS.md#manage_bom) - Detect, strip, or add Unicode BOM
 - [`list_encodings`](TOOLS.md#list_encodings) - Show all supported encodings
 - [`get_file_info`](TOOLS.md#get_file_info) - Get file/directory metadata
@@ -63,14 +63,17 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`shell`](TOOLS.md#shell) - Execute an unrestricted shell command when explicitly enabled
 - [`check_for_updates`](TOOLS.md#check_for_updates) - Check the latest release of this fork with a cached GitHub request
 
-**Supported encodings (22 total):**
-- **Unicode:** UTF-8, UTF-16 LE, UTF-16 BE (with BOM detection for UTF-16 and UTF-32)
+**Supported encodings (24 total):**
+- **Unicode:** UTF-8, UTF-16 LE, UTF-16 BE
 - **Cyrillic:** Windows-1251, KOI8-R, KOI8-U, CP866, ISO-8859-5
 - **Western European:** Windows-1252, ISO-8859-1, ISO-8859-15
 - **Central European:** Windows-1250, ISO-8859-2
 - **Greek:** Windows-1253, ISO-8859-7
 - **Turkish:** Windows-1254, ISO-8859-9
-- **Other:** Hebrew (1255), Arabic (1256), Baltic (1257), Vietnamese (1258), Thai (874)
+- **Chinese:** GBK, GB18030
+- **Other:** Hebrew (Windows-1255), Arabic (Windows-1256), Baltic (Windows-1257), Vietnamese (Windows-1258), Thai (Windows-874)
+
+`manage_bom` additionally recognizes UTF-32 LE/BE BOM signatures, but UTF-32 is not one of the 24 registered read/write encodings.
 
 See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
@@ -82,9 +85,13 @@ This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://
 
 - optional `run_script` and `shell` MCP tools, disabled by default;
 - CLI-provided allowed directories as the authoritative fallback for tunnel clients that do not implement MCP roots requests;
-- correct validation of descendants when a Windows drive root such as `D:\` is allowed.
+- correct validation of descendants when a Windows drive root such as `D:\` is allowed;
+- encoding-aware `detect_line_endings` and byte-preserving `change_line_endings` support for all 24 registered encodings, including UTF-16 LE/BE;
+- real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
+
+`server.json` retains the upstream MCP Registry package identity, release URLs, and hashes until this fork publishes its own release artifacts. Its functional description and tool catalog are kept synchronized with the fork, but the guarded registry workflow does not publish those upstream package coordinates from this repository.
 
 ## Installation
 
@@ -247,6 +254,8 @@ Once the connector is active, ask ChatGPT Web or the connected MCP client:
 - "Read config.ini and detect its encoding"
 - "Show all supported encodings"
 - "Read MainForm.dfm using CP1251 encoding"
+- "Detect line endings in ExpertAdvisor.mq5 using UTF-16 LE"
+- "Convert the UTF-16 LE MQL4 file strategy.mq4 from mixed endings to CRLF without changing its BOM"
 
 **Security:** File tools access only explicitly allowed directories:
 - **OpenAI Tunnel:** the directory arguments embedded in `MCP_COMMAND` are the authoritative baseline;
@@ -287,6 +296,7 @@ To override, set environment variables in the tunnel launcher or another stdio c
 Many legacy projects use non-UTF-8 encodings that AI assistants can't handle natively:
 
 - **Delphi/Pascal** (Windows-1251): Source files with Cyrillic UI text
+- **MetaTrader 4/5 MQL** (commonly UTF-16 LE with BOM): `.mq4`, `.mq5`, and `.mqh` sources created by MetaEditor or retained in legacy installations. Newer files may also be UTF-8, so use `detect_encoding` rather than relying only on the extension.
 - **Visual Basic 6** (Windows-1252): Forms and config files with Western European characters
 - **Legacy PHP/HTML** (CP1251, ISO-8859-1): Web apps with localized content
 - **Old config files** (Various): INI, properties, registry files with legacy encodings

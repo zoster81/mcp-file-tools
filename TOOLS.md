@@ -405,7 +405,7 @@ Convert a file from one encoding to another. Reads in source encoding, writes in
 
 ### detect_line_endings
 
-Detect line ending style (CRLF/LF/mixed) after decoding the file with encoding support, and find lines with inconsistent endings. Useful for diagnosing mixed line ending issues in legacy codebases, including UTF-16 source files.
+Detect line ending style (CRLF/LF/mixed) after decoding the file with encoding support, and find lines with inconsistent endings. This works across all 24 registered encodings, including UTF-16 LE/BE source files.
 
 **Parameters:**
 - `path` (required): Path to the file to analyze
@@ -434,9 +434,11 @@ Detect line ending style (CRLF/LF/mixed) after decoding the file with encoding s
 - `mixed`: File has both CRLF and LF endings - `inconsistentLines` lists lines with minority style
 - `none`: File has no line endings (single line or empty)
 
+**MetaTrader/MQL note:** `.mq4`, `.mq5`, and `.mqh` files are commonly stored as UTF-16 LE with BOM and CRLF line endings. Auto-detection handles BOM-bearing files; use `"encoding": "utf-16-le"` for deterministic handling when the BOM is absent or detection is ambiguous.
+
 ### change_line_endings
 
-Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style.
+Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. The implementation handles UTF-16 LE/BE code units separately and applies byte-preserving CR/LF replacement to the other registered encodings. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -455,7 +457,7 @@ Convert line endings in a file to LF or CRLF while preserving the original encod
 **Response:**
 ```json
 {
-  "message": "Converted /path/to/file.pas from crlf to lf (3 lines changed)",
+  "message": "Converted /path/to/file.mq5 from crlf to lf (3 lines changed)",
   "originalStyle": "crlf",
   "newStyle": "lf",
   "linesChanged": 3

@@ -9,6 +9,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 ### Added
 
 - Added `examples/start-openai-tunnel.ps1`, a sanitized English Windows PowerShell 5.1 quick start for ChatGPT Web through the official OpenAI Secure MCP Tunnel.
+- Added real upstream encoding fixtures and byte-identical line-ending round-trip tests for all 24 registered encodings, including UTF-16 LE/BE and GBK/GB18030.
 
 ### Changed
 
@@ -26,6 +27,13 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added the ChatGPT Web/OpenAI Secure MCP Tunnel deployment purpose to `README.md`, explicitly documenting that the current server transport is stdio and requires a compatible bridge.
 - Recorded native HTTP/JSON or Streamable HTTP transport as a future compatibility direction, not as an implemented capability.
 - Invalidated cached release data when it belongs to a different repository source.
+- Updated the fork documentation and runtime tool descriptions to list all 24 encodings and document MetaTrader 4/5 MQL sources (`.mq4`, `.mq5`, `.mqh`) commonly stored as UTF-16 LE with BOM and CRLF endings.
+
+### Fixed
+
+- Fixed `detect_line_endings` so it decodes the selected or auto-detected encoding before analyzing CRLF/LF sequences, including UTF-16 LE/BE.
+- Fixed `change_line_endings` so it preserves encoding, BOM state, and every non-line-ending byte across all 24 registered encodings.
+- Fixed four Staticcheck `ST1005` diagnostics in execution-tool error messages.
 
 ### Removed
 

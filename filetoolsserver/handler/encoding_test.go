@@ -25,7 +25,7 @@ func TestHandleListEncodings(t *testing.T) {
 		t.Fatal("expected encodings list, got empty")
 	}
 
-	// Check minimum expected number of encodings (we now support 20)
+	// Check the encoding registry remains populated; exact 24-encoding coverage is verified by the real-fixture integration tests.
 	if len(output.Encodings) < 15 {
 		t.Errorf("expected at least 15 encodings, got %d", len(output.Encodings))
 	}
