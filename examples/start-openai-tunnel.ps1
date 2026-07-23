@@ -18,8 +18,13 @@
     $TunnelId = "tunnel_REPLACE_WITH_ID"
     $AllowedDirectory = "C:\Path\To\AllowedProject"
 
-    # Keep execution disabled for the first test. Enable only after reviewing the
-    # security implications documented in TOOLS.md.
+    # Keep execution disabled for the first test.
+    # Set EnableRunScript to $true to allow supported scripts and executables whose
+    # paths are inside an allowed directory. The child process is not sandboxed.
+    # Set EnableShell to $true to allow unrestricted shell commands. Only the shell
+    # working directory is validated; the command can access anything permitted to
+    # the Windows identity running this process.
+    # Review the execution-tool security section in TOOLS.md before enabling either.
     $EnableRunScript = $false
     $EnableShell = $false
 

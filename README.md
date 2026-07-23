@@ -95,11 +95,15 @@ The currently validated deployment is Windows plus the OpenAI tunnel client. The
 Requirements:
 
 - Windows PowerShell 5.1 or later;
-- `tunnel-client.exe` from the OpenAI Secure MCP Tunnel setup;
+- the official OpenAI [`tunnel-client`](https://github.com/openai/tunnel-client) executable;
 - a Windows build of this fork;
 - an OpenAI Runtime API key with the tunnel permissions required by your OpenAI configuration;
 - a valid Tunnel ID;
 - one explicit local directory to expose to the MCP server.
+
+This project uses OpenAI's official Secure MCP Tunnel client, not a third-party tunnel implementation. See the [official OpenAI tunnel-client repository](https://github.com/openai/tunnel-client) and the [OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) for tunnel installation, permissions, control-plane setup, and current product requirements.
+
+The official client is the customer-run agent that connects a private or localhost MCP server to OpenAI-hosted products while keeping the MCP server off the public internet.
 
 #### Build the fork locally
 
@@ -156,13 +160,32 @@ $TunnelId = "tunnel_REPLACE_WITH_ID"
 $AllowedDirectory = "C:\Path\To\AllowedProject"
 ```
 
-Never commit the edited script. The example keeps `run_script` and `shell` disabled by default. Enable either capability only after reviewing the security boundaries in [TOOLS.md](TOOLS.md#execution-tools).
+Never commit the edited script. The example keeps `run_script` and `shell` disabled by default.
 
-Run the test from Windows PowerShell:
+To enable script execution for supported files located inside an allowed directory, change:
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
-    -File "$env:LOCALAPPDATA\OpenAI-Mcp-Tunnel\start-openai-tunnel.ps1"
+$EnableRunScript = $true
+```
+
+To enable unrestricted shell commands, change:
+
+```powershell
+$EnableShell = $true
+```
+
+`run_script` validates the script path and working directory against the allowed roots, but the launched process is not sandboxed. `shell` validates only its working directory; the command itself can access anything permitted to the Windows identity running the tunnel. Enable these capabilities only for a trusted connector and after reviewing [TOOLS.md](TOOLS.md#execution-tools).
+
+Run the test from Windows PowerShell with the complete one-line command:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\OpenAI-Mcp-Tunnel\start-openai-tunnel.ps1"
+```
+
+From Command Prompt, use:
+
+```bat
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\OpenAI-Mcp-Tunnel\start-openai-tunnel.ps1"
 ```
 
 The script validates paths and placeholders, runs `tunnel-client doctor --explain`, then starts the tunnel with the local operator UI at `http://127.0.0.1:8080/ui`. The MCP server itself remains stdio-only; the tunnel is the bridge to ChatGPT Web.
