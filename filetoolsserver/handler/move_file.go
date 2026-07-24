@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -18,17 +19,38 @@ func (h *Handler) HandleMoveFile(ctx context.Context, req *mcp.CallToolRequest, 
 		return dst.Result, MoveFileOutput{}, nil
 	}
 
-	// Check if source exists
-	if _, err := os.Stat(src.Path); os.IsNotExist(err) {
-		return errorResult(fmt.Sprintf("source does not exist: %s", input.Source)), MoveFileOutput{}, nil
+	// Check if source exists.
+	if _, err := os.Stat(src.Path); err != nil {
+		if os.IsNotExist(err) {
+			return errorResult(fmt.Sprintf("source does not exist: %s", input.Source)), MoveFileOutput{}, nil
+		}
+		return errorResult(fmt.Sprintf("failed to access source: %v", err)), MoveFileOutput{}, nil
 	}
 
-	// Check if destination already exists
-	if _, err := os.Stat(dst.Path); err == nil {
+	// Check if destination already exists.
+	if _, err := os.Lstat(dst.Path); err == nil {
 		return errorResult(fmt.Sprintf("destination already exists: %s", input.Destination)), MoveFileOutput{}, nil
+	} else if !os.IsNotExist(err) {
+		return errorResult(fmt.Sprintf("failed to inspect destination: %v", err)), MoveFileOutput{}, nil
 	}
 
-	if err := os.Rename(src.Path, dst.Path); err != nil {
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), MoveFileOutput{}, nil
+	default:
+	}
+	commitSrc, commitDst := h.ValidateSourceDest(input.Source, input.Destination)
+	if !commitSrc.Ok() {
+		return commitSrc.Result, MoveFileOutput{}, nil
+	}
+	if !commitDst.Ok() {
+		return commitDst.Result, MoveFileOutput{}, nil
+	}
+	if commitSrc.Path != src.Path || commitDst.Path != dst.Path {
+		return errorResult("source or destination changed while preparing move"), MoveFileOutput{}, nil
+	}
+
+	if err := filesystem.MoveNoReplace(commitSrc.Path, commitDst.Path); err != nil {
 		return errorResult(fmt.Sprintf("failed to move file: %v", err)), MoveFileOutput{}, nil
 	}
 

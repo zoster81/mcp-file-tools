@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 )
 
 type bomInfo struct {
@@ -26,6 +27,7 @@ type textDocument struct {
 	LineEndings        LineEndingInfo
 	FileSizeBytes      int64
 	Mode               os.FileMode
+	Snapshot           filesystem.FileSnapshot
 }
 
 type bomPolicy string
@@ -237,6 +239,13 @@ func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedE
 	if err != nil {
 		return textDocument{}, nil, fmt.Errorf("failed to read file: %w", err)
 	}
+	snapshot, err := filesystem.CaptureSnapshotWithData(path, data)
+	if err != nil {
+		return textDocument{}, nil, fmt.Errorf("failed to snapshot file: %w", err)
+	}
+	if snapshot.Size != info.Size() || !snapshot.ModTime.Equal(info.ModTime()) || snapshot.Mode != info.Mode() {
+		return textDocument{}, nil, fmt.Errorf("%w: file changed while being read", filesystem.ErrConcurrentModification)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -269,5 +278,6 @@ func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedE
 		LineEndings:        DetectLineEndings([]byte(content)),
 		FileSizeBytes:      info.Size(),
 		Mode:               info.Mode().Perm(),
+		Snapshot:           snapshot,
 	}, data, nil
 }

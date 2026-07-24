@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -188,7 +189,10 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 		return errorResult("path changed while preparing line-ending conversion"), ChangeLineEndingsOutput{}, nil
 	}
 
-	if err := atomicWriteFile(commit.Path, outputData, document.Mode); err != nil {
+	if err := filesystem.ReplaceFile(commit.Path, outputData, filesystem.ReplaceOptions{
+		Mode:     document.Mode,
+		Expected: &document.Snapshot,
+	}); err != nil {
 		return errorResult(fmt.Sprintf("failed to write file: %v", err)), ChangeLineEndingsOutput{}, nil
 	}
 

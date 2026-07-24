@@ -37,7 +37,7 @@ The custom tunnel-oriented changes include authoritative CLI roots, Windows driv
 
 ## Current Development Status
 
-The current source branch includes the completed R1 shared text-document refactor and the completed R2 secure filesystem walker. Recursive tools now share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. The next planned refactoring milestone is R3, which will unify atomic replacement, backup, rollback, metadata preservation, cleanup, and fsync policy; those R3 changes are not implemented yet.
+The current source branch includes the completed R1 shared text-document refactor, R2 secure filesystem walker, and R3 atomic mutation layer. Recursive tools share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. File replacement, backup, copy, move, and delete operations now share durable staging, platform-specific atomic/no-replace commits, rollback-aware backup handling, cleanup, and optimistic concurrent-modification checks. The next planned refactoring milestone is R4, which will introduce typed operation errors and centralize MCP error mapping.
 
 No GitHub Release has currently been published for this fork. The repository contains inherited version tags, but tags alone do not provide the fork binaries and `checksums.txt` required by the plugin launcher. Until a fork release is published and verified, build from source and treat the Claude Code plugin files as release preparation rather than a ready distribution channel.
 
@@ -83,7 +83,7 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 
 See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
-**Security:** File operations and `run_script` paths are restricted to allowed directories. Recursive filesystem tools resolve every visited entry through a shared secure walker and skip symlinks, Windows junctions, and other reparse points that resolve outside those directories. The optional `shell` tool validates only its working directory; the command itself is unrestricted and runs with the operating-system permissions of the MCP server process.
+**Security:** File operations and `run_script` paths are restricted to allowed directories. Recursive filesystem tools resolve every visited entry through a shared secure walker and skip symlinks, Windows junctions, and other reparse points that resolve outside those directories. Mutation handlers revalidate paths before commit, use optimistic snapshots where practical, and use atomic or no-replace platform operations; a fully handle-relative design would still be required to eliminate every possible path-based TOCTOU window. The optional `shell` tool validates only its working directory; the command itself is unrestricted and runs with the operating-system permissions of the MCP server process.
 
 ## Custom Fork Changes
 
@@ -95,7 +95,8 @@ This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://
 - encoding-aware `detect_line_endings` and byte-preserving `change_line_endings` support for all 24 registered encodings, including UTF-16 LE/BE;
 - real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests;
 - a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression;
-- a deterministic, cancellation-aware secure walker shared by `tree`, `directory_tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links.
+- a deterministic, cancellation-aware secure walker shared by `tree`, `directory_tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
+- a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 

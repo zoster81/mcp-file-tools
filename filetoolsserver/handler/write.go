@@ -6,6 +6,7 @@ import (
 	"os"
 
 	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -13,6 +14,10 @@ func (h *Handler) HandleWriteFile(ctx context.Context, req *mcp.CallToolRequest,
 	v := h.ValidatePath(input.Path)
 	if !v.Ok() {
 		return v.Result, WriteFileOutput{}, nil
+	}
+	expected, err := filesystem.CaptureSnapshot(v.Path)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to inspect target: %v", err)), WriteFileOutput{}, nil
 	}
 
 	policy, err := parseBOMPolicy(input.BOM, bomAuto)
@@ -59,7 +64,10 @@ func (h *Handler) HandleWriteFile(ctx context.Context, req *mcp.CallToolRequest,
 	}
 
 	mode := getFileMode(commit.Path)
-	if err := atomicWriteFile(commit.Path, contentToWrite, mode); err != nil {
+	if err := filesystem.ReplaceFile(commit.Path, contentToWrite, filesystem.ReplaceOptions{
+		Mode:     mode,
+		Expected: &expected,
+	}); err != nil {
 		return errorResult(fmt.Sprintf("failed to write file: %v", err)), WriteFileOutput{}, nil
 	}
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -95,7 +96,11 @@ func (h *Handler) HandleConvertEncoding(ctx context.Context, req *mcp.CallToolRe
 		}
 	}
 
-	if err := atomicWriteWithBackup(commit.Path, targetData, document.Mode, backupPath); err != nil {
+	if err := filesystem.ReplaceFile(commit.Path, targetData, filesystem.ReplaceOptions{
+		Mode:       document.Mode,
+		Expected:   &document.Snapshot,
+		BackupPath: backupPath,
+	}); err != nil {
 		return errorResult(fmt.Sprintf("failed to write converted file: %v", err)), ConvertEncodingOutput{}, nil
 	}
 

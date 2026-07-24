@@ -35,7 +35,9 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Migrated `write_file` and `convert_encoding` to the shared document encoder and added the public `auto`, `always`, `never`, and `preserve` BOM policies.
 - Migrated `detect_line_endings` and `change_line_endings` to shared text-document path, encoding, BOM, mode, and commit validation while retaining byte-exact newline conversion.
 - Consolidated recursive traversal for `search_files`, `grep_text_files`, `tree`, and `directory_tree` into one deterministic, cancellation-aware filesystem walker while preserving each tool's public filtering, limit, ordering, and error behavior.
-- Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1/R2 capabilities, unreleased fork status, and planned R3 atomic mutation work.
+- Added a shared durable mutation layer for write, edit, encoding conversion, line-ending conversion, BOM changes, copy, move, and delete operations, with exclusive same-directory staging, file sync, platform-specific atomic/no-replace commits, directory sync where supported, cleanup, and optimistic concurrent-modification snapshots.
+- Made encoding-conversion backups transactional: the original is staged and synced before target commit, an existing backup is preserved until success, and target failures restore the previous backup or remove a newly created backup.
+- Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1/R2/R3 capabilities, unreleased fork status, and planned R4 typed-error work.
 
 ### Fixed
 
@@ -54,12 +56,17 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added native Windows final-path resolution for junctions and other reparse points, closing workspace escapes that `filepath.EvalSymlinks` does not resolve on Windows.
 - Rejected existing and deeply nested missing paths whose nearest existing ancestor resolves outside the allowed directories, while retaining support for legitimate missing destinations under safe symlinks or junctions.
 - Made all recursive filesystem tools skip entries resolving outside allowed directories and report deterministic lexical traversal order; `tree` also revalidates immediately before encoding detection.
+- Prevented initially missing write/copy/move destinations from overwriting files created concurrently by committing with native no-replace operations.
+- Rejected practical concurrent changes between read/prepare and commit for document replacements, BOM changes, deletes, and other migrated mutations.
+- Fixed backup replacement so a stale `.bak` is replaced only after the new backup is durably staged, and rollback preserves the prior backup on target-commit failure.
+- Fixed mutation cleanup so staging files are removed and cleanup failures are surfaced instead of silently ignored.
 - Fixed UTF-16 writes and conversions so `auto` emits exactly one canonical BOM, `never` remains BOMless, and UTF-8/legacy `auto` output remains BOM-free.
 - Preserved CRLF, LF, CR, and mixed line-ending sequences exactly during encoding conversion, and rejected invalid, impossible, or unrepresentable output before filesystem mutation.
 - Skipped byte-identical encoding conversions without rewriting the file or creating a requested backup.
 
 ### Removed
 
+- Removed the duplicated handler-local `atomicWriteFile`, `atomicWriteWithBackup`, and temporary-path implementation after all consumers migrated to the shared filesystem mutation layer.
 - Removed source backup files that were not part of the runtime implementation.
 
 ## 2026-07-23

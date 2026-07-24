@@ -2,6 +2,8 @@
 
 ## File Operations
 
+Mutating file tools share a durable filesystem layer. Replacement data is staged in the destination directory, synced before commit, and installed with platform-specific atomic operations. Existing-file snapshots detect practical concurrent modifications; initially missing destinations use no-replace commits. On Unix, containing directories are synced after namespace changes; on Windows, replacement and no-replace moves use write-through flags. These protections reduce but do not eliminate every path-based TOCTOU window.
+
 ### read_text_file
 
 Read file contents with automatic encoding detection and optional partial reading. UTF-8 files pass through unchanged; other encodings convert to UTF-8. A Unicode transport BOM is removed from returned content and reported separately through `hasBOM` and `bomType`.
@@ -78,7 +80,7 @@ Read multiple files concurrently through the same encoding/BOM-aware document pi
 
 ### write_file
 
-Write UTF-8 input text using the selected target encoding through the shared document encoder. The supplied line endings are written exactly as provided. Encoding failures and invalid BOM policies are rejected before filesystem mutation.
+Write UTF-8 input text using the selected target encoding through the shared document encoder. The supplied line endings are written exactly as provided. Encoding failures and invalid BOM policies are rejected before filesystem mutation. The result is staged and synced before an atomic commit; existing targets are checked for concurrent changes, and new targets use a no-replace commit so a concurrently created file is not overwritten.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -115,7 +117,7 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 
 ### edit_file
 
-Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes.
+Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after it was decoded.
 
 **Parameters:**
 - `path` (required): Path to the file to edit
@@ -132,7 +134,7 @@ Make line-based edits to a text file through the shared encoding/BOM-aware docum
 - Preserves CRLF or LF line endings for consistently formatted files
 - Skips writes for logical no-op edits, preserving the original bytes across all 24 encodings
 - Rejects unrepresentable replacement text before touching the file
-- Atomic write (temp file + rename)
+- Durable atomic replacement with same-directory exclusive staging, file sync, path revalidation, and concurrent-modification detection
 - Fails on read-only files by default (set `forceWritable: true` only when user explicitly requests it)
 
 **Example:**
@@ -267,7 +269,7 @@ Create a directory recursively (like `mkdir -p`). Succeeds if already exists.
 
 ### move_file
 
-Move or rename files and directories. Fails if destination exists.
+Move or rename files and directories with a platform-native no-replace operation. A destination created concurrently is not overwritten. Namespace changes are synced where the platform provides a directory-sync mechanism.
 
 **Parameters:**
 - `source` (required): Path to move
@@ -275,7 +277,7 @@ Move or rename files and directories. Fails if destination exists.
 
 ### copy_file
 
-Copy a file. Fails if destination exists. Does not copy directories.
+Copy a regular file through exclusive same-directory staging, preserving source permissions and modification time where the platform supports them. The staged data is synced and installed atomically without replacing an existing or concurrently created destination. Does not copy directories.
 
 **Parameters:**
 - `source` (required): Source file path
@@ -283,7 +285,7 @@ Copy a file. Fails if destination exists. Does not copy directories.
 
 ### delete_file
 
-Delete a file. Does not delete directories.
+Delete a file after path revalidation and an optimistic metadata snapshot check, then sync the containing directory where supported. Does not delete directories.
 
 **Parameters:**
 - `path` (required): Path to delete
@@ -397,13 +399,13 @@ Detect the encoding of a file with confidence percentage. Useful for diagnosing 
 
 ### convert_encoding
 
-Convert a file through the shared encoding/BOM-aware document pipeline. The decoded text and its CRLF, LF, CR, or mixed line endings are preserved exactly; only the encoding and selected BOM policy change. A byte-identical result is reported as `changed: false` without rewriting the file or creating a requested backup.
+Convert a file through the shared encoding/BOM-aware document pipeline. The decoded text and its CRLF, LF, CR, or mixed line endings are preserved exactly; only the encoding and selected BOM policy change. A byte-identical result is reported as `changed: false` without rewriting the file or creating a requested backup. Changed output uses synced atomic replacement and rejects concurrent source changes.
 
 **Parameters:**
 - `path` (required): Path to the file to convert
 - `from` (optional): Source encoding (auto-detected if omitted)
 - `to` (required): Target encoding
-- `backup` (optional): Create a `.bak` backup file before converting (default: false)
+- `backup` (optional): Transactionally create or replace a `.bak` backup before committing the conversion (default: false). The backup is staged and synced first; if target commit fails, a previous backup is restored or a newly created backup is removed. If restoration itself fails, the previous backup remains in a recovery staging file whose path is included in the error.
 - `bom` (optional): BOM policy — `auto` (default), `always`, `never`, or `preserve`
 
 **BOM policy:**
@@ -471,7 +473,7 @@ Detect line ending style (CRLF/LF/mixed) after decoding the file through the sha
 
 ### change_line_endings
 
-Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. Shared path, encoding, BOM, and mode validation runs before the specialized conversion; an explicit encoding that conflicts with a Unicode BOM fails before mutation. The implementation handles UTF-16 LE/BE code units separately and applies byte-preserving CR/LF replacement to the other registered encodings. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style and preserves the file modification time.
+Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. Shared path, encoding, BOM, and mode validation runs before the specialized conversion; an explicit encoding that conflicts with a Unicode BOM fails before mutation. The implementation handles UTF-16 LE/BE code units separately and applies byte-preserving CR/LF replacement to the other registered encodings. Changed output uses synced atomic replacement with concurrent-modification detection. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style and preserves the file modification time.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -499,7 +501,7 @@ Convert line endings in a file to LF or CRLF while preserving the original encod
 
 ### manage_bom
 
-Detect, strip, or add Unicode BOM (Byte Order Mark). UTF-8 BOM breaks PHP/shell scripts. UTF-16 files need BOMs for proper detection.
+Detect, strip, or add Unicode BOM (Byte Order Mark). UTF-8 BOM breaks PHP/shell scripts. UTF-16 files need BOMs for proper detection. Strip and add operations snapshot the original bytes, revalidate the path, and use synced atomic replacement; cancellation or concurrent changes leave the original file unchanged.
 
 **Parameters:**
 - `path` (required): Path to the file

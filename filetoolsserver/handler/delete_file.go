@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -26,8 +27,24 @@ func (h *Handler) HandleDeleteFile(ctx context.Context, req *mcp.CallToolRequest
 	if info.IsDir() {
 		return errorResult("path is a directory, use a different tool to delete directories"), DeleteFileOutput{}, nil
 	}
+	expected, err := filesystem.CaptureSnapshot(v.Path)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to snapshot file: %v", err)), DeleteFileOutput{}, nil
+	}
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), DeleteFileOutput{}, nil
+	default:
+	}
+	commit := h.ValidatePath(input.Path)
+	if !commit.Ok() {
+		return commit.Result, DeleteFileOutput{}, nil
+	}
+	if commit.Path != v.Path {
+		return errorResult("path changed while preparing delete"), DeleteFileOutput{}, nil
+	}
 
-	if err := os.Remove(v.Path); err != nil {
+	if err := filesystem.RemoveFile(commit.Path, &expected); err != nil {
 		return errorResult(fmt.Sprintf("failed to delete file: %v", err)), DeleteFileOutput{}, nil
 	}
 

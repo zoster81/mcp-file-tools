@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -36,7 +37,7 @@ func (h *Handler) HandleManageBom(ctx context.Context, req *mcp.CallToolRequest,
 	case "detect":
 		return h.bomDetect(v.Path)
 	case "strip":
-		return h.bomStrip(v.Path)
+		return h.bomStrip(ctx, input.Path, v.Path)
 	case "add":
 		enc := strings.ToLower(input.Encoding)
 		if enc == "" {
@@ -45,7 +46,7 @@ func (h *Handler) HandleManageBom(ctx context.Context, req *mcp.CallToolRequest,
 		if !validBOMEncodings[enc] {
 			return errorResult(fmt.Sprintf("unsupported BOM encoding %q — valid: utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be", enc)), ManageBomOutput{}, nil
 		}
-		return h.bomAdd(v.Path, enc)
+		return h.bomAdd(ctx, input.Path, v.Path, enc)
 	}
 	// unreachable
 	return errorResult("unexpected action"), ManageBomOutput{}, nil
@@ -77,7 +78,7 @@ func (h *Handler) bomDetect(path string) (*mcp.CallToolResult, ManageBomOutput, 
 }
 
 // bomStrip removes the BOM if present, otherwise returns a no-op result.
-func (h *Handler) bomStrip(path string) (*mcp.CallToolResult, ManageBomOutput, error) {
+func (h *Handler) bomStrip(ctx context.Context, requestedPath, path string) (*mcp.CallToolResult, ManageBomOutput, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ManageBomOutput{}, nil
@@ -94,9 +95,26 @@ func (h *Handler) bomStrip(path string) (*mcp.CallToolResult, ManageBomOutput, e
 
 	bomSize := encoding.BOMSize(result.Charset)
 	stripped := data[bomSize:]
-
-	mode := getFileMode(path)
-	if err := atomicWriteFile(path, stripped, mode); err != nil {
+	expected, err := filesystem.CaptureSnapshotWithData(path, data)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to snapshot file: %v", err)), ManageBomOutput{}, nil
+	}
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), ManageBomOutput{}, nil
+	default:
+	}
+	commit := h.ValidatePath(requestedPath)
+	if !commit.Ok() {
+		return commit.Result, ManageBomOutput{}, nil
+	}
+	if commit.Path != path {
+		return errorResult("path changed while preparing BOM removal"), ManageBomOutput{}, nil
+	}
+	if err := filesystem.ReplaceFile(commit.Path, stripped, filesystem.ReplaceOptions{
+		Mode:     expected.Mode.Perm(),
+		Expected: &expected,
+	}); err != nil {
 		return errorResult(fmt.Sprintf("failed to write file: %v", err)), ManageBomOutput{}, nil
 	}
 
@@ -110,7 +128,7 @@ func (h *Handler) bomStrip(path string) (*mcp.CallToolResult, ManageBomOutput, e
 }
 
 // bomAdd prepends a BOM for the given encoding. Fails if a BOM already exists.
-func (h *Handler) bomAdd(path string, enc string) (*mcp.CallToolResult, ManageBomOutput, error) {
+func (h *Handler) bomAdd(ctx context.Context, requestedPath, path, enc string) (*mcp.CallToolResult, ManageBomOutput, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ManageBomOutput{}, nil
@@ -126,9 +144,26 @@ func (h *Handler) bomAdd(path string, enc string) (*mcp.CallToolResult, ManageBo
 	withBOM := make([]byte, len(bomBytes)+len(data))
 	copy(withBOM, bomBytes)
 	copy(withBOM[len(bomBytes):], data)
-
-	mode := getFileMode(path)
-	if err := atomicWriteFile(path, withBOM, mode); err != nil {
+	expected, err := filesystem.CaptureSnapshotWithData(path, data)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to snapshot file: %v", err)), ManageBomOutput{}, nil
+	}
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), ManageBomOutput{}, nil
+	default:
+	}
+	commit := h.ValidatePath(requestedPath)
+	if !commit.Ok() {
+		return commit.Result, ManageBomOutput{}, nil
+	}
+	if commit.Path != path {
+		return errorResult("path changed while preparing BOM addition"), ManageBomOutput{}, nil
+	}
+	if err := filesystem.ReplaceFile(commit.Path, withBOM, filesystem.ReplaceOptions{
+		Mode:     expected.Mode.Perm(),
+		Expected: &expected,
+	}); err != nil {
 		return errorResult(fmt.Sprintf("failed to write file: %v", err)), ManageBomOutput{}, nil
 	}
 

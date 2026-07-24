@@ -5,7 +5,7 @@ fork into Claude Code via `/plugin install`.
 
 The server provides 24 MCP tools for encoding-aware filesystem operations,
 BOM-preserving text handling, MetaTrader MQL support, deterministic secure
-traversal, fork-specific
+traversal, durable atomic mutations with rollback-aware backups, fork-specific
 stdio tunnel compatibility, and optional execution tools documented in the main
 [README](../README.md) and [TOOLS reference](../TOOLS.md).
 

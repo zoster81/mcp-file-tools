@@ -8,7 +8,7 @@
     {
       "name": "mcp-file-tools",
       "source": "./plugin",
-      "description": "Filesystem MCP server for 24 encodings with BOM-aware text operations, MQL support, deterministic secure traversal, and optional execution tools.",
+      "description": "Filesystem MCP server for 24 encodings with BOM-aware text operations, secure traversal, durable atomic mutations, and optional execution tools.",
       "version": "1.7.3",
       "license": "GPL-3.0",
       "homepage": "https://github.com/zoster81/mcp-file-tools"

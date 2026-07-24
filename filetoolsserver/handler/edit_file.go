@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/pmezard/go-difflib/difflib"
 )
@@ -55,19 +56,39 @@ func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, 
 			return errorResult(fmt.Sprintf("failed to encode file: %v", err)), EditFileOutput{}, nil
 		}
 
+		commit := h.ValidatePath(input.Path)
+		if !commit.Ok() {
+			return commit.Result, EditFileOutput{}, nil
+		}
+		if commit.Path != v.Path {
+			return errorResult("path changed while preparing edit"), EditFileOutput{}, nil
+		}
+
 		writeMode := originalMode
+		expected := document.Snapshot
 		if readOnly {
-			if err := clearReadOnly(v.Path, originalMode); err != nil {
+			if err := clearReadOnly(commit.Path, originalMode); err != nil {
 				return errorResult(fmt.Sprintf("failed to clear read-only flag: %v", err)), EditFileOutput{}, nil
 			}
 			readOnlyCleared = true
 			writeMode = originalMode | 0200
 			slog.Info("cleared read-only flag", "path", input.Path)
+			refreshed, refreshErr := expected.RefreshMetadata(commit.Path)
+			if refreshErr != nil {
+				if restoreErr := os.Chmod(commit.Path, originalMode); restoreErr != nil {
+					slog.Error("failed to restore read-only mode after snapshot failure", "path", input.Path, "error", restoreErr)
+				}
+				return errorResult(fmt.Sprintf("failed to refresh file snapshot: %v", refreshErr)), EditFileOutput{}, nil
+			}
+			expected = refreshed
 		}
 
-		if err := atomicWriteFile(v.Path, dataToWrite, writeMode); err != nil {
+		if err := filesystem.ReplaceFile(commit.Path, dataToWrite, filesystem.ReplaceOptions{
+			Mode:     writeMode,
+			Expected: &expected,
+		}); err != nil {
 			if readOnlyCleared {
-				if restoreErr := os.Chmod(v.Path, originalMode); restoreErr != nil {
+				if restoreErr := os.Chmod(commit.Path, originalMode); restoreErr != nil {
 					slog.Error("failed to restore read-only mode after edit failure", "path", input.Path, "error", restoreErr)
 				}
 			}

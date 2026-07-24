@@ -22,6 +22,7 @@ PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encodi
 - edit_file: in-place edits through the shared encoding/BOM-aware document pipeline; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff. Use dryRun=true to preview changes before applying.
 - grep_text_files: deterministic regex search through the shared decoder and secure walker; skips symlink/junction/reparse escapes, auto-detects BOM-bearing UTF-16 LE/BE, and accepts explicit encoding for BOMless files
 - tree/search_files/directory_tree: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
+- mutating file tools: synced same-directory staging, atomic/no-replace commits, path revalidation, practical conflict detection, and transactional conversion backups
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
 - detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
 - change_line_endings: preserve encoding, BOM state, and non-line-ending bytes while converting LF/CRLF
@@ -194,7 +195,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	// Write tools
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "manage_bom",
-		Description: "Detect, strip, or add Unicode BOM (Byte Order Mark). UTF-8 BOM breaks PHP/shell scripts; UTF-16 files need BOMs. Parameters: path (required), action (required: \"detect\"|\"strip\"|\"add\"), encoding (required for \"add\": utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be).",
+		Description: "Detect, strip, or add Unicode BOM (Byte Order Mark). Strip/add snapshot the original bytes, revalidate the path, and use synced atomic replacement so cancellation or detected concurrent changes leave the original unchanged. UTF-8 BOM breaks PHP/shell scripts; UTF-16 files need BOMs. Parameters: path (required), action (required: \"detect\"|\"strip\"|\"add\"), encoding (required for \"add\": utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Manage BOM",
 			ReadOnlyHint:    false,
@@ -206,7 +207,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "change_line_endings",
-		Description: "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Handles UTF-16 LE/BE code units separately and supports MetaTrader MQL sources (.mq4, .mq5, .mqh). Use after detect_line_endings to fix mixed or wrong line endings. Returns original style, new style, and number of lines changed. No-op if file already uses the target style. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
+		Description: "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Changed output uses synced atomic replacement with path revalidation and concurrent-modification detection. Handles UTF-16 LE/BE code units separately and supports MetaTrader MQL sources (.mq4, .mq5, .mqh). Returns original style, new style, and number of lines changed. No-op if already correct. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Change Line Endings",
 			ReadOnlyHint:    false,
@@ -230,7 +231,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "write_file",
-		Description: "Write UTF-8 content through the shared document encoder. The supplied line endings are written exactly as provided. Parameters: path (required), content (required), encoding (preserves a confidently detected existing encoding or defaults to cp1251), bom (optional: auto|always|never|preserve; default auto). auto writes UTF-8/legacy without BOM and UTF-16 LE/BE with their canonical BOM.",
+		Description: "Write UTF-8 content through the shared document encoder and durable mutation layer. Output is staged and synced before atomic commit; existing targets are checked for practical concurrent changes, and new targets use no-replace commit. The supplied line endings are written exactly. Parameters: path (required), content (required), encoding (preserves a confidently detected existing encoding or defaults to cp1251), bom (optional: auto|always|never|preserve; default auto).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Write File",
 			ReadOnlyHint:    false,
@@ -242,7 +243,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "move_file",
-		Description: "Move or rename files/directories. Fails if destination exists. Parameters: source (required), destination (required).",
+		Description: "Move or rename files/directories with a platform-native no-replace operation. A destination created concurrently is not overwritten; namespace changes are synced where supported. Parameters: source (required), destination (required).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Move File",
 			ReadOnlyHint:    false,
@@ -254,7 +255,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "copy_file",
-		Description: "Copy a file. Fails if destination exists. Parameters: source (required), destination (required).",
+		Description: "Copy a regular file through synced same-directory staging, preserving source permissions and modification time where supported. Installs atomically without replacing an existing or concurrently created destination. Parameters: source (required), destination (required).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Copy File",
 			ReadOnlyHint:    false,
@@ -266,7 +267,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_file",
-		Description: "Delete a file. Does not delete directories. Parameter: path (required).",
+		Description: "Delete a file after path revalidation and an optimistic metadata snapshot check, then sync the containing directory where supported. Does not delete directories. Parameter: path (required).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Delete File",
 			ReadOnlyHint:    false,
@@ -279,7 +280,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	// WrapContentOnly: returns readable diff text instead of StructuredContent JSON.
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "edit_file",
-		Description: "Replace text in a file with whitespace-flexible matching through the shared encoding/BOM-aware document pipeline. Returns unified diff, preserves UTF-8/UTF-16 BOM state and consistent CRLF/LF endings, and skips writes for logical no-op edits across all 24 encodings. " +
+		Description: "Replace text in a file with whitespace-flexible matching through the shared encoding/BOM-aware document pipeline and synced atomic replacement. Returns unified diff, rejects detected concurrent changes, preserves UTF-8/UTF-16 BOM state and consistent CRLF/LF endings, and skips logical no-op writes across all 24 encodings. " +
 			"In 'ask before edits' mode: ALWAYS call with dryRun=true first, show the diff, then dryRun=false after user confirms. " +
 			"With auto-edit permissions: call directly with dryRun=false. " +
 			"On no match, the error hints the closest matching content — use it to fix oldText and retry. " +
@@ -295,7 +296,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "convert_encoding",
-		Description: "Convert through the shared encoding/BOM-aware document pipeline while preserving decoded text and line endings exactly. Byte-identical results skip the write and requested backup. Parameters: path (required), from (auto-detected if omitted), to (required), backup (default false), bom (optional: auto|always|never|preserve; default auto). auto writes UTF-8/legacy without BOM and UTF-16 LE/BE with their canonical BOM. Use backup=true for irreversible conversions.",
+		Description: "Convert through the shared encoding/BOM-aware document pipeline and synced atomic replacement while preserving decoded text and line endings exactly. Byte-identical results skip writes/backups. backup=true transactionally stages the original first and restores a previous backup if target commit fails. Detected concurrent source changes are rejected. Parameters: path, from, to, backup, bom=auto|always|never|preserve.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Convert Encoding",
 			ReadOnlyHint:    false,
