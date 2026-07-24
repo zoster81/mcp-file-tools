@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -139,27 +138,18 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 		return errorResult("style must be \"lf\" or \"crlf\""), ChangeLineEndingsOutput{}, nil
 	}
 
-	encResult, err := h.resolveEncoding(input.Encoding, v.Path)
+	document, data, err := h.readTextDocumentWithData(ctx, v.Path, input.Encoding)
 	if err != nil {
 		return errorResult(err.Error()), ChangeLineEndingsOutput{}, nil
 	}
-
-	data, err := os.ReadFile(v.Path)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ChangeLineEndingsOutput{}, nil
-	}
-
-	payload, bom, err := splitTransportBOM(data, encResult.name)
-	if err != nil {
-		return errorResult(err.Error()), ChangeLineEndingsOutput{}, nil
-	}
+	payload := data[len(document.BOM.Bytes):]
 
 	var converted []byte
 	var info LineEndingInfo
-	if isUTF16Encoding(encResult.name) {
-		converted, info, err = convertUTF16LineEndings(payload, style, canonicalBOMEncoding(encResult.name) == "utf-16-le")
+	if isUTF16Encoding(document.Charset) {
+		converted, info, err = convertUTF16LineEndings(payload, style, canonicalBOMEncoding(document.Charset) == "utf-16-le")
 		if err != nil {
-			return errorResult(fmt.Sprintf("failed to process %s file: %v", encResult.name, err)), ChangeLineEndingsOutput{}, nil
+			return errorResult(fmt.Sprintf("failed to process %s file: %v", document.Charset, err)), ChangeLineEndingsOutput{}, nil
 		}
 	} else {
 		converted, info = convertASCIICompatibleLineEndings(payload, style)
@@ -180,12 +170,25 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 		linesChanged = info.CRLFCount
 	}
 
-	outputData := make([]byte, 0, len(bom.Bytes)+len(converted))
-	outputData = append(outputData, bom.Bytes...)
+	outputData := make([]byte, 0, len(document.BOM.Bytes)+len(converted))
+	outputData = append(outputData, document.BOM.Bytes...)
 	outputData = append(outputData, converted...)
 
-	mode := getFileMode(v.Path)
-	if err := atomicWriteFile(v.Path, outputData, mode); err != nil {
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), ChangeLineEndingsOutput{}, nil
+	default:
+	}
+
+	commit := h.ValidatePath(input.Path)
+	if !commit.Ok() {
+		return commit.Result, ChangeLineEndingsOutput{}, nil
+	}
+	if commit.Path != v.Path {
+		return errorResult("path changed while preparing line-ending conversion"), ChangeLineEndingsOutput{}, nil
+	}
+
+	if err := atomicWriteFile(commit.Path, outputData, document.Mode); err != nil {
 		return errorResult(fmt.Sprintf("failed to write file: %v", err)), ChangeLineEndingsOutput{}, nil
 	}
 

@@ -4,10 +4,8 @@ import (
 	"bufio"
 	"context"
 	"io"
-	"os"
 	"strings"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -138,23 +136,12 @@ func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallTool
 		return v.Result, DetectLineEndingsOutput{}, nil
 	}
 
-	encResult, err := h.resolveEncoding(input.Encoding, v.Path)
+	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
 	if err != nil {
 		return errorResult(err.Error()), DetectLineEndingsOutput{}, nil
 	}
 
-	f, err := os.Open(v.Path)
-	if err != nil {
-		return errorResult("failed to open file: " + err.Error()), DetectLineEndingsOutput{}, nil
-	}
-	defer f.Close()
-
-	var reader io.Reader = f
-	if !fileEncoding.IsUTF8(encResult.name) {
-		reader = encResult.encoder.NewDecoder().Reader(f)
-	}
-
-	style, totalLines, inconsistentLines, err := analyzeLineEndings(reader)
+	style, totalLines, inconsistentLines, err := analyzeLineEndings(strings.NewReader(document.Text))
 	if err != nil {
 		return errorResult("failed to decode or read file: " + err.Error()), DetectLineEndingsOutput{}, nil
 	}

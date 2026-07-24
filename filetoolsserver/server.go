@@ -182,7 +182,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "detect_line_endings",
-		Description: "Detect line ending style (crlf/lf/mixed/none) after decoding any of the 24 registered encodings, including UTF-16 LE/BE. Suitable for MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh), which are commonly UTF-16 LE with BOM and CRLF endings. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
+		Description: "Detect line ending style (crlf/lf/mixed/none) after decoding any of the 24 registered encodings, including UTF-16 LE/BE. Rejects an explicit encoding that conflicts with a Unicode BOM. Suitable for MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh), which are commonly UTF-16 LE with BOM and CRLF endings. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Detect Line Endings",
 			ReadOnlyHint:  true,

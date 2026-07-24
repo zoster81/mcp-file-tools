@@ -33,6 +33,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added a shared document encoder with internal BOM-preserve policy for edits.
 - Migrated `grep_text_files` to the shared encoding/BOM-aware document decoder with bounded per-file scanning and deterministic ordered aggregation.
 - Migrated `write_file` and `convert_encoding` to the shared document encoder and added the public `auto`, `always`, `never`, and `preserve` BOM policies.
+- Migrated `detect_line_endings` and `change_line_endings` to shared text-document path, encoding, BOM, mode, and commit validation while retaining byte-exact newline conversion.
 
 ### Fixed
 
@@ -40,7 +41,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Fixed `change_line_endings` so it preserves encoding, BOM state, and every non-line-ending byte across all 24 registered encodings.
 - Fixed four Staticcheck `ST1005` diagnostics in execution-tool error messages.
 - Fixed UTF-8 and UTF-16 transport BOMs leaking into `read_text_file` and `read_multiple_files` content while preserving a meaningful leading `U+FEFF` code point.
-- Added deterministic rejection of BOM/encoding conflicts instead of decoding with the wrong byte order.
+- Added deterministic rejection of BOM/encoding conflicts across the shared text-document pipeline, including `detect_line_endings`, instead of decoding with the wrong byte order.
 - Fixed `read_text_file` partial reads so CRLF separators no longer leak a trailing `\r` into paginated lines.
 - Fixed `edit_file` on UTF-16 LE/BE so normal edits preserve the original BOM and consistent CRLF/LF style instead of converting CRLF to LF.
 - Made logical no-op edits byte-identical across all 24 registered encodings.

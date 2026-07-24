@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
@@ -393,6 +394,54 @@ func TestHandleDetectLineEndings_AutoDetectUnicodeBOMs(t *testing.T) {
 			}
 			assertLineEndingOutput(t, output, testCase.wantStyle, testCase.wantTotalLines, testCase.wantInconsistent)
 		})
+	}
+}
+
+func TestHandleDetectLineEndings_BOMOnlyFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+
+	for _, encodingName := range []string{"utf-8", "utf-16-le", "utf-16-be"} {
+		encodingName := encodingName
+		t.Run(encodingName, func(t *testing.T) {
+			testFile := filepath.Join(tempDir, encodingName+"_bom_only.txt")
+			if err := os.WriteFile(testFile, fileEncoding.BOMBytesFor(encodingName), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, output, err := h.HandleDetectLineEndings(context.Background(), nil, DetectLineEndingsInput{Path: testFile})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.IsError {
+				t.Fatal("expected success")
+			}
+			assertLineEndingOutput(t, output, LineEndingNone, 1, []int{})
+		})
+	}
+}
+
+func TestHandleDetectLineEndings_BOMEncodingConflict(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	testFile := filepath.Join(tempDir, "conflict.mq5")
+	original := encodeLineEndingFixture(t, "utf-16-le", "line1\r\nline2", true)
+	if err := os.WriteFile(testFile, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleDetectLineEndings(context.Background(), nil, DetectLineEndingsInput{
+		Path:     testFile,
+		Encoding: "utf-16-be",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected BOM/encoding conflict error")
+	}
+	if text := extractTextFromResultRead(result.Content); !strings.Contains(text, "BOM indicates utf-16-le") {
+		t.Fatalf("unexpected error: %q", text)
 	}
 }
 

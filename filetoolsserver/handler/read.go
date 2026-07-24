@@ -109,65 +109,6 @@ func (h *Handler) resolveWriteEncoding(inputEncoding string, filePath string) (s
 	return h.config.DefaultEncoding, nil
 }
 
-// resolveEncoding returns explicit encoding or auto-detects based on file size.
-func (h *Handler) resolveEncoding(inputEncoding string, filePath string) (encodingResult, error) {
-	result := encodingResult{}
-
-	if inputEncoding != "" {
-		// Use explicitly specified encoding
-		result.name = strings.ToLower(inputEncoding)
-		enc, ok := encoding.Get(result.name)
-		if !ok {
-			return result, fmt.Errorf("%w: %s. Use list_encodings to see available encodings", ErrEncodingUnsupported, result.name)
-		}
-		result.encoder = enc
-		return result, nil
-	}
-
-	// Determine detection mode based on file size
-	detectionMode := "full"
-	if loadToMemory, _ := h.shouldLoadEntireFile(filePath); !loadToMemory {
-		detectionMode = "sample"
-	}
-
-	// Auto-detect encoding
-	result.autoDetected = true
-	detection, err := encoding.DetectFromFile(filePath, detectionMode)
-	if err != nil {
-		// Detection failed, fall back to UTF-8
-		result.name = "utf-8"
-		result.detectedEncoding = "detection failed, using utf-8"
-		result.encoder = nil
-		return result, nil
-	}
-	result.detectedEncoding = detection.Charset
-	result.encodingConfidence = detection.Confidence
-
-	trusted := detection.Confidence >= encoding.MinConfidenceThreshold
-	if trusted && detection.Charset != "" {
-		result.name = detection.Charset
-	} else {
-		// Fall back to UTF-8 if detection is not confident enough
-		result.name = "utf-8"
-		if detection.Charset != "" {
-			result.detectedEncoding = detection.Charset + " (low confidence, using utf-8)"
-		}
-	}
-
-	// Validate the detected/fallback encoding
-	enc, ok := encoding.Get(result.name)
-	if !ok {
-		// Unsupported detected encoding, fall back to UTF-8
-		result.encoder = nil
-		result.name = "utf-8"
-		result.detectedEncoding = result.detectedEncoding + " (unsupported, using utf-8)"
-	} else {
-		result.encoder = enc
-	}
-
-	return result, nil
-}
-
 // decodeContent decodes the file data to UTF-8 using the resolved encoding
 func decodeContent(data []byte, encResult encodingResult) (string, error) {
 	if encoding.IsUTF8(encResult.name) {

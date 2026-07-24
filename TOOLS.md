@@ -436,7 +436,7 @@ Convert a file through the shared encoding/BOM-aware document pipeline. The deco
 
 ### detect_line_endings
 
-Detect line ending style (CRLF/LF/mixed) after decoding the file with encoding support, and find lines with inconsistent endings. This works across all 24 registered encodings, including UTF-16 LE/BE source files.
+Detect line ending style (CRLF/LF/mixed) after decoding the file through the shared text-document pipeline, and find lines with inconsistent endings. This works across all 24 registered encodings, including UTF-16 LE/BE source files. An explicit encoding that conflicts with a Unicode BOM is rejected before analysis.
 
 **Parameters:**
 - `path` (required): Path to the file to analyze
@@ -469,7 +469,7 @@ Detect line ending style (CRLF/LF/mixed) after decoding the file with encoding s
 
 ### change_line_endings
 
-Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. The implementation handles UTF-16 LE/BE code units separately and applies byte-preserving CR/LF replacement to the other registered encodings. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style.
+Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. Shared path, encoding, BOM, and mode validation runs before the specialized conversion; an explicit encoding that conflicts with a Unicode BOM fails before mutation. The implementation handles UTF-16 LE/BE code units separately and applies byte-preserving CR/LF replacement to the other registered encodings. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style and preserves the file modification time.
 
 **Parameters:**
 - `path` (required): Path to the file

@@ -127,7 +127,7 @@
     },
     {
       "name": "detect_line_endings",
-      "description": "Detect crlf/lf/mixed/none after decoding the selected encoding, including UTF-16 LE/BE and MQL4/MQL5 sources"
+      "description": "Detect crlf/lf/mixed/none after decoding the selected encoding, including UTF-16 LE/BE and MQL4/MQL5 sources; rejects explicit encodings that conflict with a Unicode BOM"
     },
     {
       "name": "change_line_endings",

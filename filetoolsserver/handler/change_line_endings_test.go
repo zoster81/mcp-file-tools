@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 )
@@ -326,6 +328,99 @@ func TestHandleChangeLineEndings_AllSupportedEncodingsNoOpIsByteIdentical(t *tes
 				t.Fatal("no-op changed file bytes")
 			}
 		})
+	}
+}
+
+func TestHandleChangeLineEndings_PreservesNonLineEndingBytes(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+
+	tests := []struct {
+		encoding string
+		withBOM  bool
+	}{
+		{encoding: "utf-8"},
+		{encoding: "utf-16-le", withBOM: true},
+		{encoding: "utf-16-be", withBOM: true},
+		{encoding: "windows-1252"},
+	}
+
+	for _, testCase := range tests {
+		testCase := testCase
+		t.Run(testCase.encoding, func(t *testing.T) {
+			representative := representativeTextForEncoding(t, testCase.encoding)
+			originalText := representative + "\r\n" + representative + "\n"
+			original := encodeLineEndingFixture(t, testCase.encoding, originalText, testCase.withBOM)
+			testFile := filepath.Join(tempDir, testCase.encoding+"_bytes.txt")
+			if err := os.WriteFile(testFile, original, 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, _, err := h.HandleChangeLineEndings(context.Background(), nil, ChangeLineEndingsInput{
+				Path:     testFile,
+				Style:    LineEndingLF,
+				Encoding: testCase.encoding,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.IsError {
+				t.Fatal("expected success")
+			}
+
+			actual, err := os.ReadFile(testFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := encodeLineEndingFixture(t, testCase.encoding, ConvertLineEndings(originalText, LineEndingLF), testCase.withBOM)
+			if !bytes.Equal(actual, expected) {
+				t.Fatalf("bytes = %x, want %x", actual, expected)
+			}
+		})
+	}
+}
+
+func TestHandleChangeLineEndings_NoOpPreservesMTime(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	testFile := filepath.Join(tempDir, "noop-mtime.txt")
+	original := []byte("line1\r\nline2\r\n")
+	if err := os.WriteFile(testFile, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	fixedTime := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(testFile, fixedTime, fixedTime); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleChangeLineEndings(context.Background(), nil, ChangeLineEndingsInput{
+		Path:  testFile,
+		Style: LineEndingCRLF,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError || output.LinesChanged != 0 {
+		t.Fatalf("unexpected no-op result: %+v", output)
+	}
+
+	after, err := os.Stat(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatal("no-op changed file bytes")
+	}
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Fatalf("mtime changed from %v to %v", before.ModTime(), after.ModTime())
 	}
 }
 
