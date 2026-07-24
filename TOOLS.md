@@ -235,6 +235,7 @@ Get a recursive tree view as JSON. **Use `tree` instead for 85% fewer tokens.**
 {
   "tree": "{\"name\":\"project\",\"type\":\"directory\",\"children\":[...]}"
 }
+```
 
 ### get_file_info
 
