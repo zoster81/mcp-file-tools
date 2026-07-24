@@ -21,6 +21,8 @@ type ReadTextFileOutput struct {
 	Truncated          bool   `json:"truncated,omitempty"`
 	DetectedEncoding   string `json:"detectedEncoding,omitempty"`
 	EncodingConfidence int    `json:"encodingConfidence,omitempty"`
+	HasBOM             bool   `json:"hasBOM,omitempty"`
+	BOMType            string `json:"bomType,omitempty"`
 }
 
 // WriteFileInput - encoding defaults to cp1251 for legacy codebases
@@ -173,6 +175,8 @@ type FileReadResult struct {
 	ErrorCode          string `json:"errorCode,omitempty"` // Machine-readable error code
 	DetectedEncoding   string `json:"detectedEncoding,omitempty"`
 	EncodingConfidence int    `json:"encodingConfidence,omitempty"`
+	HasBOM             bool   `json:"hasBOM,omitempty"`
+	BOMType            string `json:"bomType,omitempty"`
 }
 
 type ReadMultipleFilesOutput struct {

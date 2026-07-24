@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 )
 
 func TestHandleEditFile_SimpleReplacement(t *testing.T) {
@@ -195,6 +198,266 @@ func TestHandleEditFile_CRLFPreservation(t *testing.T) {
 	}
 }
 
+func TestHandleEditFile_UTF16LEPreservesBOMAndCRLF(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "expert.mq5")
+	originalText := "alpha\r\nbeta\r\nstring label = \"Città\";"
+
+	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, originalText), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+		Path:  path,
+		Edits: []EditOperation{{OldText: "beta", NewText: "gamma"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bom := fileEncoding.BOMBytesFor("utf-16-le")
+	if !bytes.HasPrefix(data, bom) {
+		t.Fatalf("UTF-16 LE BOM was not preserved: prefix=% X", data[:min(len(data), len(bom))])
+	}
+	enc, _ := fileEncoding.Get("utf-16-le")
+	decoded, err := enc.NewDecoder().Bytes(data[len(bom):])
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "alpha\r\ngamma\r\nstring label = \"Città\";"
+	if string(decoded) != want {
+		t.Fatalf("decoded content = %q, want %q", decoded, want)
+	}
+}
+
+func TestHandleEditFile_UTF16BEPreservesBOMAndCRLF(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "expert-be.mq5")
+	originalText := "alpha\r\nbeta\r\nstring label = \"Città\";"
+
+	if err := os.WriteFile(path, encodeLineEndingFixture(t, "utf-16-be", originalText, true), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+		Path:  path,
+		Edits: []EditOperation{{OldText: "beta", NewText: "gamma"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bom := fileEncoding.BOMBytesFor("utf-16-be")
+	if !bytes.HasPrefix(data, bom) {
+		t.Fatalf("UTF-16 BE BOM was not preserved: prefix=% X", data[:min(len(data), len(bom))])
+	}
+	enc, _ := fileEncoding.Get("utf-16-be")
+	decoded, err := enc.NewDecoder().Bytes(data[len(bom):])
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "alpha\r\ngamma\r\nstring label = \"Città\";"
+	if string(decoded) != want {
+		t.Fatalf("decoded content = %q, want %q", decoded, want)
+	}
+}
+
+func TestHandleEditFile_UTF16LEFirstLineEditPreservesSingleBOM(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "first-line.mq4")
+	original := encodeUTF16LEWithBOM(t, "alpha\r\nbeta")
+
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+		Path:  path,
+		Edits: []EditOperation{{OldText: "alpha", NewText: "omega"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bom := fileEncoding.BOMBytesFor("utf-16-le")
+	if !bytes.HasPrefix(actual, bom) {
+		t.Fatal("transport BOM was removed")
+	}
+	if bytes.HasPrefix(actual[len(bom):], bom) {
+		t.Fatal("transport BOM was duplicated")
+	}
+	enc, _ := fileEncoding.Get("utf-16-le")
+	decoded, err := enc.NewDecoder().Bytes(actual[len(bom):])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decoded) != "omega\r\nbeta" {
+		t.Fatalf("decoded content = %q, want %q", decoded, "omega\r\nbeta")
+	}
+}
+
+func TestHandleEditFile_UTF16LENoOpIsByteIdentical(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "noop.mqh")
+	original := encodeUTF16LEWithBOM(t, "alpha\r\nbeta\r\n")
+
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+		Path:  path,
+		Edits: []EditOperation{{OldText: "beta", NewText: "beta"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	if output.Diff != "" {
+		t.Fatalf("no-op diff = %q, want empty", output.Diff)
+	}
+
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("no-op changed file bytes\ngot:  % X\nwant: % X", actual, original)
+	}
+}
+
+func TestHandleEditFile_AllSupportedEncodingsNoOpIsByteIdentical(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+
+	for _, encodingInfo := range fileEncoding.ListEncodings() {
+		encodingInfo := encodingInfo
+		t.Run(encodingInfo.Name, func(t *testing.T) {
+			text := representativeTextForEncoding(t, encodingInfo.Name)
+			withBOM := encodingInfo.Name == "utf-8" || strings.HasPrefix(encodingInfo.Name, "utf-16-")
+			original := encodeLineEndingFixture(t, encodingInfo.Name, text+"\r\n", withBOM)
+			path := filepath.Join(tempDir, encodingInfo.Name+"_edit_noop.txt")
+
+			if err := os.WriteFile(path, original, 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, output, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+				Path:     path,
+				Encoding: encodingInfo.Name,
+				Edits:    []EditOperation{{OldText: text, NewText: text}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.IsError {
+				t.Fatalf("expected success, got %v", result.Content)
+			}
+			if output.Diff != "" {
+				t.Fatalf("no-op diff = %q, want empty", output.Diff)
+			}
+
+			actual, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(actual, original) {
+				t.Fatal("no-op changed file bytes")
+			}
+		})
+	}
+}
+
+func TestHandleEditFile_PreservesUTF8BOM(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "utf8-bom.txt")
+	bom := fileEncoding.BOMBytesFor("utf-8")
+	original := append(append([]byte(nil), bom...), []byte("alpha\r\nbeta")...)
+
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+		Path:  path,
+		Edits: []EditOperation{{OldText: "beta", NewText: "gamma"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append(append([]byte(nil), bom...), []byte("alpha\r\ngamma")...)
+	if !bytes.Equal(actual, want) {
+		t.Fatalf("UTF-8 BOM edit bytes differ\ngot:  % X\nwant: % X", actual, want)
+	}
+}
+
+func TestHandleEditFile_EncodingFailureLeavesOriginalUnchanged(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "cp1251.txt")
+	original := []byte("alpha")
+
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+		Path:     path,
+		Encoding: "cp1251",
+		Edits:    []EditOperation{{OldText: "alpha", NewText: "earth 🌍"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected encoding error for an unrepresentable character")
+	}
+
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("encoding failure changed original bytes\ngot:  % X\nwant: % X", actual, original)
+	}
+}
+
 func TestHandleEditFile_ValidationErrors(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
@@ -223,12 +486,12 @@ func TestHandleEditFile_ValidationErrors(t *testing.T) {
 
 func TestAdjustRelativeIndent(t *testing.T) {
 	tests := []struct {
-		name      string
-		oldLines  []string
-		newLine   string
-		lineIndex int
+		name       string
+		oldLines   []string
+		newLine    string
+		lineIndex  int
 		baseIndent string
-		want      string
+		want       string
 	}{
 		{
 			name:       "zero relative indent",
@@ -323,7 +586,7 @@ func TestEditFile_CP1251Encoding(t *testing.T) {
 	// In CP1251: Н=0xCD, е=0xE5, в=0xE2, а=0xE0, л=0xEB, и=0xE8, д=0xE4, н=0xED
 	cp1251Content := []byte{
 		0xCD, 0xE5, 0xE2, 0xE0, 0xEB, 0xE8, 0xE4, 0xE5, 0xED, // Невалиден
-		0x20,       // space
+		0x20,             // space
 		0xF2, 0xE8, 0xEF, // тип
 		0x2E, // .
 	}
@@ -354,9 +617,9 @@ func TestEditFile_CP1251Encoding(t *testing.T) {
 	// Expected CP1251: "Типът е невалиден." (The type is invalid.)
 	expectedCP1251 := []byte{
 		0xD2, 0xE8, 0xEF, 0xFA, 0xF2, // Типът
-		0x20,             // space
-		0xE5,             // е
-		0x20,             // space
+		0x20,                                                 // space
+		0xE5,                                                 // е
+		0x20,                                                 // space
 		0xED, 0xE5, 0xE2, 0xE0, 0xEB, 0xE8, 0xE4, 0xE5, 0xED, // невалиден
 		0x2E, // .
 	}

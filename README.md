@@ -41,7 +41,7 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`read_text_file`](TOOLS.md#read_text_file) - Read files with encoding auto-detection and conversion
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read multiple files concurrently with encoding support
 - [`write_file`](TOOLS.md#write_file) - Write files in specific encodings
-- [`edit_file`](TOOLS.md#edit_file) - Line-based edits with diff preview and whitespace-flexible matching
+- [`edit_file`](TOOLS.md#edit_file) - Encoding/BOM-aware edits with diff preview, preserved CRLF/LF, and byte-identical no-ops
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with pattern filtering

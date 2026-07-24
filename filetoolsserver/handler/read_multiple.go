@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"runtime"
 	"sync"
 
@@ -44,7 +44,7 @@ func (h *Handler) HandleReadMultipleFiles(ctx context.Context, req *mcp.CallTool
 						ErrorCode: ErrCodeOperationFailed,
 					}
 				default:
-					results[j.idx] = h.readSingleFile(j.filePath, input.Encoding)
+					results[j.idx] = h.readSingleFile(ctx, j.filePath, input.Encoding)
 				}
 			}
 		}()
@@ -74,8 +74,8 @@ func (h *Handler) HandleReadMultipleFiles(ctx context.Context, req *mcp.CallTool
 	}, nil
 }
 
-// readSingleFile reads a single file with optional encoding.
-func (h *Handler) readSingleFile(path, requestedEncoding string) FileReadResult {
+// readSingleFile maps the shared text-document pipeline into a batch result.
+func (h *Handler) readSingleFile(ctx context.Context, path, requestedEncoding string) FileReadResult {
 	result := FileReadResult{Path: path}
 
 	v := h.ValidatePath(path)
@@ -85,32 +85,18 @@ func (h *Handler) readSingleFile(path, requestedEncoding string) FileReadResult 
 		return result
 	}
 
-	// Resolve encoding (detection mode based on file size vs MemoryThreshold)
-	encResult, err := h.resolveEncoding(requestedEncoding, v.Path)
-	if err != nil {
-		result.Error = err.Error()
-		result.ErrorCode = ErrCodeEncoding
-		return result
-	}
-
-	// Read file content for decoding
-	data, err := os.ReadFile(v.Path)
+	document, err := h.readTextDocument(ctx, v.Path, requestedEncoding)
 	if err != nil {
 		result.Error, result.ErrorCode = classifyReadError(err, v.Path)
 		return result
 	}
 
-	content, err := decodeContent(data, encResult)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to decode file content: %v", err)
-		result.ErrorCode = ErrCodeEncoding
-		return result
-	}
-
-	result.Content = content
-	if encResult.autoDetected {
-		result.DetectedEncoding = encResult.detectedEncoding
-		result.EncodingConfidence = encResult.encodingConfidence
+	result.Content = document.Text
+	result.HasBOM = document.BOM.HasBOM
+	result.BOMType = document.BOM.Type
+	if document.AutoDetected {
+		result.DetectedEncoding = document.DetectedEncoding
+		result.EncodingConfidence = document.EncodingConfidence
 	}
 
 	return result
@@ -136,11 +122,16 @@ func classifyPathError(err error) string {
 
 // classifyReadError returns a descriptive error message and code for file read errors.
 func classifyReadError(err error, path string) (string, string) {
-	if os.IsNotExist(err) {
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "operation cancelled", ErrCodeOperationFailed
+	case errors.Is(err, ErrEncodingUnsupported), errors.Is(err, ErrBOMEncodingConflict), errors.Is(err, ErrEncodingDecode):
+		return err.Error(), ErrCodeEncoding
+	case errors.Is(err, fs.ErrNotExist):
 		return fmt.Sprintf("file not found: %s", path), ErrCodeNotFound
-	}
-	if os.IsPermission(err) {
+	case errors.Is(err, fs.ErrPermission):
 		return fmt.Sprintf("permission denied: %s", path), ErrCodePermission
+	default:
+		return err.Error(), ErrCodeIO
 	}
-	return fmt.Sprintf("failed to read file: %v", err), ErrCodeIO
 }

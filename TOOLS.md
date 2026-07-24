@@ -4,7 +4,7 @@
 
 ### read_text_file
 
-Read file contents with automatic encoding detection and optional partial reading. UTF-8 files pass through unchanged; other encodings convert to UTF-8.
+Read file contents with automatic encoding detection and optional partial reading. UTF-8 files pass through unchanged; other encodings convert to UTF-8. A Unicode transport BOM is removed from returned content and reported separately through `hasBOM` and `bomType`.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -31,14 +31,16 @@ Read file contents with automatic encoding detection and optional partial readin
   "startLine": 100,
   "endLine": 149,
   "truncated": false,
-  "detectedEncoding": "windows-1251",
-  "encodingConfidence": 95
+  "detectedEncoding": "utf-16-le",
+  "encodingConfidence": 100,
+  "hasBOM": true,
+  "bomType": "utf-16-le"
 }
 ```
 
 ### read_multiple_files
 
-Read multiple files concurrently with encoding support. Individual file failures don't stop the operation.
+Read multiple files concurrently through the same encoding/BOM-aware document pipeline used by `read_text_file`. Individual file failures don't stop the operation.
 
 **Parameters:**
 - `paths` (required): Array of file paths to read
@@ -59,8 +61,10 @@ Read multiple files concurrently with encoding support. Individual file failures
     {
       "path": "/path/to/file1.pas",
       "content": "program Hello;...",
-      "detectedEncoding": "windows-1251",
-      "encodingConfidence": 95
+      "detectedEncoding": "utf-16-le",
+      "encodingConfidence": 100,
+      "hasBOM": true,
+      "bomType": "utf-16-le"
     },
     {
       "path": "/path/to/file2.pas",
@@ -99,7 +103,7 @@ Write content to file. UTF-8 writes as-is; other encodings convert from UTF-8.
 
 ### edit_file
 
-Make line-based edits to a text file. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes.
+Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes.
 
 **Parameters:**
 - `path` (required): Path to the file to edit
@@ -112,7 +116,10 @@ Make line-based edits to a text file. Supports exact matching and whitespace-fle
 - Exact text matching (first occurrence)
 - Whitespace-flexible matching (ignores leading whitespace differences)
 - Preserves original indentation
-- CRLF line endings normalized to LF
+- Preserves UTF-8/UTF-16 BOM state explicitly
+- Preserves CRLF or LF line endings for consistently formatted files
+- Skips writes for logical no-op edits, preserving the original bytes across all 24 encodings
+- Rejects unrepresentable replacement text before touching the file
 - Atomic write (temp file + rename)
 - Fails on read-only files by default (set `forceWritable: true` only when user explicitly requests it)
 

@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/pmezard/go-difflib/difflib"
 )
@@ -23,67 +22,54 @@ func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, 
 		return v.Result, EditFileOutput{}, nil
 	}
 
-	if loadToMemory, size := h.shouldLoadEntireFile(v.Path); !loadToMemory {
-		slog.Warn("loading large file into memory", "path", input.Path, "size", size, "threshold", h.config.MemoryThreshold)
-	}
-
-	originalMode := getFileMode(v.Path)
-
-	readOnlyCleared := false
-	forceWritable := input.ForceWritable != nil && *input.ForceWritable // default: false
-	if isReadOnly(originalMode) {
-		if !forceWritable {
-			return errorResult("file is read-only — STOP, do NOT retry and do NOT attempt to change file attributes. Ask the user whether to proceed with forceWritable: true, or skip this file"), EditFileOutput{}, nil
-		}
-		if !input.DryRun {
-			if err := clearReadOnly(v.Path, originalMode); err != nil {
-				return errorResult(fmt.Sprintf("failed to clear read-only flag: %v", err)), EditFileOutput{}, nil
-			}
-			readOnlyCleared = true
-			slog.Info("cleared read-only flag", "path", input.Path)
-		}
-	}
-
-	data, err := os.ReadFile(v.Path)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to read file: %v", err)), EditFileOutput{}, nil
-	}
-
-	// TODO: Use DetectLineEndingsFromFile for streaming when file > MemoryThreshold
-	lineEndings := DetectLineEndings(data)
-	if lineEndings.Style == LineEndingMixed {
-		slog.Warn("file has mixed line endings", "path", input.Path, "crlf", lineEndings.CRLFCount, "lf", lineEndings.LFCount)
-	}
-
-	encodingName, err := h.resolveEncodingFromData(input.Encoding, data, input.Path)
+	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
 	if err != nil {
 		return errorResult(err.Error()), EditFileOutput{}, nil
 	}
 
-	var content string
-	if encoding.IsUTF8(encodingName) {
-		content = string(data)
-	} else {
-		enc, _ := encoding.Get(encodingName) // Already validated by resolveEncodingFromData
-		decoder := enc.NewDecoder()
-		decoded, err := decoder.Bytes(data)
-		if err != nil {
-			return errorResult(fmt.Sprintf("failed to decode file with %s: %v", encodingName, err)), EditFileOutput{}, nil
-		}
-		content = string(decoded)
-		slog.Debug("edit_file: decoded content", "path", input.Path, "encoding", encodingName, "originalSize", len(data), "decodedSize", len(decoded))
+	originalMode := document.Mode
+	readOnly := isReadOnly(originalMode)
+	forceWritable := input.ForceWritable != nil && *input.ForceWritable // default: false
+	if readOnly && !forceWritable {
+		return errorResult("file is read-only — STOP, do NOT retry and do NOT attempt to change file attributes. Ask the user whether to proceed with forceWritable: true, or skip this file"), EditFileOutput{}, nil
 	}
 
-	content = ConvertLineEndings(content, LineEndingLF)
+	if document.LineEndings.Style == LineEndingMixed {
+		slog.Warn("file has mixed line endings", "path", input.Path, "crlf", document.LineEndings.CRLFCount, "lf", document.LineEndings.LFCount)
+	}
+
+	content := ConvertLineEndings(document.Text, LineEndingLF)
 	modifiedContent, err := applyEdits(content, input.Edits)
 	if err != nil {
 		return errorResult(err.Error()), EditFileOutput{}, nil
 	}
 
 	diff := createUnifiedDiff(content, modifiedContent, input.Path)
+	changed := modifiedContent != content
+	readOnlyCleared := false
 
-	if !input.DryRun {
-		if err := atomicWriteFileWithEncoding(v.Path, modifiedContent, encodingName, lineEndings.Style, originalMode); err != nil {
+	if !input.DryRun && changed {
+		dataToWrite, err := encodeTextDocument(document, modifiedContent, bomPreserve)
+		if err != nil {
+			return errorResult(fmt.Sprintf("failed to encode file: %v", err)), EditFileOutput{}, nil
+		}
+
+		writeMode := originalMode
+		if readOnly {
+			if err := clearReadOnly(v.Path, originalMode); err != nil {
+				return errorResult(fmt.Sprintf("failed to clear read-only flag: %v", err)), EditFileOutput{}, nil
+			}
+			readOnlyCleared = true
+			writeMode = originalMode | 0200
+			slog.Info("cleared read-only flag", "path", input.Path)
+		}
+
+		if err := atomicWriteFile(v.Path, dataToWrite, writeMode); err != nil {
+			if readOnlyCleared {
+				if restoreErr := os.Chmod(v.Path, originalMode); restoreErr != nil {
+					slog.Error("failed to restore read-only mode after edit failure", "path", input.Path, "error", restoreErr)
+				}
+			}
 			return errorResult(fmt.Sprintf("failed to write file: %v", err)), EditFileOutput{}, nil
 		}
 	}
@@ -261,30 +247,6 @@ func createUnifiedDiff(original, modified, filepath string) string {
 	}
 	text, _ := difflib.GetUnifiedDiffString(diff)
 	return text
-}
-
-// atomicWriteFileWithEncoding encodes UTF-8 content to the target encoding and writes atomically.
-func atomicWriteFileWithEncoding(path, content, encodingName, lineEndingStyle string, mode os.FileMode) error {
-	content = ConvertLineEndings(content, lineEndingStyle)
-
-	var dataToWrite []byte
-	if encoding.IsUTF8(encodingName) {
-		dataToWrite = []byte(content)
-	} else {
-		enc, ok := encoding.Get(encodingName)
-		if !ok {
-			return fmt.Errorf("unsupported encoding: %s", encodingName)
-		}
-		encoder := enc.NewEncoder()
-		encoded, err := encoder.Bytes([]byte(content))
-		if err != nil {
-			return fmt.Errorf("failed to encode content to %s: %w", encodingName, err)
-		}
-		dataToWrite = encoded
-		slog.Debug("edit_file: encoded content for write", "encoding", encodingName, "utf8Size", len(content), "encodedSize", len(encoded))
-	}
-
-	return atomicWriteFile(path, dataToWrite, mode)
 }
 
 func isReadOnly(mode os.FileMode) bool {

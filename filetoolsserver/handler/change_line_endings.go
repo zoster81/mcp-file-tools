@@ -6,36 +6,8 @@ import (
 	"os"
 	"strings"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-func canonicalBOMEncoding(name string) string {
-	switch strings.ToLower(name) {
-	case "utf-8", "utf8", "ascii":
-		return "utf-8"
-	case "utf-16-le", "utf16le", "utf-16le":
-		return "utf-16-le"
-	case "utf-16-be", "utf16be", "utf-16be":
-		return "utf-16-be"
-	default:
-		return strings.ToLower(name)
-	}
-}
-
-func splitPreservedBOM(data []byte, encodingName string) ([]byte, []byte, error) {
-	result, found := fileEncoding.DetectBOM(data)
-	if !found {
-		return data, nil, nil
-	}
-	if canonicalBOMEncoding(encodingName) != result.Charset {
-		return nil, nil, fmt.Errorf("file BOM indicates %s but selected encoding is %s", result.Charset, encodingName)
-	}
-
-	bomSize := fileEncoding.BOMSize(result.Charset)
-	bom := append([]byte(nil), data[:bomSize]...)
-	return data[bomSize:], bom, nil
-}
 
 func isUTF16Encoding(name string) bool {
 	switch canonicalBOMEncoding(name) {
@@ -177,7 +149,7 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ChangeLineEndingsOutput{}, nil
 	}
 
-	payload, bom, err := splitPreservedBOM(data, encResult.name)
+	payload, bom, err := splitTransportBOM(data, encResult.name)
 	if err != nil {
 		return errorResult(err.Error()), ChangeLineEndingsOutput{}, nil
 	}
@@ -208,8 +180,8 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 		linesChanged = info.CRLFCount
 	}
 
-	outputData := make([]byte, 0, len(bom)+len(converted))
-	outputData = append(outputData, bom...)
+	outputData := make([]byte, 0, len(bom.Bytes)+len(converted))
+	outputData = append(outputData, bom.Bytes...)
 	outputData = append(outputData, converted...)
 
 	mode := getFileMode(v.Path)

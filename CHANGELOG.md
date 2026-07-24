@@ -10,6 +10,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 - Added `examples/start-openai-tunnel.ps1`, a sanitized English Windows PowerShell 5.1 quick start for ChatGPT Web through the official OpenAI Secure MCP Tunnel.
 - Added real upstream encoding fixtures and byte-identical line-ending round-trip tests for all 24 registered encodings, including UTF-16 LE/BE and GBK/GB18030.
+- Added optional `hasBOM` and `bomType` metadata to single-file and batch read results.
 
 ### Changed
 
@@ -28,12 +29,20 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Recorded native HTTP/JSON or Streamable HTTP transport as a future compatibility direction, not as an implemented capability.
 - Invalidated cached release data when it belongs to a different repository source.
 - Updated the fork documentation and runtime tool descriptions to list all 24 encodings and document MetaTrader 4/5 MQL sources (`.mq4`, `.mq5`, `.mqh`) commonly stored as UTF-16 LE with BOM and CRLF endings.
+- Refactored `read_text_file`, `read_multiple_files`, and `edit_file` to use one shared encoding/BOM-aware document pipeline and consistent batch error classification.
+- Added a shared document encoder with internal BOM-preserve policy for edits.
 
 ### Fixed
 
 - Fixed `detect_line_endings` so it decodes the selected or auto-detected encoding before analyzing CRLF/LF sequences, including UTF-16 LE/BE.
 - Fixed `change_line_endings` so it preserves encoding, BOM state, and every non-line-ending byte across all 24 registered encodings.
 - Fixed four Staticcheck `ST1005` diagnostics in execution-tool error messages.
+- Fixed UTF-8 and UTF-16 transport BOMs leaking into `read_text_file` and `read_multiple_files` content while preserving a meaningful leading `U+FEFF` code point.
+- Added deterministic rejection of BOM/encoding conflicts instead of decoding with the wrong byte order.
+- Fixed `read_text_file` partial reads so CRLF separators no longer leak a trailing `\r` into paginated lines.
+- Fixed `edit_file` on UTF-16 LE/BE so normal edits preserve the original BOM and consistent CRLF/LF style instead of converting CRLF to LF.
+- Made logical no-op edits byte-identical across all 24 registered encodings.
+- Made edit encoding failures occur before filesystem mutation, leaving the original file unchanged.
 
 ### Removed
 

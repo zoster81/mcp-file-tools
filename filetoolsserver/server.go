@@ -19,7 +19,7 @@ MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh) are commonly UTF-16 LE with BOM an
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
 - write_file: converts UTF-8 content to target encoding (default: cp1251)
-- edit_file: in-place edits with encoding support, returns unified diff. Use dryRun=true to preview changes before applying.
+- edit_file: in-place edits through the shared encoding/BOM-aware document pipeline; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff. Use dryRun=true to preview changes before applying.
 - grep_text_files: encoding-aware regex search across files
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
 - detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
@@ -72,7 +72,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	// Read-only tools
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "read_text_file",
-		Description: "Read file with encoding auto-detection, converts to UTF-8. PREFER THIS over built-in Read for non-UTF-8 files (Cyrillic, legacy codebases). For files >2000 lines, use offset/limit to paginate. Returns totalLines and fileSizeBytes for planning subsequent reads. Use maxCharacters to cap output size and prevent token overflow. Parameters: path (required), encoding (optional, auto-detected), offset (1-indexed start line), limit (max lines to return), maxCharacters (optional, truncates content).",
+		Description: "Read file with encoding auto-detection, converts to UTF-8, strips a Unicode transport BOM from returned content, and reports hasBOM/bomType metadata. PREFER THIS over built-in Read for non-UTF-8 files (Cyrillic, legacy codebases). For files >2000 lines, use offset/limit to paginate. Returns totalLines and fileSizeBytes for planning subsequent reads. Use maxCharacters to cap output size and prevent token overflow. Parameters: path (required), encoding (optional, auto-detected), offset (1-indexed start line), limit (max lines to return), maxCharacters (optional, truncates content).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Read Text File",
 			ReadOnlyHint:  true,
@@ -82,7 +82,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "read_multiple_files",
-		Description: "Read multiple files concurrently with encoding support. PREFER THIS when reading several non-UTF-8 files at once. Individual failures don't stop the batch — partial results are returned. Parameters: paths (required array), encoding (optional, auto-detected per file).",
+		Description: "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file. PREFER THIS when reading several non-UTF-8 files at once. Individual failures don't stop the batch — partial results are returned. Each successful result may include hasBOM/bomType metadata. Parameters: paths (required array), encoding (optional, auto-detected per file).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Read Multiple Files",
 			ReadOnlyHint:  true,
@@ -278,7 +278,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	// WrapContentOnly: returns readable diff text instead of StructuredContent JSON.
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "edit_file",
-		Description: "Replace text in a file with whitespace-flexible matching. Returns unified diff. Supports non-UTF-8 via encoding param. " +
+		Description: "Replace text in a file with whitespace-flexible matching through the shared encoding/BOM-aware document pipeline. Returns unified diff, preserves UTF-8/UTF-16 BOM state and consistent CRLF/LF endings, and skips writes for logical no-op edits across all 24 encodings. " +
 			"In 'ask before edits' mode: ALWAYS call with dryRun=true first, show the diff, then dryRun=false after user confirms. " +
 			"With auto-edit permissions: call directly with dryRun=false. " +
 			"On no match, the error hints the closest matching content — use it to fix oldText and retry. " +

@@ -28,32 +28,12 @@ func (h *Handler) HandleReadTextFile(ctx context.Context, req *mcp.CallToolReque
 		return v.Result, ReadTextFileOutput{}, nil
 	}
 
-	// Get file size early for the output
-	fileInfo, err := os.Stat(v.Path)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to stat file: %v", err)), ReadTextFileOutput{}, nil
-	}
-	fileSizeBytes := fileInfo.Size()
-
-	if loadToMemory, size := h.shouldLoadEntireFile(v.Path); !loadToMemory {
-		slog.Warn("loading large file into memory", "path", input.Path, "size", size, "threshold", h.config.MemoryThreshold)
-	}
-
-	encResult, err := h.resolveEncoding(input.Encoding, v.Path)
+	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
 	if err != nil {
 		return errorResult(err.Error()), ReadTextFileOutput{}, nil
 	}
 
-	data, err := os.ReadFile(v.Path)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ReadTextFileOutput{}, nil
-	}
-
-	content, err := decodeContent(data, encResult)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to decode file content: %v", err)), ReadTextFileOutput{}, nil
-	}
-
+	content := document.Text
 	totalLines := strings.Count(content, "\n") + 1
 
 	var startLine, endLine int
@@ -78,21 +58,23 @@ func (h *Handler) HandleReadTextFile(ctx context.Context, req *mcp.CallToolReque
 		}
 		content = content[:byteIdx]
 		content += fmt.Sprintf("\n\n[TRUNCATED at %d characters. File has %d lines, %d bytes. Use offset/limit for specific ranges.]",
-			*input.MaxCharacters, totalLines, fileSizeBytes)
+			*input.MaxCharacters, totalLines, document.FileSizeBytes)
 		truncated = true
 	}
 
 	output := ReadTextFileOutput{
 		Content:       content,
 		TotalLines:    totalLines,
-		FileSizeBytes: fileSizeBytes,
+		FileSizeBytes: document.FileSizeBytes,
 		StartLine:     startLine,
 		EndLine:       endLine,
 		Truncated:     truncated,
+		HasBOM:        document.BOM.HasBOM,
+		BOMType:       document.BOM.Type,
 	}
-	if encResult.autoDetected {
-		output.DetectedEncoding = encResult.detectedEncoding
-		output.EncodingConfidence = encResult.encodingConfidence
+	if document.AutoDetected {
+		output.DetectedEncoding = document.DetectedEncoding
+		output.EncodingConfidence = document.EncodingConfidence
 	}
 
 	return &mcp.CallToolResult{}, output, nil
@@ -125,31 +107,6 @@ func (h *Handler) resolveWriteEncoding(inputEncoding string, filePath string) (s
 
 	// 3. New file or detection failed - use configured default
 	return h.config.DefaultEncoding, nil
-}
-
-// resolveEncodingFromData returns encoding from loaded data: explicit > auto-detect.
-func (h *Handler) resolveEncodingFromData(inputEncoding string, data []byte, filePath string) (string, error) {
-	// 1. Explicit encoding always wins
-	if inputEncoding != "" {
-		encodingName := strings.ToLower(inputEncoding)
-		if _, ok := encoding.Get(encodingName); !ok {
-			return "", fmt.Errorf("%w: %s. Use list_encodings to see available encodings", ErrEncodingUnsupported, encodingName)
-		}
-		return encodingName, nil
-	}
-
-	// 2. Auto-detect from loaded data
-	detected := encoding.Detect(data)
-	if detected.Confidence >= encoding.MinConfidenceThreshold {
-		if _, ok := encoding.Get(detected.Charset); ok {
-			slog.Debug("auto-detected encoding from data", "path", filePath, "encoding", detected.Charset, "confidence", detected.Confidence)
-			return detected.Charset, nil
-		}
-	}
-
-	// 3. Detection failed or low confidence - fall back to UTF-8
-	slog.Debug("encoding detection inconclusive, using utf-8", "path", filePath, "detected", detected.Charset, "confidence", detected.Confidence)
-	return "utf-8", nil
 }
 
 // resolveEncoding returns explicit encoding or auto-detects based on file size.
@@ -249,6 +206,9 @@ func applyOffsetLimit(lines []string, offset, limit *int) (string, int, int) {
 		}
 	}
 
-	selectedLines := lines[startIdx:endIdx]
+	selectedLines := make([]string, endIdx-startIdx)
+	for i, line := range lines[startIdx:endIdx] {
+		selectedLines[i] = strings.TrimSuffix(line, "\r")
+	}
 	return strings.Join(selectedLines, "\n"), startIdx + 1, endIdx
 }

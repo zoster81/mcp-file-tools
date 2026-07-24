@@ -87,11 +87,11 @@
   "tools": [
     {
       "name": "read_text_file",
-      "description": "Read files with encoding auto-detection across 24 encodings, including UTF-16 LE/BE, and convert content to UTF-8"
+      "description": "Read files through the shared encoding/BOM-aware document pipeline, convert content to UTF-8, strip transport BOMs, and report BOM metadata"
     },
     {
       "name": "read_multiple_files",
-      "description": "Read multiple files concurrently with encoding support"
+      "description": "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file"
     },
     {
       "name": "write_file",
@@ -99,7 +99,7 @@
     },
     {
       "name": "edit_file",
-      "description": "Replace text sequences with whitespace-flexible matching, returns diff"
+      "description": "Edit text through the shared encoding/BOM-aware document pipeline while preserving UTF-8/UTF-16 BOM state and consistent CRLF/LF endings; logical no-ops are byte-identical"
     },
     {
       "name": "list_directory",
