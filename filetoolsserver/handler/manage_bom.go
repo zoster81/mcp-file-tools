@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -150,7 +151,7 @@ func readFileHead(path string, n int) ([]byte, error) {
 
 	buf := make([]byte, n)
 	read, err := f.Read(buf)
-	if err != nil && read == 0 {
+	if err != nil && err != io.EOF {
 		return nil, err
 	}
 	return buf[:read], nil

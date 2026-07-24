@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 )
 
 func TestHandleConvertEncoding_UTF8ToCP1251(t *testing.T) {
@@ -78,7 +81,7 @@ func TestHandleConvertEncoding_WithBackup(t *testing.T) {
 	h := NewHandler([]string{tempDir})
 
 	testFile := filepath.Join(tempDir, "test.txt")
-	originalContent := []byte("original content")
+	originalContent := []byte("Привет")
 	os.WriteFile(testFile, originalContent, 0644)
 
 	result, output, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
@@ -195,5 +198,265 @@ func TestHandleConvertEncoding_GB2312AliasResolves(t *testing.T) {
 	}
 	if result.IsError {
 		t.Error("expected gb2312 alias to resolve, got error")
+	}
+}
+
+func TestHandleConvertEncoding_UTF8ToUTF16LEAutoAddsBOMAndPreservesLineEndings(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "mixed.mq5")
+	content := "alpha\r\nbeta\ngamma\rdelta"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, From: "utf-8", To: "utf-16-le",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bom := fileEncoding.BOMBytesFor("utf-16-le")
+	if !bytes.HasPrefix(data, bom) {
+		t.Fatal("auto policy did not add UTF-16 LE BOM")
+	}
+	if got := decodeWrittenText(t, "utf-16-le", data); got != content {
+		t.Fatalf("line endings changed: got %q, want %q", got, content)
+	}
+	if !output.HasBOM || output.BOMType != "utf-16-le" || output.BOMPolicy != "auto" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleConvertEncoding_UTF16LEToUTF8AutoRemovesTransportBOM(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "expert.mq5")
+	content := "// Città Привет 中文\r\n"
+	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, To: "utf-8",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found := fileEncoding.DetectBOM(data); found {
+		t.Fatal("auto policy should write UTF-8 without BOM")
+	}
+	if string(data) != content {
+		t.Fatalf("converted content = %q, want %q", data, content)
+	}
+	if output.HasBOM || output.BOMType != "" || output.BOMPolicy != "auto" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleConvertEncoding_BOMPreserveMapsPresenceToTargetEncoding(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "preserve.txt")
+	original := append(append([]byte(nil), fileEncoding.BOMBytesFor("utf-8")...), []byte("hello")...)
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, From: "utf-8", To: "utf-16-be", BOM: "preserve",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(data, fileEncoding.BOMBytesFor("utf-16-be")) {
+		t.Fatal("preserve policy did not preserve BOM presence in target encoding")
+	}
+	if !output.HasBOM || output.BOMType != "utf-16-be" || output.BOMPolicy != "preserve" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleConvertEncoding_BOMNeverWritesBOMlessUTF16(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "bomless.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, From: "utf-8", To: "utf-16-le", BOM: "never",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found := fileEncoding.DetectBOM(data); found {
+		t.Fatal("unexpected BOM")
+	}
+	if output.HasBOM || output.BOMPolicy != "never" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleConvertEncoding_InvalidBOMPolicyDoesNotMutate(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "unchanged.txt")
+	original := []byte("original")
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, From: "utf-8", To: "utf-16-le", BOM: "sometimes",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected invalid BOM policy error")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("file mutated: got %q, want %q", actual, original)
+	}
+}
+
+func TestHandleConvertEncoding_BOMAlwaysRejectsLegacyTargetWithoutMutation(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "legacy.txt")
+	original := []byte("hello")
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, From: "utf-8", To: "cp1251", BOM: "always", Backup: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected BOM/encoding compatibility error")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("file mutated: got %q, want %q", actual, original)
+	}
+	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
+		t.Fatalf("backup should not be created, stat error = %v", err)
+	}
+}
+
+func TestHandleConvertEncoding_ByteIdenticalNoOpSkipsWriteAndBackup(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "unchanged.txt")
+	original := []byte("alpha\r\nbeta\ngamma\rdelta")
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, From: "utf-8", To: "utf-8", BOM: "auto", Backup: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	if output.Changed {
+		t.Fatalf("changed = true, want false: %+v", output)
+	}
+	if output.BackupPath != "" {
+		t.Fatalf("backupPath = %q, want empty for no-op", output.BackupPath)
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("file changed: got %q, want %q", actual, original)
+	}
+	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
+		t.Fatalf("backup should not be created, stat error = %v", err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Fatalf("modification time changed: before=%v after=%v", before.ModTime(), after.ModTime())
+	}
+}
+
+func TestHandleConvertEncoding_UnrepresentableContentDoesNotMutateOrBackup(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "emoji.txt")
+	original := []byte("earth 🌍")
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleConvertEncoding(context.Background(), nil, ConvertEncodingInput{
+		Path: path, From: "utf-8", To: "cp1251", BOM: "never", Backup: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected encoding error")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("file mutated: got %q, want %q", actual, original)
+	}
+	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
+		t.Fatalf("backup should not be created, stat error = %v", err)
 	}
 }

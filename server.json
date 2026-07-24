@@ -95,7 +95,7 @@
     },
     {
       "name": "write_file",
-      "description": "Write file with encoding conversion from UTF-8"
+      "description": "Write through the shared document encoder with explicit auto, always, never, or preserve BOM policy"
     },
     {
       "name": "edit_file",
@@ -139,7 +139,7 @@
     },
     {
       "name": "convert_encoding",
-      "description": "Convert file encoding from source to target encoding"
+      "description": "Convert through the shared encoding/BOM-aware pipeline while preserving decoded text and line endings exactly and skipping byte-identical writes"
     },
     {
       "name": "list_encodings",

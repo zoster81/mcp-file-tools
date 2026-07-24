@@ -78,26 +78,38 @@ Read multiple files concurrently through the same encoding/BOM-aware document pi
 
 ### write_file
 
-Write content to file. UTF-8 writes as-is; other encodings convert from UTF-8.
+Write UTF-8 input text using the selected target encoding through the shared document encoder. The supplied line endings are written exactly as provided. Encoding failures and invalid BOM policies are rejected before filesystem mutation.
 
 **Parameters:**
 - `path` (required): Path to the file
-- `content` (required): Content to write
-- `encoding` (optional): Target encoding (default: cp1251)
+- `content` (required): UTF-8 content to write
+- `encoding` (optional): Target encoding; preserves a confidently detected existing encoding when omitted, otherwise uses the configured default (`cp1251` by default)
+- `bom` (optional): BOM policy — `auto` (default), `always`, `never`, or `preserve`
+
+**BOM policy:**
+- `auto`: UTF-8 and legacy encodings have no BOM; UTF-16 LE/BE receive their canonical BOM
+- `always`: Require the target encoding's canonical BOM; fails for encodings without BOM support
+- `never`: Write no BOM
+- `preserve`: Preserve the existing file's BOM presence, using the canonical BOM for the selected target encoding; a new file has no BOM
 
 **Example:**
 ```json
 {
-  "path": "/path/to/file.pas",
-  "content": "program Hello;\nbegin\n  writeln('Zdravei');\nend.",
-  "encoding": "cp1251"
+  "path": "/path/to/expert.mq5",
+  "content": "#property strict\r\n",
+  "encoding": "utf-16-le",
+  "bom": "auto"
 }
 ```
 
 **Response:**
 ```json
 {
-  "message": "Successfully wrote 48 bytes to /path/to/file.pas"
+  "message": "Successfully wrote 38 bytes to /path/to/expert.mq5 (encoding: utf-16-le, BOM: auto)",
+  "encoding": "utf-16-le",
+  "bomPolicy": "auto",
+  "hasBOM": true,
+  "bomType": "utf-16-le"
 }
 ```
 
@@ -383,31 +395,42 @@ Detect the encoding of a file with confidence percentage. Useful for diagnosing 
 
 ### convert_encoding
 
-Convert a file from one encoding to another. Reads in source encoding, writes in target encoding.
+Convert a file through the shared encoding/BOM-aware document pipeline. The decoded text and its CRLF, LF, CR, or mixed line endings are preserved exactly; only the encoding and selected BOM policy change. A byte-identical result is reported as `changed: false` without rewriting the file or creating a requested backup.
 
 **Parameters:**
 - `path` (required): Path to the file to convert
 - `from` (optional): Source encoding (auto-detected if omitted)
 - `to` (required): Target encoding
 - `backup` (optional): Create a `.bak` backup file before converting (default: false)
+- `bom` (optional): BOM policy — `auto` (default), `always`, `never`, or `preserve`
+
+**BOM policy:**
+- `auto`: UTF-8 and legacy targets have no BOM; UTF-16 LE/BE targets receive their canonical BOM
+- `always`: Require the target encoding's canonical BOM; fails before mutation for encodings without BOM support
+- `never`: Write no BOM
+- `preserve`: Preserve source BOM presence using the canonical BOM of the target encoding
 
 **Example:**
 ```json
 {
-  "path": "/path/to/file.pas",
-  "from": "cp1251",
+  "path": "/path/to/expert.mq5",
+  "from": "utf-16-le",
   "to": "utf-8",
-  "backup": true
+  "backup": true,
+  "bom": "auto"
 }
 ```
 
 **Response:**
 ```json
 {
-  "message": "Converted /path/to/file.pas from windows-1251 to utf-8",
-  "sourceEncoding": "windows-1251",
+  "message": "Successfully converted /path/to/expert.mq5 from utf-16-le to utf-8 (BOM: auto) (backup: /path/to/expert.mq5.bak)",
+  "sourceEncoding": "utf-16-le",
   "targetEncoding": "utf-8",
-  "backupPath": "/path/to/file.pas.bak"
+  "backupPath": "/path/to/expert.mq5.bak",
+  "bomPolicy": "auto",
+  "hasBOM": false,
+  "changed": true
 }
 ```
 

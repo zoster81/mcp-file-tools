@@ -3,8 +3,9 @@ package handler
 import (
 	"context"
 	"fmt"
+	"os"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -14,31 +15,61 @@ func (h *Handler) HandleWriteFile(ctx context.Context, req *mcp.CallToolRequest,
 		return v.Result, WriteFileOutput{}, nil
 	}
 
-	// Resolve encoding: explicit > preserve existing > configured default
+	policy, err := parseBOMPolicy(input.BOM, bomAuto)
+	if err != nil {
+		return errorResult(err.Error()), WriteFileOutput{}, nil
+	}
+
+	// Resolve encoding: explicit > preserve existing > configured default.
 	encodingName, err := h.resolveWriteEncoding(input.Encoding, v.Path)
 	if err != nil {
 		return errorResult(err.Error()), WriteFileOutput{}, nil
 	}
 
-	enc, _ := encoding.Get(encodingName) // Already validated by resolveWriteEncoding
-
-	var contentToWrite []byte
-	if encoding.IsUTF8(encodingName) {
-		contentToWrite = []byte(input.Content)
-	} else {
-		encoder := enc.NewEncoder()
-		encoded, err := encoder.Bytes([]byte(input.Content))
-		if err != nil {
-			return errorResult(fmt.Sprintf("failed to encode content: %v", err)), WriteFileOutput{}, nil
+	document := textDocument{Charset: encodingName}
+	if policy == bomPreserve {
+		head, readErr := readFileHead(v.Path, 4)
+		switch {
+		case readErr == nil:
+			if detected, found := fileEncoding.DetectBOM(head); found {
+				document.BOM = bomInfo{HasBOM: true, Type: detected.Charset}
+			}
+		case !os.IsNotExist(readErr):
+			return errorResult(fmt.Sprintf("failed to inspect existing BOM: %v", readErr)), WriteFileOutput{}, nil
 		}
-		contentToWrite = encoded
 	}
 
-	mode := getFileMode(v.Path)
-	if err := atomicWriteFile(v.Path, contentToWrite, mode); err != nil {
+	contentToWrite, err := encodeTextDocument(document, input.Content, policy)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to encode content: %v", err)), WriteFileOutput{}, nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), WriteFileOutput{}, nil
+	default:
+	}
+
+	commit := h.ValidatePath(input.Path)
+	if !commit.Ok() {
+		return commit.Result, WriteFileOutput{}, nil
+	}
+	if commit.Path != v.Path {
+		return errorResult("path changed while preparing write"), WriteFileOutput{}, nil
+	}
+
+	mode := getFileMode(commit.Path)
+	if err := atomicWriteFile(commit.Path, contentToWrite, mode); err != nil {
 		return errorResult(fmt.Sprintf("failed to write file: %v", err)), WriteFileOutput{}, nil
 	}
 
-	message := fmt.Sprintf("Successfully wrote %d bytes to %s (encoding: %s)", len(contentToWrite), input.Path, encodingName)
-	return &mcp.CallToolResult{}, WriteFileOutput{Message: message}, nil
+	hasBOM, bomType := outputBOMMetadata(contentToWrite)
+	message := fmt.Sprintf("Successfully wrote %d bytes to %s (encoding: %s, BOM: %s)", len(contentToWrite), input.Path, encodingName, policy)
+	return &mcp.CallToolResult{}, WriteFileOutput{
+		Message:   message,
+		Encoding:  encodingName,
+		BOMPolicy: string(policy),
+		HasBOM:    hasBOM,
+		BOMType:   bomType,
+	}, nil
 }

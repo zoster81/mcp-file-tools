@@ -32,6 +32,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Refactored `read_text_file`, `read_multiple_files`, and `edit_file` to use one shared encoding/BOM-aware document pipeline and consistent batch error classification.
 - Added a shared document encoder with internal BOM-preserve policy for edits.
 - Migrated `grep_text_files` to the shared encoding/BOM-aware document decoder with bounded per-file scanning and deterministic ordered aggregation.
+- Migrated `write_file` and `convert_encoding` to the shared document encoder and added the public `auto`, `always`, `never`, and `preserve` BOM policies.
 
 ### Fixed
 
@@ -47,6 +48,9 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Fixed UTF-16 LE/BE grep so BOM-bearing files are auto-detected and BOMless files can be searched with an explicit encoding instead of being rejected by raw NUL-byte binary checks.
 - Fixed parallel grep ordering and global `maxMatches` enforcement, including accurate `truncated` reporting when the limit is reached exactly.
 - Revalidated every traversed grep file before reading so file symlinks or junctions resolving outside allowed directories are skipped.
+- Fixed UTF-16 writes and conversions so `auto` emits exactly one canonical BOM, `never` remains BOMless, and UTF-8/legacy `auto` output remains BOM-free.
+- Preserved CRLF, LF, CR, and mixed line-ending sequences exactly during encoding conversion, and rejected invalid, impossible, or unrepresentable output before filesystem mutation.
+- Skipped byte-identical encoding conversions without rewriting the file or creating a requested backup.
 
 ### Removed
 

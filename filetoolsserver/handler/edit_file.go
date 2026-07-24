@@ -49,7 +49,8 @@ func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, 
 	readOnlyCleared := false
 
 	if !input.DryRun && changed {
-		dataToWrite, err := encodeTextDocument(document, modifiedContent, bomPreserve)
+		contentToWrite := restoreDocumentLineEndings(modifiedContent, document.LineEndings.Style)
+		dataToWrite, err := encodeTextDocument(document, contentToWrite, bomPreserve)
 		if err != nil {
 			return errorResult(fmt.Sprintf("failed to encode file: %v", err)), EditFileOutput{}, nil
 		}

@@ -18,7 +18,7 @@ MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh) are commonly UTF-16 LE with BOM an
 
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
-- write_file: converts UTF-8 content to target encoding (default: cp1251)
+- write_file: encodes UTF-8 content through the shared document encoder; supports bom=auto|always|never|preserve (default: auto)
 - edit_file: in-place edits through the shared encoding/BOM-aware document pipeline; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff. Use dryRun=true to preview changes before applying.
 - grep_text_files: deterministic regex search through the shared decoder; auto-detects BOM-bearing UTF-16 LE/BE and accepts explicit encoding for BOMless files
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
@@ -29,7 +29,7 @@ Workflow for non-UTF-8 files:
 1. detect_encoding - identify file encoding
 2. detect_line_endings - inspect line endings using the detected or explicit encoding
 3. read_text_file or edit_file - read/modify with correct encoding
-4. change_line_endings when needed, or write_file with encoding param to preserve the intended encoding
+4. change_line_endings when needed, or write_file/convert_encoding with an explicit encoding and BOM policy
 
 If "no allowed directories configured" error: add directory paths as args in .mcp.json.
 
@@ -229,7 +229,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "write_file",
-		Description: "Write file with encoding conversion from UTF-8. PREFER THIS over built-in Write for non-UTF-8 files — converts UTF-8 content to target encoding, preserving legacy compatibility. Parameters: path (required), content (required), encoding (default: cp1251). Use after read_text_file to preserve original encoding.",
+		Description: "Write UTF-8 content through the shared document encoder. The supplied line endings are written exactly as provided. Parameters: path (required), content (required), encoding (preserves a confidently detected existing encoding or defaults to cp1251), bom (optional: auto|always|never|preserve; default auto). auto writes UTF-8/legacy without BOM and UTF-16 LE/BE with their canonical BOM.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Write File",
 			ReadOnlyHint:    false,
@@ -294,7 +294,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "convert_encoding",
-		Description: "Convert file from one encoding to another. Use after detect_encoding to identify the source. Parameters: path (required), from (source encoding, auto-detected if omitted), to (target encoding, required), backup (create .bak file before converting, default: false). IMPORTANT: Use backup=true for irreversible conversions.",
+		Description: "Convert through the shared encoding/BOM-aware document pipeline while preserving decoded text and line endings exactly. Byte-identical results skip the write and requested backup. Parameters: path (required), from (auto-detected if omitted), to (required), backup (default false), bom (optional: auto|always|never|preserve; default auto). auto writes UTF-8/legacy without BOM and UTF-16 LE/BE with their canonical BOM. Use backup=true for irreversible conversions.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Convert Encoding",
 			ReadOnlyHint:    false,

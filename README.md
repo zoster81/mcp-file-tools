@@ -40,7 +40,7 @@ The custom tunnel-oriented changes include authoritative CLI roots, Windows driv
 Provides 24 tools for file operations, encoding conversion, update checks, and optional local execution:
 - [`read_text_file`](TOOLS.md#read_text_file) - Read files with encoding auto-detection and conversion
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read multiple files concurrently with encoding support
-- [`write_file`](TOOLS.md#write_file) - Write files in specific encodings
+- [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
 - [`edit_file`](TOOLS.md#edit_file) - Encoding/BOM-aware edits with diff preview, preserved CRLF/LF, and byte-identical no-ops
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
@@ -50,7 +50,7 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`search_files`](TOOLS.md#search_files) - Recursively search for files matching glob patterns
 - [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic regex search through the shared encoding/BOM-aware decoder, including UTF-16 LE/BE
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
-- [`convert_encoding`](TOOLS.md#convert_encoding) - Convert file between encodings
+- [`convert_encoding`](TOOLS.md#convert_encoding) - Convert encoding while preserving decoded text and line endings, with explicit BOM policy and byte-identical no-op suppression
 - [`detect_line_endings`](TOOLS.md#detect_line_endings) - Detect CRLF/LF/mixed endings after decoding UTF-8, legacy, or UTF-16 text
 - [`change_line_endings`](TOOLS.md#change_line_endings) - Convert LF/CRLF while preserving encoding, BOM state, and non-line-ending bytes
 - [`manage_bom`](TOOLS.md#manage_bom) - Detect, strip, or add Unicode BOM
@@ -87,7 +87,8 @@ This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://
 - CLI-provided allowed directories as the authoritative fallback for tunnel clients that do not implement MCP roots requests;
 - correct validation of descendants when a Windows drive root such as `D:\` is allowed;
 - encoding-aware `detect_line_endings` and byte-preserving `change_line_endings` support for all 24 registered encodings, including UTF-16 LE/BE;
-- real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests.
+- real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests;
+- a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 
@@ -256,6 +257,7 @@ Once the connector is active, ask ChatGPT Web or the connected MCP client:
 - "Read MainForm.dfm using CP1251 encoding"
 - "Detect line endings in ExpertAdvisor.mq5 using UTF-16 LE"
 - "Convert the UTF-16 LE MQL4 file strategy.mq4 from mixed endings to CRLF without changing its BOM"
+- "Convert expert.mq5 from UTF-8 to UTF-16 LE with `bom: auto` and create a backup"
 
 **Security:** File tools access only explicitly allowed directories:
 - **OpenAI Tunnel:** the directory arguments embedded in `MCP_COMMAND` are the authoritative baseline;
@@ -307,7 +309,7 @@ User: Read config.ini and change the title to "Настройки"
 Assistant: [read_text_file with cp1251] → [modify UTF-8] → [write_file with cp1251]
 ```
 
-The original encoding is preserved - files remain compatible with legacy tools.
+The original encoding can be preserved while the public `bom` policy controls BOM output explicitly. The default `auto` policy writes UTF-8 and legacy encodings without BOM and UTF-16 LE/BE with their canonical BOM; use `preserve` when BOM presence must match an existing file.
 
 ## Development
 

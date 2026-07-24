@@ -1,110 +1,105 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // HandleConvertEncoding converts a file from one encoding to another.
 func (h *Handler) HandleConvertEncoding(ctx context.Context, req *mcp.CallToolRequest, input ConvertEncodingInput) (*mcp.CallToolResult, ConvertEncodingOutput, error) {
-	// Validate required target encoding
 	if input.To == "" {
 		return errorResult("target encoding (to) is required"), ConvertEncodingOutput{}, nil
 	}
 
-	// Validate path
 	v := h.ValidatePath(input.Path)
 	if !v.Ok() {
 		return v.Result, ConvertEncodingOutput{}, nil
 	}
 
-	// Validate target encoding
-	targetEnc, ok := encoding.Get(strings.ToLower(input.To))
-	if !ok {
+	targetEncodingName := strings.ToLower(input.To)
+	if _, ok := fileEncoding.Get(targetEncodingName); !ok {
 		return errorResult(fmt.Sprintf("unsupported target encoding: %s. Use list_encodings to see available encodings.", input.To)), ConvertEncodingOutput{}, nil
 	}
 
-	// Check file size - warn if large file will be loaded to memory
-	if loadToMemory, size := h.shouldLoadEntireFile(v.Path); !loadToMemory {
-		slog.Warn("loading large file into memory", "path", input.Path, "size", size, "threshold", h.config.MemoryThreshold)
-	}
-
-	// Preserve original file permissions
-	originalMode := getFileMode(v.Path)
-
-	// Read file
-	data, err := os.ReadFile(v.Path)
+	policy, err := parseBOMPolicy(input.BOM, bomAuto)
 	if err != nil {
-		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ConvertEncodingOutput{}, nil
+		return errorResult(err.Error()), ConvertEncodingOutput{}, nil
 	}
 
-	// Resolve source encoding
-	var sourceEncodingName string
-	if input.From != "" {
-		sourceEncodingName = strings.ToLower(input.From)
-		_, ok := encoding.Get(sourceEncodingName)
-		if !ok {
-			return errorResult(fmt.Sprintf("unsupported source encoding: %s. Use list_encodings to see available encodings.", input.From)), ConvertEncodingOutput{}, nil
-		}
-	} else {
-		// Auto-detect source encoding
-		detection, _ := encoding.DetectSample(data)
-		if detection.Charset == "" {
-			return errorResult("could not detect source encoding. Please specify 'from' parameter."), ConvertEncodingOutput{}, nil
-		}
-		sourceEncodingName = detection.Charset
+	document, originalData, err := h.readTextDocumentWithData(ctx, v.Path, input.From)
+	if err != nil {
+		return errorResult(err.Error()), ConvertEncodingOutput{}, nil
+	}
+	sourceEncodingName := document.Charset
 
-		// Validate detected encoding is supported
-		_, ok := encoding.Get(sourceEncodingName)
-		if !ok {
-			return errorResult(fmt.Sprintf("detected encoding %s is not supported. Please specify 'from' parameter.", sourceEncodingName)), ConvertEncodingOutput{}, nil
-		}
+	targetDocument := document
+	targetDocument.Charset = targetEncodingName
+	targetData, err := encodeTextDocument(targetDocument, document.Text, policy)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to encode to %s: %v", targetEncodingName, err)), ConvertEncodingOutput{}, nil
 	}
 
-	// Decode to UTF-8
-	var utf8Content string
-	if encoding.IsUTF8(sourceEncodingName) {
-		utf8Content = string(data)
-	} else {
-		sourceEnc, _ := encoding.Get(sourceEncodingName)
-		decoder := sourceEnc.NewDecoder()
-		decoded, err := decoder.Bytes(data)
-		if err != nil {
-			return errorResult(fmt.Sprintf("failed to decode from %s: %v", sourceEncodingName, err)), ConvertEncodingOutput{}, nil
-		}
-		utf8Content = string(decoded)
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), ConvertEncodingOutput{}, nil
+	default:
 	}
 
-	// Encode to target
-	var targetData []byte
-	targetEncodingName := strings.ToLower(input.To)
-	if encoding.IsUTF8(targetEncodingName) {
-		targetData = []byte(utf8Content)
-	} else {
-		encoder := targetEnc.NewEncoder()
-		encoded, err := encoder.Bytes([]byte(utf8Content))
-		if err != nil {
-			return errorResult(fmt.Sprintf("failed to encode to %s: %v", targetEncodingName, err)), ConvertEncodingOutput{}, nil
-		}
-		targetData = encoded
+	hasBOM, bomType := outputBOMMetadata(targetData)
+	if bytes.Equal(originalData, targetData) {
+		return &mcp.CallToolResult{}, ConvertEncodingOutput{
+			Message:        fmt.Sprintf("No conversion needed for %s: target bytes are unchanged", input.Path),
+			SourceEncoding: sourceEncodingName,
+			TargetEncoding: targetEncodingName,
+			BOMPolicy:      string(policy),
+			HasBOM:         hasBOM,
+			BOMType:        bomType,
+			Changed:        false,
+		}, nil
 	}
 
 	var backupPath string
 	if input.Backup {
-		backupPath = v.Path + ".bak"
+		backup := h.ValidatePath(v.Path + ".bak")
+		if !backup.Ok() {
+			return backup.Result, ConvertEncodingOutput{}, nil
+		}
+		backupPath = backup.Path
 	}
 
-	if err := atomicWriteWithBackup(v.Path, targetData, originalMode, backupPath); err != nil {
+	select {
+	case <-ctx.Done():
+		return errorResult(ctx.Err().Error()), ConvertEncodingOutput{}, nil
+	default:
+	}
+
+	commit := h.ValidatePath(input.Path)
+	if !commit.Ok() {
+		return commit.Result, ConvertEncodingOutput{}, nil
+	}
+	if commit.Path != v.Path {
+		return errorResult("path changed while preparing encoding conversion"), ConvertEncodingOutput{}, nil
+	}
+	if backupPath != "" {
+		backup := h.ValidatePath(backupPath)
+		if !backup.Ok() {
+			return backup.Result, ConvertEncodingOutput{}, nil
+		}
+		if backup.Path != backupPath {
+			return errorResult("backup path changed while preparing encoding conversion"), ConvertEncodingOutput{}, nil
+		}
+	}
+
+	if err := atomicWriteWithBackup(commit.Path, targetData, document.Mode, backupPath); err != nil {
 		return errorResult(fmt.Sprintf("failed to write converted file: %v", err)), ConvertEncodingOutput{}, nil
 	}
 
-	message := fmt.Sprintf("Successfully converted %s from %s to %s", input.Path, sourceEncodingName, targetEncodingName)
+	message := fmt.Sprintf("Successfully converted %s from %s to %s (BOM: %s)", input.Path, sourceEncodingName, targetEncodingName, policy)
 	if backupPath != "" {
 		message += fmt.Sprintf(" (backup: %s)", backupPath)
 	}
@@ -114,5 +109,9 @@ func (h *Handler) HandleConvertEncoding(ctx context.Context, req *mcp.CallToolRe
 		SourceEncoding: sourceEncodingName,
 		TargetEncoding: targetEncodingName,
 		BackupPath:     backupPath,
+		BOMPolicy:      string(policy),
+		HasBOM:         hasBOM,
+		BOMType:        bomType,
+		Changed:        true,
 	}, nil
 }

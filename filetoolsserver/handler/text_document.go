@@ -30,7 +30,26 @@ type textDocument struct {
 
 type bomPolicy string
 
-const bomPreserve bomPolicy = "preserve"
+const (
+	bomPreserve bomPolicy = "preserve"
+	bomAlways   bomPolicy = "always"
+	bomNever    bomPolicy = "never"
+	bomAuto     bomPolicy = "auto"
+)
+
+func parseBOMPolicy(value string, defaultPolicy bomPolicy) (bomPolicy, error) {
+	if strings.TrimSpace(value) == "" {
+		return defaultPolicy, nil
+	}
+
+	policy := bomPolicy(strings.ToLower(strings.TrimSpace(value)))
+	switch policy {
+	case bomPreserve, bomAlways, bomNever, bomAuto:
+		return policy, nil
+	default:
+		return "", fmt.Errorf("invalid BOM policy %q: valid values are auto, always, never, preserve", value)
+	}
+}
 
 func canonicalBOMEncoding(name string) string {
 	switch strings.ToLower(name) {
@@ -112,8 +131,6 @@ func (h *Handler) resolveEncodingFromDataDetailed(inputEncoding string, data []b
 }
 
 func encodeTextDocument(document textDocument, content string, policy bomPolicy) ([]byte, error) {
-	content = restoreDocumentLineEndings(content, document.LineEndings.Style)
-
 	var encoded []byte
 	if fileEncoding.IsUTF8(document.Charset) {
 		encoded = []byte(content)
@@ -156,35 +173,61 @@ func restoreDocumentLineEndings(content, style string) string {
 }
 
 func documentBOMBytes(document textDocument, policy bomPolicy) ([]byte, error) {
-	if policy != bomPreserve {
+	charset := canonicalBOMEncoding(document.Charset)
+
+	switch policy {
+	case bomNever:
+		return nil, nil
+	case bomAuto:
+		switch charset {
+		case "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be":
+			return requiredBOMBytes(charset, policy)
+		default:
+			return nil, nil
+		}
+	case bomAlways:
+		return requiredBOMBytes(charset, policy)
+	case bomPreserve:
+		if !document.BOM.HasBOM {
+			return nil, nil
+		}
+		return requiredBOMBytes(charset, policy)
+	default:
 		return nil, fmt.Errorf("unsupported BOM policy: %s", policy)
 	}
-	if !document.BOM.HasBOM {
-		return nil, nil
-	}
-	if canonicalBOMEncoding(document.Charset) != document.BOM.Type {
-		return nil, fmt.Errorf("%w: document BOM is %s but encoding is %s", ErrBOMEncodingConflict, document.BOM.Type, document.Charset)
-	}
-	if len(document.BOM.Bytes) > 0 {
-		return append([]byte(nil), document.BOM.Bytes...), nil
-	}
-	bom := fileEncoding.BOMBytesFor(document.BOM.Type)
+}
+
+func requiredBOMBytes(charset string, policy bomPolicy) ([]byte, error) {
+	bom := fileEncoding.BOMBytesFor(charset)
 	if len(bom) == 0 {
-		return nil, fmt.Errorf("%w: no BOM bytes registered for %s", ErrEncodingEncode, document.BOM.Type)
+		return nil, fmt.Errorf("%w: BOM policy %s is not supported for encoding %s", ErrEncodingEncode, policy, charset)
 	}
 	return bom, nil
 }
 
+func outputBOMMetadata(data []byte) (bool, string) {
+	result, found := fileEncoding.DetectBOM(data)
+	if !found {
+		return false, ""
+	}
+	return true, result.Charset
+}
+
 func (h *Handler) readTextDocument(ctx context.Context, path, requestedEncoding string) (textDocument, error) {
+	document, _, err := h.readTextDocumentWithData(ctx, path, requestedEncoding)
+	return document, err
+}
+
+func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedEncoding string) (textDocument, []byte, error) {
 	select {
 	case <-ctx.Done():
-		return textDocument{}, ctx.Err()
+		return textDocument{}, nil, ctx.Err()
 	default:
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return textDocument{}, fmt.Errorf("failed to stat file: %w", err)
+		return textDocument{}, nil, fmt.Errorf("failed to stat file: %w", err)
 	}
 	if info.Size() > h.config.MemoryThreshold {
 		slog.Warn("loading large file into memory", "path", path, "size", info.Size(), "threshold", h.config.MemoryThreshold)
@@ -192,28 +235,28 @@ func (h *Handler) readTextDocument(ctx context.Context, path, requestedEncoding 
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return textDocument{}, fmt.Errorf("failed to read file: %w", err)
+		return textDocument{}, nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	select {
 	case <-ctx.Done():
-		return textDocument{}, ctx.Err()
+		return textDocument{}, nil, ctx.Err()
 	default:
 	}
 
 	encResult, err := h.resolveEncodingFromDataDetailed(requestedEncoding, data, path)
 	if err != nil {
-		return textDocument{}, err
+		return textDocument{}, nil, err
 	}
 
 	payload, bom, err := splitTransportBOM(data, encResult.name)
 	if err != nil {
-		return textDocument{}, err
+		return textDocument{}, nil, err
 	}
 
 	content, err := decodeContent(payload, encResult)
 	if err != nil {
-		return textDocument{}, fmt.Errorf("%w: failed to decode file content with %s: %v", ErrEncodingDecode, encResult.name, err)
+		return textDocument{}, nil, fmt.Errorf("%w: failed to decode file content with %s: %v", ErrEncodingDecode, encResult.name, err)
 	}
 
 	return textDocument{
@@ -226,5 +269,5 @@ func (h *Handler) readTextDocument(ctx context.Context, path, requestedEncoding 
 		LineEndings:        DetectLineEndings([]byte(content)),
 		FileSizeBytes:      info.Size(),
 		Mode:               info.Mode().Perm(),
-	}, nil
+	}, data, nil
 }

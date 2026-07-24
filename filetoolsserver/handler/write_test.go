@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -317,5 +318,243 @@ func TestHandleWriteFile_ExplicitEncodingOverridesExisting(t *testing.T) {
 	expectedCP1251 := []byte{0xD2, 0xE5, 0xF1, 0xF2}
 	if !bytes.Equal(written, expectedCP1251) {
 		t.Errorf("expected CP1251 bytes %v, got %v", expectedCP1251, written)
+	}
+}
+
+func decodeWrittenText(t *testing.T, encodingName string, data []byte) string {
+	t.Helper()
+	if detected, found := fileEncoding.DetectBOM(data); found {
+		data = data[fileEncoding.BOMSize(detected.Charset):]
+	}
+	if fileEncoding.IsUTF8(encodingName) {
+		return string(data)
+	}
+	enc, ok := fileEncoding.Get(encodingName)
+	if !ok {
+		t.Fatalf("encoding %q is not registered", encodingName)
+	}
+	decoded, err := enc.NewDecoder().Bytes(data)
+	if err != nil {
+		t.Fatalf("decode %s: %v", encodingName, err)
+	}
+	return string(decoded)
+}
+
+func TestHandleWriteFile_UTF16LEAutoAddsSingleBOM(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "expert.mq5")
+	content := "#property strict\r\n// Città Привет 中文\r\n"
+
+	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: content, Encoding: "utf-16-le",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %q", extractTextFromResultWrite(result.Content))
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bom := fileEncoding.BOMBytesFor("utf-16-le")
+	if !bytes.HasPrefix(data, bom) {
+		t.Fatalf("missing UTF-16 LE BOM: % X", data[:min(len(data), len(bom))])
+	}
+	if bytes.HasPrefix(data[len(bom):], bom) {
+		t.Fatal("UTF-16 LE BOM was duplicated")
+	}
+	if got := decodeWrittenText(t, "utf-16-le", data); got != content {
+		t.Fatalf("decoded content = %q, want %q", got, content)
+	}
+	if !output.HasBOM || output.BOMType != "utf-16-le" || output.BOMPolicy != "auto" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleWriteFile_BOMNeverWritesBOMlessUTF16(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "bomless.mqh")
+
+	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: "input int Value = 1;\r\n", Encoding: "utf-16-le", BOM: "never",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %q", extractTextFromResultWrite(result.Content))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found := fileEncoding.DetectBOM(data); found {
+		t.Fatal("unexpected BOM")
+	}
+	if output.HasBOM || output.BOMType != "" || output.BOMPolicy != "never" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleWriteFile_BOMPreserveKeepsUTF8BOM(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "preserve.txt")
+	original := append(append([]byte(nil), fileEncoding.BOMBytesFor("utf-8")...), []byte("old")...)
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: "new", Encoding: "utf-8", BOM: "preserve",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %q", extractTextFromResultWrite(result.Content))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(data, fileEncoding.BOMBytesFor("utf-8")) {
+		t.Fatal("UTF-8 BOM was not preserved")
+	}
+	if !output.HasBOM || output.BOMType != "utf-8" || output.BOMPolicy != "preserve" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleWriteFile_InvalidBOMPolicyDoesNotMutate(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "unchanged.txt")
+	original := []byte("original")
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: "replacement", Encoding: "utf-8", BOM: "sometimes",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected invalid BOM policy error")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("file mutated: got %q, want %q", actual, original)
+	}
+}
+
+func TestHandleWriteFile_BOMAlwaysRejectsLegacyEncoding(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "legacy.txt")
+
+	result, _, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: "Привет", Encoding: "cp1251", BOM: "always",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected BOM/encoding compatibility error")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("target should not be created, stat error = %v", err)
+	}
+}
+
+func TestHandleWriteFile_BOMAlwaysAddsUTF8BOM(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "utf8-bom.txt")
+
+	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: "hello", Encoding: "utf-8", BOM: "always",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %q", extractTextFromResultWrite(result.Content))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, append(fileEncoding.BOMBytesFor("utf-8"), []byte("hello")...)) {
+		t.Fatalf("unexpected bytes: % X", data)
+	}
+	if !output.HasBOM || output.BOMType != "utf-8" || output.BOMPolicy != "always" {
+		t.Fatalf("unexpected output metadata: %+v", output)
+	}
+}
+
+func TestHandleWriteFile_UnrepresentableContentDoesNotMutate(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "legacy.txt")
+	original := []byte{0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2}
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: "earth 🌍", Encoding: "cp1251", BOM: "never",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected encoding error")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("file mutated: got % X, want % X", actual, original)
+	}
+}
+
+func TestHandleWriteFile_BOMPreserveTreatsEmptyFileAsBOMless(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "empty.txt")
+	if err := os.WriteFile(path, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path: path, Content: "hello", Encoding: "utf-8", BOM: "preserve",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %q", extractTextFromResultWrite(result.Content))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("content = %q, want hello", data)
+	}
+	if output.HasBOM || output.BOMType != "" || output.BOMPolicy != "preserve" {
+		t.Fatalf("unexpected output metadata: %+v", output)
 	}
 }
