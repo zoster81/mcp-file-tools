@@ -11,8 +11,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -42,7 +43,7 @@ func (h *Handler) HandleGrep(ctx context.Context, req *mcp.CallToolRequest, inpu
 	if len(files) == 0 {
 		return &mcp.CallToolResult{}, GrepOutput{Matches: []GrepMatch{}, FilesSearched: 0}, nil
 	}
-	matches, filesMatched, truncated := h.searchFiles(ctx, files, re, input, maxMatches, h.config.MemoryThreshold)
+	matches, filesMatched, truncated := h.searchFiles(ctx, files, re, input, maxMatches)
 	return &mcp.CallToolResult{}, GrepOutput{
 		Matches:       matches,
 		TotalMatches:  len(matches),
@@ -98,9 +99,16 @@ func (h *Handler) collectFiles(ctx context.Context, paths []string, include, exc
 					}
 					return nil
 				}
-				if shouldIncludeFile(p, include, exclude) && !seen[p] {
-					seen[p] = true
-					files = append(files, p)
+				if !security.IsPathSafeResolved(p, allowedDirs) {
+					return nil
+				}
+				validated := h.ValidatePath(p)
+				if !validated.Ok() {
+					return nil
+				}
+				if shouldIncludeFile(p, include, exclude) && !seen[validated.Path] {
+					seen[validated.Path] = true
+					files = append(files, validated.Path)
 				}
 				return nil
 			})
@@ -137,101 +145,176 @@ func shouldIncludeFile(path string, include, exclude string) bool {
 	return true
 }
 
-// searchFiles searches all files concurrently using a worker pool.
-// Uses a cancellable context to stop workers early when maxMatches is reached.
-func (h *Handler) searchFiles(ctx context.Context, files []string, re *regexp.Regexp, input GrepInput, maxMatches int, maxFileSize int64) ([]GrepMatch, int, bool) {
+type grepJob struct {
+	index      int
+	path       string
+	maxMatches int
+}
+
+type grepFileResult struct {
+	index     int
+	matches   []GrepMatch
+	truncated bool
+	err       error
+}
+
+// searchFiles searches files concurrently while committing results in file order.
+// Only a bounded window is in flight, so per-file results cannot grow without limit.
+func (h *Handler) searchFiles(ctx context.Context, files []string, re *regexp.Regexp, input GrepInput, maxMatches int) ([]GrepMatch, int, bool) {
 	numWorkers := runtime.NumCPU()
 	if numWorkers > len(files) {
 		numWorkers = len(files)
 	}
+
 	searchCtx, cancelSearch := context.WithCancel(ctx)
 	defer cancelSearch()
 
-	jobs := make(chan string, numWorkers)
-	results := make(chan []GrepMatch, numWorkers)
-	var filesMatched int
-	var mu sync.Mutex
-	// Start workers
+	jobs := make(chan grepJob, numWorkers)
+	results := make(chan grepFileResult, numWorkers)
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for path := range jobs {
-				select {
-				case <-searchCtx.Done():
-					results <- nil
-				default:
-					matches := searchSingleFile(path, re, input, maxFileSize)
-					if len(matches) > 0 {
-						mu.Lock()
-						filesMatched++
-						mu.Unlock()
-					}
-					results <- matches
-				}
+			for job := range jobs {
+				result := h.searchSingleFile(searchCtx, job.path, re, input, job.maxMatches)
+				result.index = job.index
+				results <- result
 			}
 		}()
 	}
-	// Send jobs, stop early if search is cancelled
-	go func() {
-		defer close(jobs)
-		for _, file := range files {
-			select {
-			case <-searchCtx.Done():
-				return
-			case jobs <- file:
-			}
-		}
-	}()
-	// Close results when workers done
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
-	// Collect results, cancel workers when limit reached
-	var allMatches []GrepMatch
-	truncated := false
-	for fileMatches := range results {
-		for _, m := range fileMatches {
-			if len(allMatches) >= maxMatches {
-				truncated = true
-				cancelSearch()
-				break
-			}
-			allMatches = append(allMatches, m)
+
+	nextDispatch := 0
+	jobsClosed := false
+	closeJobs := func() {
+		if !jobsClosed {
+			close(jobs)
+			jobsClosed = true
 		}
 	}
-	return allMatches, filesMatched, truncated
+	dispatch := func(limit int) {
+		jobs <- grepJob{index: nextDispatch, path: files[nextDispatch], maxMatches: limit}
+		nextDispatch++
+	}
+	for i := 0; i < numWorkers && nextDispatch < len(files); i++ {
+		dispatch(maxMatches)
+	}
+	if nextDispatch == len(files) {
+		closeJobs()
+	}
+
+	pending := make(map[int]grepFileResult, numWorkers)
+	nextCommit := 0
+	remaining := maxMatches
+	allMatches := make([]GrepMatch, 0, min(maxMatches, 64))
+	matchedFiles := make(map[string]struct{})
+	truncated := false
+
+	for result := range results {
+		pending[result.index] = result
+		if ctx.Err() != nil {
+			cancelSearch()
+			closeJobs()
+		}
+
+		for {
+			current, ok := pending[nextCommit]
+			if !ok {
+				break
+			}
+			delete(pending, nextCommit)
+
+			if current.err == nil && len(current.matches) > 0 {
+				take := min(remaining, len(current.matches))
+				allMatches = append(allMatches, current.matches[:take]...)
+				remaining -= take
+				for _, match := range current.matches[:take] {
+					matchedFiles[match.Path] = struct{}{}
+				}
+				if current.truncated || take < len(current.matches) {
+					truncated = true
+				}
+			}
+
+			nextCommit++
+			if remaining == 0 && truncated {
+				cancelSearch()
+				closeJobs()
+				break
+			}
+			if ctx.Err() != nil {
+				cancelSearch()
+				closeJobs()
+				break
+			}
+			if nextDispatch < len(files) {
+				limit := remaining
+				if limit == 0 {
+					limit = 1
+				}
+				dispatch(limit)
+				if nextDispatch == len(files) {
+					closeJobs()
+				}
+			}
+		}
+	}
+
+	return allMatches, len(matchedFiles), truncated
 }
 
-// searchSingleFile searches for matches in a single file.
-func searchSingleFile(path string, re *regexp.Regexp, input GrepInput, maxFileSize int64) []GrepMatch {
-	// Check file size - warn if large file will be loaded to memory
-	if info, err := os.Stat(path); err == nil && info.Size() > maxFileSize {
-		slog.Warn("loading large file into memory", "path", path, "size", info.Size(), "threshold", maxFileSize)
+// searchSingleFile decodes and searches one file, returning at most maxMatches results.
+func (h *Handler) searchSingleFile(ctx context.Context, path string, re *regexp.Regexp, input GrepInput, maxMatches int) grepFileResult {
+	result := grepFileResult{}
+	if maxMatches <= 0 {
+		return result
 	}
-	data, err := os.ReadFile(path)
-	if err != nil || isBinaryFile(data) {
-		return nil
+
+	validated := h.ValidatePath(path)
+	if !validated.Ok() {
+		result.err = validated.Err
+		return result
 	}
-	content, detectedEncoding := decodeFileContent(data, input.Encoding)
-	if content == "" {
-		return nil
+
+	document, err := h.readTextDocument(ctx, validated.Path, input.Encoding)
+	if err != nil {
+		result.err = err
+		return result
 	}
-	lines := strings.Split(content, "\n")
-	var matches []GrepMatch
+	if document.Text == "" || isLikelyBinaryText(document.Text) {
+		return result
+	}
+
+	lines := splitGrepLines(document.Text)
+	result.matches = make([]GrepMatch, 0, min(maxMatches, 16))
 	for lineNum, line := range lines {
+		select {
+		case <-ctx.Done():
+			result.matches = nil
+			result.err = ctx.Err()
+			return result
+		default:
+		}
+
 		loc := re.FindStringIndex(line)
 		if loc == nil {
 			continue
 		}
+		if len(result.matches) >= maxMatches {
+			result.truncated = true
+			return result
+		}
+
 		match := GrepMatch{
-			Path:     path,
+			Path:     validated.Path,
 			Line:     lineNum + 1,
 			Column:   loc[0] + 1,
 			Text:     line,
-			Encoding: detectedEncoding,
+			Encoding: document.Charset,
 		}
 		if input.ContextBefore > 0 {
 			match.Before = getContextBefore(lines, lineNum, input.ContextBefore)
@@ -239,51 +322,38 @@ func searchSingleFile(path string, re *regexp.Regexp, input GrepInput, maxFileSi
 		if input.ContextAfter > 0 {
 			match.After = getContextAfter(lines, lineNum, input.ContextAfter)
 		}
-		matches = append(matches, match)
+		result.matches = append(result.matches, match)
 	}
-	return matches
+	return result
 }
 
-// isBinaryFile checks if the data appears to be binary (contains null bytes).
-func isBinaryFile(data []byte) bool {
-	checkSize := binaryCheckSize
-	if len(data) < checkSize {
-		checkSize = len(data)
+func splitGrepLines(content string) []string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+	return strings.Split(content, "\n")
+}
+
+// isLikelyBinaryText classifies decoded content instead of raw encoded bytes.
+func isLikelyBinaryText(content string) bool {
+	if !utf8.ValidString(content) {
+		return true
 	}
-	for i := 0; i < checkSize; i++ {
-		if data[i] == 0 {
+
+	controlCount := 0
+	runeCount := 0
+	for byteIndex, r := range content {
+		if byteIndex >= binaryCheckSize {
+			break
+		}
+		runeCount++
+		if r == 0 {
 			return true
 		}
-	}
-	return false
-}
-
-// decodeFileContent decodes file data to UTF-8 string.
-func decodeFileContent(data []byte, forcedEncoding string) (string, string) {
-	var encodingName string
-	if forcedEncoding != "" {
-		encodingName = strings.ToLower(forcedEncoding)
-	} else {
-		detection, _ := encoding.DetectSample(data)
-		if detection.Charset != "" {
-			encodingName = detection.Charset
-		} else {
-			encodingName = "utf-8"
+		if unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t' {
+			controlCount++
 		}
 	}
-	if encoding.IsUTF8(encodingName) {
-		return string(data), encodingName
-	}
-	enc, ok := encoding.Get(encodingName)
-	if !ok {
-		return string(data), "utf-8"
-	}
-	decoder := enc.NewDecoder()
-	decoded, err := decoder.Bytes(data)
-	if err != nil {
-		return string(data), "utf-8"
-	}
-	return string(decoded), encodingName
+	return runeCount > 0 && controlCount*10 >= runeCount
 }
 
 // getContextBefore returns N lines before the given line index.

@@ -31,6 +31,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Updated the fork documentation and runtime tool descriptions to list all 24 encodings and document MetaTrader 4/5 MQL sources (`.mq4`, `.mq5`, `.mqh`) commonly stored as UTF-16 LE with BOM and CRLF endings.
 - Refactored `read_text_file`, `read_multiple_files`, and `edit_file` to use one shared encoding/BOM-aware document pipeline and consistent batch error classification.
 - Added a shared document encoder with internal BOM-preserve policy for edits.
+- Migrated `grep_text_files` to the shared encoding/BOM-aware document decoder with bounded per-file scanning and deterministic ordered aggregation.
 
 ### Fixed
 
@@ -43,6 +44,9 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Fixed `edit_file` on UTF-16 LE/BE so normal edits preserve the original BOM and consistent CRLF/LF style instead of converting CRLF to LF.
 - Made logical no-op edits byte-identical across all 24 registered encodings.
 - Made edit encoding failures occur before filesystem mutation, leaving the original file unchanged.
+- Fixed UTF-16 LE/BE grep so BOM-bearing files are auto-detected and BOMless files can be searched with an explicit encoding instead of being rejected by raw NUL-byte binary checks.
+- Fixed parallel grep ordering and global `maxMatches` enforcement, including accurate `truncated` reporting when the limit is reached exactly.
+- Revalidated every traversed grep file before reading so file symlinks or junctions resolving outside allowed directories are skipped.
 
 ### Removed
 

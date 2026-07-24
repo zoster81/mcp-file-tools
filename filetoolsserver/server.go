@@ -20,7 +20,7 @@ PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encodi
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
 - write_file: converts UTF-8 content to target encoding (default: cp1251)
 - edit_file: in-place edits through the shared encoding/BOM-aware document pipeline; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff. Use dryRun=true to preview changes before applying.
-- grep_text_files: encoding-aware regex search across files
+- grep_text_files: deterministic regex search through the shared decoder; auto-detects BOM-bearing UTF-16 LE/BE and accepts explicit encoding for BOMless files
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
 - detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
 - change_line_endings: preserve encoding, BOM state, and non-line-ending bytes while converting LF/CRLF
@@ -122,7 +122,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "grep_text_files",
-		Description: "Regex search in file contents with encoding support. PREFER THIS over built-in Grep when searching non-UTF-8 files or when encoding-aware matching is needed. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
+		Description: "Regex search through the shared encoding/BOM-aware document decoder. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Results follow deterministic traversal order, binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Grep Text Files",
 			ReadOnlyHint:  true,

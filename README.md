@@ -48,7 +48,7 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`tree`](TOOLS.md#tree) - Compact indented tree view (85% fewer tokens than JSON)
 - [`directory_tree`](TOOLS.md#directory_tree-deprecated) - Get recursive tree view as JSON (deprecated, use `tree`)
 - [`search_files`](TOOLS.md#search_files) - Recursively search for files matching glob patterns
-- [`grep_text_files`](TOOLS.md#grep_text_files) - Regex search in file contents with encoding support
+- [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic regex search through the shared encoding/BOM-aware decoder, including UTF-16 LE/BE
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
 - [`convert_encoding`](TOOLS.md#convert_encoding) - Convert file between encodings
 - [`detect_line_endings`](TOOLS.md#detect_line_endings) - Detect CRLF/LF/mixed endings after decoding UTF-8, legacy, or UTF-16 text

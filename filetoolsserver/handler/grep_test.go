@@ -2,10 +2,15 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
+
+	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 )
 
 func TestHandleGrep_SimpleMatch(t *testing.T) {
@@ -303,9 +308,9 @@ func TestHandleGrep_SkipsBinaryFiles(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
 
-	// Create binary file with null bytes
-	binaryContent := []byte{0x00, 0x01, 0x02, 'f', 'i', 'n', 'd', 'm', 'e'}
-	os.WriteFile(filepath.Join(tempDir, "binary.bin"), binaryContent, 0644)
+	// Create a PNG-shaped binary payload containing the search text.
+	binaryContent := append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), []byte("findme")...)
+	os.WriteFile(filepath.Join(tempDir, "binary.png"), binaryContent, 0644)
 
 	// Create text file
 	os.WriteFile(filepath.Join(tempDir, "text.txt"), []byte("findme"), 0644)
@@ -323,5 +328,201 @@ func TestHandleGrep_SkipsBinaryFiles(t *testing.T) {
 	// Should only find in text file, not binary
 	if output.TotalMatches != 1 {
 		t.Errorf("expected 1 match (skipping binary), got %d", output.TotalMatches)
+	}
+}
+
+func encodeGrepFixture(t *testing.T, charset, content string, withBOM bool) []byte {
+	t.Helper()
+
+	enc, ok := fileEncoding.Get(charset)
+	if !ok {
+		t.Fatalf("encoding %q is not registered", charset)
+	}
+	encoded, err := enc.NewEncoder().Bytes([]byte(content))
+	if err != nil {
+		t.Fatalf("encode %s fixture: %v", charset, err)
+	}
+	if !withBOM {
+		return encoded
+	}
+
+	bom := fileEncoding.BOMBytesFor(charset)
+	result := make([]byte, 0, len(bom)+len(encoded))
+	result = append(result, bom...)
+	result = append(result, encoded...)
+	return result
+}
+
+func TestHandleGrep_UTF16Documents(t *testing.T) {
+	tests := []struct {
+		name              string
+		charset           string
+		withBOM           bool
+		requestedEncoding string
+		pattern           string
+		wantLine          string
+	}{
+		{name: "auto detects UTF-16 LE BOM MQL", charset: "utf-16-le", withBOM: true, pattern: "#property strict", wantLine: "#property strict"},
+		{name: "auto detects UTF-16 BE BOM", charset: "utf-16-be", withBOM: true, pattern: "中文注释", wantLine: "// 中文注释"},
+		{name: "explicit UTF-16 LE without BOM", charset: "utf-16-le", requestedEncoding: "utf-16-le", pattern: "Привет", wantLine: "// Привет"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			h := NewHandler([]string{tempDir})
+			path := filepath.Join(tempDir, "expert.mq5")
+			content := "#property strict\r\n// Città\r\n// Привет\r\n// 中文注释\r\n"
+			if err := os.WriteFile(path, encodeGrepFixture(t, tt.charset, content, tt.withBOM), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, output, err := h.HandleGrep(context.Background(), nil, GrepInput{Pattern: tt.pattern, Paths: []string{path}, Encoding: tt.requestedEncoding})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.IsError {
+				t.Fatalf("expected success, got %v", result.Content)
+			}
+			if output.TotalMatches != 1 {
+				t.Fatalf("total matches = %d, want 1", output.TotalMatches)
+			}
+			match := output.Matches[0]
+			if match.Text != tt.wantLine {
+				t.Fatalf("match text = %q, want %q", match.Text, tt.wantLine)
+			}
+			if strings.HasPrefix(match.Text, "\uFEFF") {
+				t.Fatal("transport BOM leaked into the first grep line")
+			}
+			if match.Encoding != tt.charset {
+				t.Fatalf("encoding = %q, want %q", match.Encoding, tt.charset)
+			}
+		})
+	}
+}
+
+func TestHandleGrep_UTF16MultilingualComments(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "localized.mq5")
+	content := "// Città\r\n// Привет\r\n// 中文注释\r\n"
+	if err := os.WriteFile(path, encodeGrepFixture(t, "utf-16-le", content, true), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, output, err := h.HandleGrep(context.Background(), nil, GrepInput{Pattern: "Città|Привет|中文注释", Paths: []string{path}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.TotalMatches != 3 {
+		t.Fatalf("total matches = %d, want 3", output.TotalMatches)
+	}
+}
+
+func TestHandleGrep_MaxMatchesUsesDeterministicFileOrder(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+
+	slowPath := filepath.Join(tempDir, "a-slow.txt")
+	fastPath := filepath.Join(tempDir, "z-fast.txt")
+	if err := os.WriteFile(slowPath, []byte(strings.Repeat("x", 16<<20)+"match-a\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fastPath, []byte("match-z\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, output, err := h.HandleGrep(context.Background(), nil, GrepInput{Pattern: "match-", Paths: []string{tempDir}, MaxMatches: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.TotalMatches != 1 || !output.Truncated {
+		t.Fatalf("unexpected limited output: %+v", output)
+	}
+	if output.Matches[0].Path != slowPath {
+		t.Fatalf("first match path = %q, want deterministic path %q", output.Matches[0].Path, slowPath)
+	}
+}
+
+func TestHandleGrep_MaxMatchesExactDoesNotTruncate(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	if err := os.WriteFile(filepath.Join(tempDir, "a-match.txt"), []byte("match\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "b-no-match.txt"), []byte("other\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, output, err := h.HandleGrep(context.Background(), nil, GrepInput{Pattern: "match", Paths: []string{tempDir}, MaxMatches: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.TotalMatches != 1 {
+		t.Fatalf("total matches = %d, want 1", output.TotalMatches)
+	}
+	if output.Truncated {
+		t.Fatal("truncated = true, want false when no match was omitted")
+	}
+}
+
+func TestHandleGrep_SkipsSymlinkFileEscape(t *testing.T) {
+	allowedDir := t.TempDir()
+	outsideDir := t.TempDir()
+	target := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(target, []byte("findme outside"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(allowedDir, "linked-secret.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink creation is not supported in this environment: %v", err)
+	}
+
+	h := NewHandler([]string{allowedDir})
+	_, output, err := h.HandleGrep(context.Background(), nil, GrepInput{Pattern: "findme", Paths: []string{allowedDir}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.TotalMatches != 0 {
+		t.Fatalf("symlink escape returned %d matches", output.TotalMatches)
+	}
+}
+
+func TestSearchSingleFile_StopsAtLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "limited.txt")
+	if err := os.WriteFile(path, []byte("match one\nmatch two\nmatch three\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := h.searchSingleFile(context.Background(), path, regexp.MustCompile("match"), GrepInput{}, 2)
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	if len(result.matches) != 2 {
+		t.Fatalf("matches = %d, want 2", len(result.matches))
+	}
+	if !result.truncated {
+		t.Fatal("truncated = false, want true after finding an additional match")
+	}
+}
+
+func TestSearchSingleFile_CancelledContext(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "cancel.txt")
+	if err := os.WriteFile(path, []byte("match\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := h.searchSingleFile(ctx, path, regexp.MustCompile("match"), GrepInput{}, 1)
+	if !errors.Is(result.err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", result.err)
+	}
+	if len(result.matches) != 0 {
+		t.Fatalf("matches = %d, want 0", len(result.matches))
 	}
 }

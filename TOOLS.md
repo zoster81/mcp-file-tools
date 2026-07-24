@@ -304,7 +304,7 @@ Recursively search for files and directories matching a glob pattern.
 
 ### grep_text_files
 
-Search file contents using regex patterns with encoding support. Supports context lines and concurrent searching.
+Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. BOM-bearing UTF-16 LE/BE files are auto-detected; pass `encoding` explicitly for BOMless or otherwise ambiguous files. Binary classification is performed after decoding, results are committed in deterministic traversal order, and `maxMatches` is enforced while scanning rather than after unbounded collection.
 
 **Parameters:**
 - `pattern` (required): Regular expression pattern to search for

@@ -119,7 +119,7 @@
     },
     {
       "name": "grep_text_files",
-      "description": "Regex search in file contents with encoding support"
+      "description": "Deterministic regex search through the shared encoding/BOM-aware decoder, including UTF-16 LE/BE"
     },
     {
       "name": "detect_encoding",
