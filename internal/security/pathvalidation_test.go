@@ -317,14 +317,26 @@ func TestValidatePath_Symlinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create symlinks
+	// Create file and directory symlinks.
 	goodSymlink := filepath.Join(allowedDir, "good-link.txt")
 	badSymlink := filepath.Join(allowedDir, "bad-link.txt")
+	allowedSubdir := filepath.Join(allowedDir, "target-dir")
+	if err := os.Mkdir(allowedSubdir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	goodDirSymlink := filepath.Join(allowedDir, "good-dir-link")
+	badDirSymlink := filepath.Join(allowedDir, "bad-dir-link")
 
 	if err := os.Symlink(allowedFile, goodSymlink); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(forbiddenFile, badSymlink); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(allowedSubdir, goodDirSymlink); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(forbiddenDir, badDirSymlink); err != nil {
 		t.Fatal(err)
 	}
 
@@ -361,12 +373,19 @@ func TestValidatePath_Symlinks(t *testing.T) {
 				t.Errorf("%s: unexpected error: %v", tt.description, err)
 			}
 			if tt.shouldError && err != nil {
-				// Symlink to forbidden file should return ErrSymlinkDenied
+				// Symlink to forbidden file should return ErrSymlinkDenied.
 				if !errors.Is(err, ErrSymlinkDenied) {
 					t.Errorf("%s: expected ErrSymlinkDenied, got: %v", tt.description, err)
 				}
 			}
 		})
+	}
+
+	if _, err := ValidatePath(filepath.Join(goodDirSymlink, "missing", "new.txt"), []string{allowedDir}); err != nil {
+		t.Fatalf("missing path through safe directory symlink: %v", err)
+	}
+	if _, err := ValidatePath(filepath.Join(badDirSymlink, "missing", "new.txt"), []string{allowedDir}); !errors.Is(err, ErrParentDirDenied) {
+		t.Fatalf("missing path through escaping directory symlink error = %v, want ErrParentDirDenied", err)
 	}
 }
 

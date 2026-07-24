@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -14,7 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -82,36 +81,25 @@ func (h *Handler) collectFiles(ctx context.Context, paths []string, include, exc
 			continue
 		}
 		if info.IsDir() {
-			filepath.WalkDir(v.Path, func(p string, d fs.DirEntry, err error) error {
-				// Check for cancellation during walk
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-				}
-				if err != nil {
-					slog.Debug("skipping path due to error", "path", p, "error", err)
+			err := filesystem.Walk(ctx, v.Path, filesystem.WalkOptions{
+				ResolvedAllowedDirs: allowedDirs,
+				OnError: func(path string, _ int, err error) error {
+					slog.Debug("skipping path due to error", "path", path, "error", err)
 					return nil
+				},
+			}, func(entry filesystem.Entry) (filesystem.WalkAction, error) {
+				if entry.DirEntry.IsDir() {
+					return filesystem.WalkContinue, nil
 				}
-				if d.IsDir() {
-					if !security.IsPathSafeResolved(p, allowedDirs) {
-						return filepath.SkipDir
-					}
-					return nil
+				if shouldIncludeFile(entry.Path, include, exclude) && !seen[entry.ResolvedPath] {
+					seen[entry.ResolvedPath] = true
+					files = append(files, entry.ResolvedPath)
 				}
-				if !security.IsPathSafeResolved(p, allowedDirs) {
-					return nil
-				}
-				validated := h.ValidatePath(p)
-				if !validated.Ok() {
-					return nil
-				}
-				if shouldIncludeFile(p, include, exclude) && !seen[validated.Path] {
-					seen[validated.Path] = true
-					files = append(files, validated.Path)
-				}
-				return nil
+				return filesystem.WalkContinue, nil
 			})
+			if err != nil && ctx.Err() != nil {
+				return files
+			}
 		} else if shouldIncludeFile(v.Path, include, exclude) && !seen[v.Path] {
 			seen[v.Path] = true
 			files = append(files, v.Path)

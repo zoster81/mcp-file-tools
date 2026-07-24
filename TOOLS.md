@@ -161,6 +161,8 @@ The `readOnlyCleared` field indicates if the read-only flag was removed (only pr
 
 ## Directory Operations
 
+The recursive tools `tree`, `directory_tree`, `search_files`, and `grep_text_files` use one deterministic, cancellation-aware secure walker. Every traversed entry is resolved before it is exposed to the tool; symlinks, Windows junctions, and other reparse points that resolve outside the allowed directories are skipped. Directory links encountered below the requested root are not followed.
+
 ### list_directory
 
 List files and directories with optional pattern filtering.
@@ -186,7 +188,7 @@ List files and directories with optional pattern filtering.
 
 ### tree
 
-Compact indented tree view optimized for AI/LLM consumption. Uses ~85% fewer tokens than `directory_tree`.
+Compact indented tree view optimized for AI/LLM consumption. Uses ~85% fewer tokens than `directory_tree`, returns entries in deterministic lexical traversal order, and skips links or reparse points that resolve outside the allowed directories.
 
 **Parameters:**
 - `path` (required): Root directory
@@ -236,7 +238,7 @@ Compact indented tree view optimized for AI/LLM consumption. Uses ~85% fewer tok
 
 ### directory_tree (deprecated)
 
-Get a recursive tree view as JSON. **Use `tree` instead for 85% fewer tokens.**
+Get a recursive tree view as JSON in deterministic lexical traversal order. **Use `tree` instead for 85% fewer tokens.** Links or reparse points resolving outside the allowed directories are omitted.
 
 **Parameters:**
 - `path` (required): Root directory
@@ -288,7 +290,7 @@ Delete a file. Does not delete directories.
 
 ### search_files
 
-Recursively search for files and directories matching a glob pattern.
+Recursively search for files and directories matching a glob pattern in deterministic lexical traversal order. Entries resolving outside the allowed directories through symlinks, junctions, or other reparse points are skipped.
 
 **Parameters:**
 - `path` (required): Root directory to search from
@@ -317,7 +319,7 @@ Recursively search for files and directories matching a glob pattern.
 
 ### grep_text_files
 
-Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. BOM-bearing UTF-16 LE/BE files are auto-detected; pass `encoding` explicitly for BOMless or otherwise ambiguous files. Binary classification is performed after decoding, results are committed in deterministic traversal order, and `maxMatches` is enforced while scanning rather than after unbounded collection.
+Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. BOM-bearing UTF-16 LE/BE files are auto-detected; pass `encoding` explicitly for BOMless or otherwise ambiguous files. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. Binary classification is performed after decoding, results are committed in deterministic traversal order, and `maxMatches` is enforced while scanning rather than after unbounded collection.
 
 **Parameters:**
 - `pattern` (required): Regular expression pattern to search for

@@ -152,3 +152,69 @@ func TestHandleTree_ShowEncoding(t *testing.T) {
 		t.Error("expected no encoding annotations when showEncoding=false")
 	}
 }
+
+func TestHandleTree_SkipsDirectoryLinkEscape(t *testing.T) {
+	allowedDir := t.TempDir()
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	createDirectoryLinkForTest(t, outsideDir, filepath.Join(allowedDir, "escape"))
+
+	h := NewHandler([]string{allowedDir})
+	_, output, err := h.HandleTree(context.Background(), nil, TreeInput{Path: allowedDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.Tree, "escape") {
+		t.Fatalf("unsafe directory link was returned:\n%s", output.Tree)
+	}
+}
+
+func TestHandleTree_DeterministicOrder(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "b-dir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(root, "z.txt"),
+		filepath.Join(root, "a.txt"),
+		filepath.Join(root, "b-dir", "z.txt"),
+		filepath.Join(root, "b-dir", "a.txt"),
+	} {
+		if err := os.WriteFile(path, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h := NewHandler([]string{root})
+	_, output, err := h.HandleTree(context.Background(), nil, TreeInput{Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "a.txt\nb-dir/\n  a.txt\n  z.txt\nz.txt\n"
+	if output.Tree != want {
+		t.Fatalf("tree = %q, want %q", output.Tree, want)
+	}
+}
+
+func TestHandleTree_Cancelled(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("test"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler([]string{root})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, output, err := h.HandleTree(ctx, nil, TreeInput{Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !output.Truncated {
+		t.Fatal("expected cancelled tree to be marked truncated")
+	}
+	if output.Tree != "" || output.FileCount != 0 || output.DirCount != 0 {
+		t.Fatalf("unexpected partial output after pre-cancellation: %+v", output)
+	}
+}

@@ -12,6 +12,9 @@ Git remote.
 - Implemented MCP transport: stdio
 - Native HTTP/JSON or Streamable HTTP transport: not implemented
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
+- Current source capabilities: completed shared text-document core (R1) and completed secure filesystem walker (R2)
+- Next source milestone: atomic mutation layer (R3), not implemented yet
+- Fork release status as of 2026-07-24: no published GitHub Release; inherited tags do not provide fork binaries or checksums
 - Go module path: intentionally retained as `github.com/dimitar-grigorov/mcp-file-tools`
   for source compatibility with the upstream codebase
 
@@ -86,8 +89,10 @@ the upstream implementation. They do not include this fork's execution tools,
 tunnel compatibility changes, or Windows drive-root fix.
 
 The fork contains plugin files for future compatibility. Their repository and
-download references point to `zoster81/mcp-file-tools`, but they should not be
-advertised as ready until a matching fork release has been tested end to end.
+download references point to `zoster81/mcp-file-tools`, but they are not a working
+distribution channel until a matching fork release with platform binaries and
+`checksums.txt` has been published and tested end to end. Mirrored or inherited
+tags alone are insufficient.
 
 ## Upstream synchronization
 
@@ -119,6 +124,8 @@ roots, execution, update-check, release, and tunnel behavior.
 - `go mod verify` succeeds;
 - PowerShell example parses under Windows PowerShell 5.1;
 - JSON, YAML, JavaScript, and Markdown checks succeed;
+- README, tool reference, changelog, plugin metadata, Smithery metadata, runtime descriptions, and roadmap describe the same released and unreleased capabilities;
+- secure traversal tests cover Unix symlinks and Windows junction/reparse-point escapes;
 - GoReleaser configuration targets `zoster81/mcp-file-tools`;
 - release tag, embedded binary version, plugin version, and marketplace version match;
 - release assets and checksums are verified after publication.

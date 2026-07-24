@@ -488,6 +488,24 @@ func TestHandleGrep_SkipsSymlinkFileEscape(t *testing.T) {
 	}
 }
 
+func TestHandleGrep_SkipsDirectoryLinkEscape(t *testing.T) {
+	allowedDir := t.TempDir()
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("findme outside"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	createDirectoryLinkForTest(t, outsideDir, filepath.Join(allowedDir, "escape"))
+
+	h := NewHandler([]string{allowedDir})
+	_, output, err := h.HandleGrep(context.Background(), nil, GrepInput{Pattern: "findme", Paths: []string{allowedDir}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.TotalMatches != 0 || output.FilesSearched != 0 {
+		t.Fatalf("directory link escape was searched: %+v", output)
+	}
+}
+
 func TestSearchSingleFile_StopsAtLimit(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})

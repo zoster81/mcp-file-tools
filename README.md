@@ -33,7 +33,13 @@ Another browser-hosted LLM could use the current server only if its MCP connecto
 
 A future compatibility phase may add an optional native HTTP/JSON transport while preserving stdio support. That work requires a separate security, authentication, binding, and deployment design before implementation.
 
-The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, and optional local execution tools. The upstream project remains the source of the original encoding-aware file-tool implementation.
+The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware text-document core, and deterministic secure traversal. The upstream project remains the source of the original encoding-aware file-tool implementation.
+
+## Current Development Status
+
+The current source branch includes the completed R1 shared text-document refactor and the completed R2 secure filesystem walker. Recursive tools now share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. The next planned refactoring milestone is R3, which will unify atomic replacement, backup, rollback, metadata preservation, cleanup, and fsync policy; those R3 changes are not implemented yet.
+
+No GitHub Release has currently been published for this fork. The repository contains inherited version tags, but tags alone do not provide the fork binaries and `checksums.txt` required by the plugin launcher. Until a fork release is published and verified, build from source and treat the Claude Code plugin files as release preparation rather than a ready distribution channel.
 
 ## What It Does
 
@@ -45,10 +51,10 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with pattern filtering
-- [`tree`](TOOLS.md#tree) - Compact indented tree view (85% fewer tokens than JSON)
-- [`directory_tree`](TOOLS.md#directory_tree-deprecated) - Get recursive tree view as JSON (deprecated, use `tree`)
-- [`search_files`](TOOLS.md#search_files) - Recursively search for files matching glob patterns
-- [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic regex search through the shared encoding/BOM-aware decoder, including UTF-16 LE/BE
+- [`tree`](TOOLS.md#tree) - Compact deterministic tree through the shared secure walker (85% fewer tokens than JSON)
+- [`directory_tree`](TOOLS.md#directory_tree-deprecated) - Get a deterministic secure recursive tree as JSON (deprecated, use `tree`)
+- [`search_files`](TOOLS.md#search_files) - Deterministic glob search that skips symlink, junction, and reparse-point escapes
+- [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic regex search through the shared decoder and secure walker, including UTF-16 LE/BE
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
 - [`convert_encoding`](TOOLS.md#convert_encoding) - Convert encoding while preserving decoded text and line endings, with explicit BOM policy and byte-identical no-op suppression
 - [`detect_line_endings`](TOOLS.md#detect_line_endings) - Detect CRLF/LF/mixed endings after decoding UTF-8, legacy, or UTF-16 text
@@ -77,18 +83,19 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 
 See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
-**Security:** File operations and `run_script` paths are restricted to allowed directories. The optional `shell` tool validates only its working directory; the command itself is unrestricted and runs with the operating-system permissions of the MCP server process.
+**Security:** File operations and `run_script` paths are restricted to allowed directories. Recursive filesystem tools resolve every visited entry through a shared secure walker and skip symlinks, Windows junctions, and other reparse points that resolve outside those directories. The optional `shell` tool validates only its working directory; the command itself is unrestricted and runs with the operating-system permissions of the MCP server process.
 
 ## Custom Fork Changes
 
-This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). Compared with the upstream project, this fork currently adds:
+This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). Compared with the upstream project, the current source branch adds:
 
 - optional `run_script` and `shell` MCP tools, disabled by default;
 - CLI-provided allowed directories as the authoritative fallback for tunnel clients that do not implement MCP roots requests;
 - correct validation of descendants when a Windows drive root such as `D:\` is allowed;
 - encoding-aware `detect_line_endings` and byte-preserving `change_line_endings` support for all 24 registered encodings, including UTF-16 LE/BE;
 - real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests;
-- a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression.
+- a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression;
+- a deterministic, cancellation-aware secure walker shared by `tree`, `directory_tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 
@@ -239,7 +246,7 @@ Set `MCP_NO_UPDATE_CHECK=1` before starting the server to disable release checks
 
 This fork originates from [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). The existing MCP Registry entry and the original Claude Code marketplace integration belong to the upstream project and do not represent this fork or its additional tools.
 
-The fork retains upstream plugin files for compatibility work, but they require a matching fork release before they can download fork binaries successfully. The upstream plugin can still be installed separately with:
+The fork retains plugin files for a future fork distribution, but they require a matching published fork release with platform binaries and `checksums.txt`. No such fork release is currently published, so the fork plugin is not yet a working installation path. The upstream plugin can still be installed separately with:
 
 ```text
 /plugin marketplace add dimitar-grigorov/mcp-file-tools

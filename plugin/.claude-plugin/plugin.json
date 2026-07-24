@@ -1,6 +1,6 @@
 {
   "name": "mcp-file-tools",
-  "description": "Filesystem MCP server with non-UTF-8 encoding support: CP1251, CP1252, KOI8-R, ISO-8859, with auto-detection and UTF-8 conversion.",
+  "description": "Filesystem MCP server for 24 encodings with BOM-aware text operations, MQL support, deterministic secure traversal, and optional execution tools.",
   "version": "1.7.3",
   "author": {
     "name": "zoster81",

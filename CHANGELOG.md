@@ -34,6 +34,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Migrated `grep_text_files` to the shared encoding/BOM-aware document decoder with bounded per-file scanning and deterministic ordered aggregation.
 - Migrated `write_file` and `convert_encoding` to the shared document encoder and added the public `auto`, `always`, `never`, and `preserve` BOM policies.
 - Migrated `detect_line_endings` and `change_line_endings` to shared text-document path, encoding, BOM, mode, and commit validation while retaining byte-exact newline conversion.
+- Consolidated recursive traversal for `search_files`, `grep_text_files`, `tree`, and `directory_tree` into one deterministic, cancellation-aware filesystem walker while preserving each tool's public filtering, limit, ordering, and error behavior.
+- Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1/R2 capabilities, unreleased fork status, and planned R3 atomic mutation work.
 
 ### Fixed
 
@@ -49,6 +51,9 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Fixed UTF-16 LE/BE grep so BOM-bearing files are auto-detected and BOMless files can be searched with an explicit encoding instead of being rejected by raw NUL-byte binary checks.
 - Fixed parallel grep ordering and global `maxMatches` enforcement, including accurate `truncated` reporting when the limit is reached exactly.
 - Revalidated every traversed grep file before reading so file symlinks or junctions resolving outside allowed directories are skipped.
+- Added native Windows final-path resolution for junctions and other reparse points, closing workspace escapes that `filepath.EvalSymlinks` does not resolve on Windows.
+- Rejected existing and deeply nested missing paths whose nearest existing ancestor resolves outside the allowed directories, while retaining support for legitimate missing destinations under safe symlinks or junctions.
+- Made all recursive filesystem tools skip entries resolving outside allowed directories and report deterministic lexical traversal order; `tree` also revalidates immediately before encoding detection.
 - Fixed UTF-16 writes and conversions so `auto` emits exactly one canonical BOM, `never` remains BOMless, and UTF-8/legacy `auto` output remains BOM-free.
 - Preserved CRLF, LF, CR, and mixed line-ending sequences exactly during encoding conversion, and rejected invalid, impossible, or unrepresentable output before filesystem mutation.
 - Skipped byte-identical encoding conversions without rewriting the file or creating a requested backup.

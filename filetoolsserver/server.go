@@ -20,7 +20,8 @@ PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encodi
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
 - write_file: encodes UTF-8 content through the shared document encoder; supports bom=auto|always|never|preserve (default: auto)
 - edit_file: in-place edits through the shared encoding/BOM-aware document pipeline; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff. Use dryRun=true to preview changes before applying.
-- grep_text_files: deterministic regex search through the shared decoder; auto-detects BOM-bearing UTF-16 LE/BE and accepts explicit encoding for BOMless files
+- grep_text_files: deterministic regex search through the shared decoder and secure walker; skips symlink/junction/reparse escapes, auto-detects BOM-bearing UTF-16 LE/BE, and accepts explicit encoding for BOMless files
+- tree/search_files/directory_tree: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
 - detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
 - change_line_endings: preserve encoding, BOM state, and non-line-ending bytes while converting LF/CRLF
@@ -122,7 +123,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "grep_text_files",
-		Description: "Regex search through the shared encoding/BOM-aware document decoder. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Results follow deterministic traversal order, binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
+		Description: "Regex search through the shared encoding/BOM-aware document decoder and deterministic secure walker. Directory traversal skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Grep Text Files",
 			ReadOnlyHint:  true,
@@ -152,7 +153,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "directory_tree",
-		Description: "DEPRECATED: Use 'tree' instead (85% fewer tokens). Returns JSON tree structure for compatibility with mcp-js-servers. Parameters: path (required), excludePatterns (optional).",
+		Description: "DEPRECATED: Use 'tree' instead (85% fewer tokens). Returns a deterministic JSON tree through the shared secure walker and skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Parameters: path (required), excludePatterns (optional).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Directory Tree (JSON)",
 			ReadOnlyHint:  true,
@@ -162,7 +163,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "tree",
-		Description: "Compact indented tree view of directory structure. Uses 85% fewer tokens than directory_tree — PREFER THIS for directory visualization. Set showEncoding=true to detect and display file encodings (e.g., for auditing legacy codebases). Parameters: path (required), maxDepth (0=unlimited), maxFiles (default 1000), dirsOnly (bool), exclude (array of patterns), showEncoding (bool, shows detected encoding per file).",
+		Description: "Compact deterministic tree view through the shared secure walker. Uses 85% fewer tokens than directory_tree — PREFER THIS for directory visualization. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Set showEncoding=true to detect and display file encodings after immediate path revalidation. Parameters: path (required), maxDepth (0=unlimited), maxFiles (default 1000), dirsOnly (bool), exclude (array of patterns), showEncoding (bool, shows detected encoding per file).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Tree (Compact)",
 			ReadOnlyHint:  true,
@@ -172,7 +173,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_files",
-		Description: "Recursively search for files matching a glob pattern (*.ext or **/*.ext). Returns full paths. Parameters: path (required), pattern (required), excludePatterns, maxResults (default 10000).",
+		Description: "Recursively search in deterministic lexical order through the shared secure walker. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Returns full paths matching a glob pattern (*.ext or **/*.ext). Parameters: path (required), pattern (required), excludePatterns, maxResults (default 10000).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Search Files",
 			ReadOnlyHint:  true,

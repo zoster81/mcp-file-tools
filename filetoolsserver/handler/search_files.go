@@ -2,14 +2,12 @@ package handler
 
 import (
 	"context"
-	"errors"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -45,55 +43,32 @@ func (h *Handler) HandleSearchFiles(ctx context.Context, req *mcp.CallToolReques
 	return &mcp.CallToolResult{}, SearchFilesOutput{Files: results, Truncated: truncated}, nil
 }
 
-var errMaxResultsReached = errors.New("max results reached")
-
-// searchFiles recursively searches for files matching the pattern
+// searchFiles recursively searches for files matching the pattern.
 func searchFiles(ctx context.Context, rootPath, pattern string, excludePatterns, allowedDirs []string, maxResults int) ([]string, bool, error) {
-	var results []string
+	results := make([]string, 0)
 	truncated := false
-	err := filepath.WalkDir(rootPath, func(fullPath string, d fs.DirEntry, err error) error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		if err != nil {
-			slog.Debug("skipping path due to error", "path", fullPath, "error", err)
+	err := filesystem.Walk(ctx, rootPath, filesystem.WalkOptions{
+		ResolvedAllowedDirs: allowedDirs,
+		Exclude: func(entry filesystem.Entry) bool {
+			return shouldExcludePath(filepath.ToSlash(entry.RelativePath), excludePatterns)
+		},
+		OnError: func(path string, _ int, err error) error {
+			slog.Debug("skipping path due to error", "path", path, "error", err)
 			return nil
+		},
+	}, func(entry filesystem.Entry) (filesystem.WalkAction, error) {
+		if !matchGlobPattern(filepath.ToSlash(entry.RelativePath), pattern) {
+			return filesystem.WalkContinue, nil
 		}
-		if d.IsDir() && fullPath != rootPath {
-			if !security.IsPathSafeResolved(fullPath, allowedDirs) {
-				return filepath.SkipDir
-			}
+		results = append(results, entry.Path)
+		if len(results) >= maxResults {
+			truncated = true
+			return filesystem.WalkStop, nil
 		}
-		relativePath, err := filepath.Rel(rootPath, fullPath)
-		if err != nil {
-			return nil
-		}
-		if relativePath == "." {
-			return nil
-		}
-		relativePathNorm := filepath.ToSlash(relativePath)
-		if shouldExcludePath(relativePathNorm, excludePatterns) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if matchGlobPattern(relativePathNorm, pattern) {
-			results = append(results, fullPath)
-			if len(results) >= maxResults {
-				truncated = true
-				return errMaxResultsReached
-			}
-		}
-		return nil
+		return filesystem.WalkContinue, nil
 	})
-	if err != nil && err != errMaxResultsReached {
+	if err != nil {
 		return nil, false, err
-	}
-	if results == nil {
-		results = []string{}
 	}
 	return results, truncated, nil
 }

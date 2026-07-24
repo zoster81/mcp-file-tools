@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -41,45 +41,68 @@ func (h *Handler) HandleDirectoryTree(ctx context.Context, req *mcp.CallToolRequ
 	return &mcp.CallToolResult{}, output, nil
 }
 
-// buildTree recursively builds a tree of directory entries
+type treeEntryLocation struct {
+	parent *[]TreeEntry
+	index  int
+	name   string
+}
+
+// buildTree builds a hierarchical result from the shared secure walker.
 func buildTree(ctx context.Context, dirPath string, excludePatterns []string, allowedDirs []string) ([]TreeEntry, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-	entries, err := os.ReadDir(dirPath)
+	result := make([]TreeEntry, 0)
+	childrenByRelativePath := map[string]*[]TreeEntry{"": &result}
+	directoryLocations := make(map[string]treeEntryLocation)
+
+	err := filesystem.Walk(ctx, dirPath, filesystem.WalkOptions{
+		ResolvedAllowedDirs: allowedDirs,
+		Exclude: func(entry filesystem.Entry) bool {
+			return shouldExclude(entry.Name, excludePatterns)
+		},
+		OnError: func(path string, depth int, err error) error {
+			if depth == 0 {
+				return err
+			}
+			location, ok := directoryLocations[filepath.Clean(path)]
+			if !ok {
+				return nil
+			}
+			entries := *location.parent
+			if location.index >= 0 && location.index < len(entries) && entries[location.index].Name == location.name {
+				*location.parent = append(entries[:location.index], entries[location.index+1:]...)
+			}
+			delete(directoryLocations, filepath.Clean(path))
+			return nil
+		},
+	}, func(entry filesystem.Entry) (filesystem.WalkAction, error) {
+		parentRelativePath := filepath.Dir(entry.RelativePath)
+		if parentRelativePath == "." {
+			parentRelativePath = ""
+		}
+		parent := childrenByRelativePath[parentRelativePath]
+		if parent == nil {
+			return filesystem.WalkSkipDir, nil
+		}
+
+		treeEntry := TreeEntry{Name: entry.Name, Type: "file"}
+		if entry.DirEntry.IsDir() {
+			children := make([]TreeEntry, 0)
+			treeEntry.Type = "directory"
+			treeEntry.Children = &children
+		}
+		*parent = append(*parent, treeEntry)
+
+		if entry.DirEntry.IsDir() {
+			childrenByRelativePath[entry.RelativePath] = treeEntry.Children
+			directoryLocations[filepath.Clean(entry.ResolvedPath)] = treeEntryLocation{
+				parent: parent,
+				index:  len(*parent) - 1,
+				name:   entry.Name,
+			}
+		}
+		return filesystem.WalkContinue, nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	var result []TreeEntry
-	for _, entry := range entries {
-		name := entry.Name()
-		if shouldExclude(name, excludePatterns) {
-			continue
-		}
-		treeEntry := TreeEntry{Name: name}
-		if entry.IsDir() {
-			treeEntry.Type = "directory"
-			childPath := filepath.Join(dirPath, name)
-			if !security.IsPathSafeResolved(childPath, allowedDirs) {
-				continue
-			}
-			children, err := buildTree(ctx, childPath, excludePatterns, allowedDirs)
-			if err != nil {
-				if err == context.Canceled || err == context.DeadlineExceeded {
-					return nil, err
-				}
-				continue
-			}
-			treeEntry.Children = &children
-		} else {
-			treeEntry.Type = "file"
-		}
-		result = append(result, treeEntry)
-	}
-	if result == nil {
-		result = []TreeEntry{}
 	}
 	return result, nil
 }

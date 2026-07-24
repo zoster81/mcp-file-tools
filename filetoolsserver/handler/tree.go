@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -34,17 +35,57 @@ func (h *Handler) HandleTree(ctx context.Context, req *mcp.CallToolRequest, inpu
 	}
 	state := &treeState{
 		maxFiles:     maxFiles,
-		maxDepth:     input.MaxDepth,
 		dirsOnly:     input.DirsOnly,
 		exclude:      input.Exclude,
 		showEncoding: input.ShowEncoding,
-		allowedDirs:  h.ResolvedAllowedDirs(),
-		fileCount:    0,
-		dirCount:     0,
-		truncated:    false,
 	}
+	allowedDirs := h.ResolvedAllowedDirs()
 	var sb strings.Builder
-	buildCompactTree(ctx, &sb, v.Path, 0, state)
+	_ = filesystem.Walk(ctx, v.Path, filesystem.WalkOptions{
+		ResolvedAllowedDirs: allowedDirs,
+		MaxDepth:            input.MaxDepth,
+	}, func(entry filesystem.Entry) (filesystem.WalkAction, error) {
+		if state.totalCount() >= state.maxFiles {
+			state.truncated = true
+			return filesystem.WalkStop, nil
+		}
+		if shouldExcludeTree(entry.Name, state.exclude) {
+			if entry.DirEntry.IsDir() {
+				return filesystem.WalkSkipDir, nil
+			}
+			return filesystem.WalkContinue, nil
+		}
+
+		indent := strings.Repeat("  ", entry.Depth-1)
+		if entry.DirEntry.IsDir() {
+			state.dirCount++
+			sb.WriteString(indent)
+			sb.WriteString(entry.Name)
+			sb.WriteString("/\n")
+			return filesystem.WalkContinue, nil
+		}
+		if state.dirsOnly {
+			return filesystem.WalkContinue, nil
+		}
+
+		state.fileCount++
+		sb.WriteString(indent)
+		sb.WriteString(entry.Name)
+		if state.showEncoding {
+			if safePath, safe := security.ResolvePathSafe(entry.Path, allowedDirs); safe {
+				if enc := detectFileEncoding(safePath); enc != "" {
+					sb.WriteString("  [")
+					sb.WriteString(enc)
+					sb.WriteString("]")
+				}
+			}
+		}
+		sb.WriteString("\n")
+		return filesystem.WalkContinue, nil
+	})
+	if ctx.Err() != nil {
+		state.truncated = true
+	}
 	return &mcp.CallToolResult{}, TreeOutput{
 		Tree:      sb.String(),
 		FileCount: state.fileCount,
@@ -55,11 +96,9 @@ func (h *Handler) HandleTree(ctx context.Context, req *mcp.CallToolRequest, inpu
 
 type treeState struct {
 	maxFiles     int
-	maxDepth     int
 	dirsOnly     bool
 	exclude      []string
 	showEncoding bool
-	allowedDirs  []string
 	fileCount    int
 	dirCount     int
 	truncated    bool
@@ -67,60 +106,6 @@ type treeState struct {
 
 func (s *treeState) totalCount() int {
 	return s.fileCount + s.dirCount
-}
-
-func buildCompactTree(ctx context.Context, sb *strings.Builder, dirPath string, depth int, state *treeState) {
-	select {
-	case <-ctx.Done():
-		state.truncated = true
-		return
-	default:
-	}
-	if state.truncated {
-		return
-	}
-	if state.maxDepth > 0 && depth >= state.maxDepth {
-		return
-	}
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return
-	}
-	indent := strings.Repeat("  ", depth)
-	for _, entry := range entries {
-		if state.totalCount() >= state.maxFiles {
-			state.truncated = true
-			return
-		}
-		name := entry.Name()
-		if shouldExcludeTree(name, state.exclude) {
-			continue
-		}
-		if entry.IsDir() {
-			subPath := filepath.Join(dirPath, name)
-			if !security.IsPathSafeResolved(subPath, state.allowedDirs) {
-				continue
-			}
-			state.dirCount++
-			sb.WriteString(indent)
-			sb.WriteString(name)
-			sb.WriteString("/\n")
-			buildCompactTree(ctx, sb, subPath, depth+1, state)
-		} else if !state.dirsOnly {
-			state.fileCount++
-			sb.WriteString(indent)
-			sb.WriteString(name)
-			if state.showEncoding {
-				filePath := filepath.Join(dirPath, name)
-				if enc := detectFileEncoding(filePath); enc != "" {
-					sb.WriteString("  [")
-					sb.WriteString(enc)
-					sb.WriteString("]")
-				}
-			}
-			sb.WriteString("\n")
-		}
-	}
 }
 
 // detectFileEncoding returns the detected encoding name for a file, or "" on error.

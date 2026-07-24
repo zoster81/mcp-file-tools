@@ -160,3 +160,82 @@ func TestHandleSearchFiles_MaxResults(t *testing.T) {
 		t.Error("expected truncated to be true")
 	}
 }
+
+func TestHandleSearchFiles_SkipsDirectoryLinkEscape(t *testing.T) {
+	allowedDir := t.TempDir()
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	createDirectoryLinkForTest(t, outsideDir, filepath.Join(allowedDir, "escape"))
+
+	h := NewHandler([]string{allowedDir})
+	result, output, err := h.HandleSearchFiles(context.Background(), nil, SearchFilesInput{
+		Path:    allowedDir,
+		Pattern: "**",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	if len(output.Files) != 0 {
+		t.Fatalf("unsafe directory link was returned: %v", output.Files)
+	}
+}
+
+func TestHandleSearchFiles_DeterministicOrder(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "b-dir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(root, "z.txt"),
+		filepath.Join(root, "a.txt"),
+		filepath.Join(root, "b-dir", "z.txt"),
+		filepath.Join(root, "b-dir", "a.txt"),
+	} {
+		if err := os.WriteFile(path, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h := NewHandler([]string{root})
+	_, output, err := h.HandleSearchFiles(context.Background(), nil, SearchFilesInput{Path: root, Pattern: "**/*.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		filepath.Join(root, "a.txt"),
+		filepath.Join(root, "b-dir", "a.txt"),
+		filepath.Join(root, "b-dir", "z.txt"),
+		filepath.Join(root, "z.txt"),
+	}
+	if len(output.Files) != len(want) {
+		t.Fatalf("files = %v, want %v", output.Files, want)
+	}
+	for i := range want {
+		if output.Files[i] != want[i] {
+			t.Fatalf("files[%d] = %q, want %q", i, output.Files[i], want[i])
+		}
+	}
+}
+
+func TestHandleSearchFiles_Cancelled(t *testing.T) {
+	root := t.TempDir()
+	h := NewHandler([]string{root})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, _, err := h.HandleSearchFiles(ctx, nil, SearchFilesInput{Path: root, Pattern: "**"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected cancellation error")
+	}
+	if text := extractTextFromResult(result.Content); text != "search cancelled" {
+		t.Fatalf("error text = %q, want %q", text, "search cancelled")
+	}
+}

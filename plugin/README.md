@@ -3,13 +3,16 @@
 Installs the [`zoster81/mcp-file-tools`](https://github.com/zoster81/mcp-file-tools)
 fork into Claude Code via `/plugin install`.
 
-The server provides encoding-aware filesystem operations plus the fork-specific
-stdio tunnel compatibility and optional execution tools documented in the main
+The server provides 24 MCP tools for encoding-aware filesystem operations,
+BOM-preserving text handling, MetaTrader MQL support, deterministic secure
+traversal, fork-specific
+stdio tunnel compatibility, and optional execution tools documented in the main
 [README](../README.md) and [TOOLS reference](../TOOLS.md).
 
-> The plugin launcher downloads a matching GitHub Release from this fork. It will
-> not work until the requested plugin version has been published as a fork release
-> with the expected binaries and `checksums.txt` asset.
+> **Current status (2026-07-24):** no GitHub Release has been published for this
+> fork. The plugin launcher downloads a matching fork release and therefore does
+> not work yet. Inherited repository tags are not sufficient: the requested version
+> must provide the expected platform binaries and `checksums.txt` asset.
 
 ## Install
 

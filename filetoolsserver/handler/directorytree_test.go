@@ -300,3 +300,78 @@ func TestHandleDirectoryTree_NotADirectory(t *testing.T) {
 	}
 }
 
+func TestHandleDirectoryTree_SkipsDirectoryLinkEscape(t *testing.T) {
+	allowedDir := t.TempDir()
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	createDirectoryLinkForTest(t, outsideDir, filepath.Join(allowedDir, "escape"))
+
+	h := NewHandler([]string{allowedDir})
+	result, output, err := h.HandleDirectoryTree(context.Background(), nil, DirectoryTreeInput{Path: allowedDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	if strings.Contains(output.Tree, "escape") {
+		t.Fatalf("unsafe directory link was returned: %s", output.Tree)
+	}
+}
+
+func TestHandleDirectoryTree_DeterministicOrder(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "b-dir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(root, "z.txt"),
+		filepath.Join(root, "a.txt"),
+		filepath.Join(root, "b-dir", "z.txt"),
+		filepath.Join(root, "b-dir", "a.txt"),
+	} {
+		if err := os.WriteFile(path, []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h := NewHandler([]string{root})
+	_, output, err := h.HandleDirectoryTree(context.Background(), nil, DirectoryTreeInput{Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tree []TreeEntry
+	if err := json.Unmarshal([]byte(output.Tree), &tree); err != nil {
+		t.Fatal(err)
+	}
+	if len(tree) != 3 || tree[0].Name != "a.txt" || tree[1].Name != "b-dir" || tree[2].Name != "z.txt" {
+		t.Fatalf("unexpected root order: %+v", tree)
+	}
+	if tree[1].Children == nil || len(*tree[1].Children) != 2 {
+		t.Fatalf("unexpected b-dir children: %+v", tree[1].Children)
+	}
+	children := *tree[1].Children
+	if children[0].Name != "a.txt" || children[1].Name != "z.txt" {
+		t.Fatalf("unexpected child order: %+v", children)
+	}
+}
+
+func TestHandleDirectoryTree_Cancelled(t *testing.T) {
+	root := t.TempDir()
+	h := NewHandler([]string{root})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, _, err := h.HandleDirectoryTree(ctx, nil, DirectoryTreeInput{Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected cancellation error")
+	}
+	if text := extractTextFromResult(result.Content); text != "operation cancelled" {
+		t.Fatalf("error text = %q, want %q", text, "operation cancelled")
+	}
+}
