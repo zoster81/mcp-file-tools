@@ -12,8 +12,8 @@ Git remote.
 - Implemented MCP transport: stdio
 - Native HTTP/JSON or Streamable HTTP transport: not implemented
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
-- Current source capabilities: completed shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors with centralized MCP/batch mapping (R4), and bounded ordered concurrency for batch read and grep processing (R5)
-- Next source milestone: shared execution preparation and authoritative tool metadata (R6), not implemented yet
+- Current source capabilities: completed shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors with centralized MCP/batch mapping (R4), bounded ordered concurrency for batch read and grep processing (R5), and shared execution preparation plus authoritative tool metadata (R6)
+- Next source milestone: no additional refactoring milestone is currently selected
 - Release source: fork-owned semantic tags whose plugin, marketplace, binary, and Registry versions must match
 - Go module path: `github.com/zoster81/mcp-file-tools`
 
@@ -73,9 +73,9 @@ Real credentials belong in a private copy outside the Git checkout.
 
 ## MCP Registry status
 
-`server.template.json` is a release-neutral template owned by `zoster81/mcp-file-tools`. It contains the fork namespace, repository, homepage, complete tool catalog, package filenames, and zeroed checksum placeholders; it is not published directly.
+`server.template.json` is a release-neutral template owned by `zoster81/mcp-file-tools`. It contains the fork namespace, repository, homepage, package filenames, zeroed checksum placeholders, and an intentionally empty `tools` array; it is not published directly. The authoritative tool names, descriptions, titles, and annotations live in `internal/toolcatalog/catalog.json`, which is embedded by the Go runtime.
 
-`.github/workflows/publish-registry.yml` runs only in `zoster81/mcp-file-tools`. After a fork release is published, it downloads that release's `checksums.txt`, generates a temporary `server.json` with the exact version, fork download URLs, and SHA-256 values, rejects missing or unexpected MCP binaries, and then authenticates to the MCP Registry through GitHub OIDC.
+`.github/workflows/publish-registry.yml` runs only in `zoster81/mcp-file-tools`. After a fork release is published, it downloads that release's `checksums.txt`; `scripts/generate-server-json.js` injects the catalog's Registry-facing name/description projection, exact version, fork download URLs, and SHA-256 values into a temporary `server.json`. The generator rejects a duplicated template catalog, invalid or duplicate catalog tools, and missing or unexpected MCP binaries before GitHub OIDC authentication.
 
 The target registry identity is `io.github.zoster81/mcp-file-tools`. Publishing remains dependent on a real fork release with all six platform binaries and `checksums.txt`; inherited tags alone are insufficient.
 
@@ -135,7 +135,8 @@ available.
 - `go mod verify` succeeds;
 - PowerShell example parses under Windows PowerShell 5.1;
 - JSON, YAML, JavaScript, Markdown, actionlint, and ShellCheck checks succeed;
-- README, tool reference, changelog, plugin metadata, Smithery metadata, runtime descriptions, roadmap, and `server.template.json` describe the same fork-owned capabilities;
+- README, tool reference, changelog, plugin metadata, Smithery metadata, runtime catalog, roadmap, and generated Registry manifest describe the same fork-owned capabilities;
+- runtime tool registration and annotations match `internal/toolcatalog/catalog.json`, every catalog tool is linked from README and documented in TOOLS.md, and `server.template.json` keeps `tools` empty;
 - secure traversal tests cover Unix symlinks and Windows junction/reparse-point escapes;
 - mutation tests cover synced staging, transactional backup rollback, cleanup, no-replace creation, concurrent-modification rejection, and platform cross-builds;
 - typed-error tests cover standard and joined causes, security/path categories, encoding categories, mutation conflicts, cancellation, and stable batch error codes;

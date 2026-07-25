@@ -74,6 +74,42 @@ func CaptureSnapshotWithData(path string, data []byte) (snapshot FileSnapshot, e
 	return snapshot, nil
 }
 
+// CaptureSnapshotWithDigest streams path into a SHA-256 digest without loading
+// the entire file into memory, then verifies that path still matches the opened
+// file metadata. It is suitable for optimistic pre-execution checks.
+func CaptureSnapshotWithDigest(path string) (snapshot FileSnapshot, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("capture_snapshot_with_digest", path, err)
+	}()
+
+	file, err := os.Open(path)
+	if err != nil {
+		return FileSnapshot{}, err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return FileSnapshot{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return FileSnapshot{}, fmt.Errorf("path is not a regular file: %s", path)
+	}
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return FileSnapshot{}, err
+	}
+
+	snapshot = snapshotFromInfo(info)
+	copy(snapshot.digest[:], hasher.Sum(nil))
+	snapshot.hasDigest = true
+	if err := snapshot.verifyMetadata(path); err != nil {
+		return FileSnapshot{}, err
+	}
+	return snapshot, nil
+}
+
 func snapshotFromInfo(info fs.FileInfo) FileSnapshot {
 	return FileSnapshot{
 		Exists:  true,
@@ -95,15 +131,28 @@ func (snapshot FileSnapshot) Verify(path string) (err error) {
 	if !snapshot.hasDigest {
 		return nil
 	}
-	data, err := os.ReadFile(path)
+
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	actual := sha256.Sum256(data)
-	if actual != snapshot.digest {
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if err := snapshot.verifyInfo(path, info); err != nil {
+		return err
+	}
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return err
+	}
+	if !bytes.Equal(hasher.Sum(nil), snapshot.digest[:]) {
 		return fmt.Errorf("%w: content differs for %s", ErrConcurrentModification, path)
 	}
-	return nil
+	return snapshot.verifyMetadata(path)
 }
 
 func (snapshot FileSnapshot) verifyMetadata(path string) error {

@@ -21,6 +21,7 @@ if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
 
 const root = path.resolve(__dirname, '..');
 const templatePath = path.join(root, 'server.template.json');
+const catalogPath = path.join(root, 'internal', 'toolcatalog', 'catalog.json');
 const checksumsPath = path.resolve(process.cwd(), process.argv[3] || 'checksums.txt');
 const outputPath = path.resolve(process.cwd(), process.argv[4] || 'server.json');
 
@@ -34,6 +35,28 @@ if (manifest.repository?.url !== forkRepository || manifest.homepage !== forkRep
 if (!Array.isArray(manifest.packages) || manifest.packages.length === 0) {
   fail('registry template must contain at least one package');
 }
+if (!Array.isArray(manifest.tools) || manifest.tools.length !== 0) {
+  fail('registry template tools must be empty; tool metadata comes from the authoritative catalog');
+}
+
+const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+if (!Array.isArray(catalog.tools) || catalog.tools.length === 0) {
+  fail('tool catalog must contain at least one tool');
+}
+const toolNames = new Set();
+for (const tool of catalog.tools) {
+  if (typeof tool.name !== 'string' || tool.name.trim() === '') {
+    fail('tool catalog contains an invalid name');
+  }
+  if (typeof tool.description !== 'string' || tool.description.trim() === '') {
+    fail(`tool catalog description is missing for ${tool.name}`);
+  }
+  if (toolNames.has(tool.name)) {
+    fail(`tool catalog contains duplicate name ${tool.name}`);
+  }
+  toolNames.add(tool.name);
+}
+manifest.tools = catalog.tools.map(({ name, description }) => ({ name, description }));
 
 const checksums = new Map();
 for (const rawLine of fs.readFileSync(checksumsPath, 'utf8').split(/\r?\n/)) {

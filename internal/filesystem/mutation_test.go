@@ -6,9 +6,44 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestCaptureSnapshotWithDigestDetectsSameMetadataContentChange(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "script.bin")
+	if err := os.WriteFile(path, []byte("first1"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := CaptureSnapshotWithDigest(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("second"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := snapshot.Verify(path); !errors.Is(err, ErrConcurrentModification) {
+		t.Fatalf("Verify() error = %v, want ErrConcurrentModification", err)
+	}
+}
+
+func TestCaptureSnapshotWithDigestRejectsDirectory(t *testing.T) {
+	_, err := CaptureSnapshotWithDigest(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("CaptureSnapshotWithDigest() error = %v, want regular-file rejection", err)
+	}
+}
 
 func TestReplaceFile_CommitsAndPreservesMode(t *testing.T) {
 	dir := t.TempDir()

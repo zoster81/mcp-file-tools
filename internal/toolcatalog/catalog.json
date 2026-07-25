@@ -1,0 +1,236 @@
+{
+  "tools": [
+    {
+      "name": "read_text_file",
+      "title": "Read Text File",
+      "description": "Read file with encoding auto-detection, converts to UTF-8, strips a Unicode transport BOM from returned content, and reports hasBOM/bomType metadata. PREFER THIS over built-in Read for non-UTF-8 files (Cyrillic, legacy codebases). For files >2000 lines, use offset/limit to paginate. Returns totalLines and fileSizeBytes for planning subsequent reads. Use maxCharacters to cap output size and prevent token overflow. Parameters: path (required), encoding (optional, auto-detected), offset (1-indexed start line), limit (max lines to return), maxCharacters (optional, truncates content).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "read_multiple_files",
+      "title": "Read Multiple Files",
+      "description": "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file. A bounded ordered worker coordinator limits in-flight work and preserves input order. PREFER THIS when reading several non-UTF-8 files at once. Individual failures do not stop the batch, and cancellation still returns one result per requested path. Partial results include stable per-file errorCode values from the centralized operation-error mapping. Each successful result may include hasBOM/bomType metadata. Parameters: paths (required array), encoding (optional, auto-detected per file).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_directory",
+      "title": "List Directory",
+      "description": "List files and directories with optional glob pattern filtering (e.g., *.pas, *.dfm). Parameters: path (required), pattern (optional, default: *).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_encodings",
+      "title": "List Encodings",
+      "description": "List all 24 supported encodings with name, aliases, and description. Use this to find the correct encoding name for read/write/convert operations.",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "detect_encoding",
+      "title": "Detect Encoding",
+      "description": "Auto-detect file encoding with confidence score (0-100) and BOM detection. ALWAYS use this first when encountering garbled text or � characters. Use before read_text_file to determine the correct encoding. Parameters: path (required), mode (sample=fast default, chunked=thorough, full=entire file).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "grep_text_files",
+      "title": "Grep Text Files",
+      "description": "Regex search through the shared encoding/BOM-aware document decoder, deterministic secure walker, and bounded ordered worker coordinator. Directory traversal skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. File results commit in lexical order, pending results stay bounded, and cancellation stops new dispatch. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_allowed_directories",
+      "title": "List Allowed Directories",
+      "description": "Returns the list of directories this server is allowed to access. Subdirectories are also accessible. If empty, user needs to add directory paths as args in .mcp.json.",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_file_info",
+      "title": "Get File Info",
+      "description": "Get file/directory metadata: size, timestamps, permissions, type. Use this to check file size before reading large files with read_text_file. Parameter: path (required).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "directory_tree",
+      "title": "Directory Tree (JSON)",
+      "description": "DEPRECATED: Use 'tree' instead (85% fewer tokens). Returns a deterministic JSON tree through the shared secure walker and skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Parameters: path (required), excludePatterns (optional).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "tree",
+      "title": "Tree (Compact)",
+      "description": "Compact deterministic tree view through the shared secure walker. Uses 85% fewer tokens than directory_tree — PREFER THIS for directory visualization. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Set showEncoding=true to detect and display file encodings after immediate path revalidation. Parameters: path (required), maxDepth (0=unlimited), maxFiles (default 1000), dirsOnly (bool), exclude (array of patterns), showEncoding (bool, shows detected encoding per file).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_files",
+      "title": "Search Files",
+      "description": "Recursively search in deterministic lexical order through the shared secure walker. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Returns full paths matching a glob pattern (*.ext or **/*.ext). Parameters: path (required), pattern (required), excludePatterns, maxResults (default 10000).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "detect_line_endings",
+      "title": "Detect Line Endings",
+      "description": "Detect line ending style (crlf/lf/mixed/none) after decoding any of the 24 registered encodings, including UTF-16 LE/BE. Rejects an explicit encoding that conflicts with a Unicode BOM. Suitable for MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh), which are commonly UTF-16 LE with BOM and CRLF endings. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "manage_bom",
+      "title": "Manage BOM",
+      "description": "Detect, strip, or add Unicode BOM (Byte Order Mark). Strip/add snapshot the original bytes, revalidate the path, and use synced atomic replacement so cancellation or detected concurrent changes leave the original unchanged. UTF-8 BOM breaks PHP/shell scripts; UTF-16 files need BOMs. Parameters: path (required), action (required: \"detect\"|\"strip\"|\"add\"), encoding (required for \"add\": utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be).",
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": true,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "change_line_endings",
+      "title": "Change Line Endings",
+      "description": "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Changed output uses synced atomic replacement with path revalidation and concurrent-modification detection. Handles UTF-16 LE/BE code units separately and supports MetaTrader MQL sources (.mq4, .mq5, .mqh). Returns original style, new style, and number of lines changed. No-op if already correct. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": true,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "create_directory",
+      "title": "Create Directory",
+      "description": "Create a directory recursively (mkdir -p). Succeeds silently if already exists. Parameter: path (required).",
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "write_file",
+      "title": "Write File",
+      "description": "Write UTF-8 content through the shared document encoder and durable mutation layer. Output is staged and synced before atomic commit; existing targets are checked for practical concurrent changes, and new targets use no-replace commit. The supplied line endings are written exactly. Parameters: path (required), content (required), encoding (preserves a confidently detected existing encoding or defaults to cp1251), bom (optional: auto|always|never|preserve; default auto).",
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": true,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "move_file",
+      "title": "Move File",
+      "description": "Move or rename files/directories with a platform-native no-replace operation. A destination created concurrently is not overwritten; namespace changes are synced where supported. Parameters: source (required), destination (required).",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "copy_file",
+      "title": "Copy File",
+      "description": "Copy a regular file through synced same-directory staging, preserving source permissions and modification time where supported. Installs atomically without replacing an existing or concurrently created destination. Parameters: source (required), destination (required).",
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "delete_file",
+      "title": "Delete File",
+      "description": "Delete a file after path revalidation and an optimistic metadata snapshot check, then sync the containing directory where supported. Does not delete directories. Parameter: path (required).",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "edit_file",
+      "title": "Edit File",
+      "description": "Replace text in a file with whitespace-flexible matching through the shared encoding/BOM-aware document pipeline and synced atomic replacement. Returns unified diff, rejects detected concurrent changes, preserves UTF-8/UTF-16 BOM state and consistent CRLF/LF endings, and skips logical no-op writes across all 24 encodings. In 'ask before edits' mode: ALWAYS call with dryRun=true first, show the diff, then dryRun=false after user confirms. With auto-edit permissions: call directly with dryRun=false. On no match, the error hints the closest matching content — use it to fix oldText and retry. Parameters: path, edits [{oldText, newText}], dryRun (false), encoding (auto).",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "convert_encoding",
+      "title": "Convert Encoding",
+      "description": "Convert through the shared encoding/BOM-aware document pipeline and synced atomic replacement while preserving decoded text and line endings exactly. Byte-identical results skip writes/backups. backup=true transactionally stages the original first and restores a previous backup if target commit fails. Detected concurrent source changes are rejected. Parameters: path, from, to, backup, bom=auto|always|never|preserve.",
+      "annotations": {
+        "readOnlyHint": false,
+        "idempotentHint": true,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "run_script",
+      "title": "Run Script",
+      "description": "Execute a script located inside an allowed directory. The script path and optional cwd are validated against the directories passed when the server starts and revalidated immediately before launch. Supported: .ps1, .bat, .cmd, .py, .js, .mjs, .cjs, .sh, .exe, .com. Parameters: path, args, cwd, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_RUN_SCRIPT=1 or MCP_ENABLE_EXECUTION=1.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "shell",
+      "title": "Shell Command",
+      "description": "Execute an arbitrary shell command. The optional cwd must be inside a directory passed when the server starts and is revalidated immediately before launch; if omitted, the first allowed directory is used. WARNING: the command itself is unrestricted and can access resources outside cwd. On Windows shell may be powershell (default), pwsh, or cmd. Parameters: command, cwd, shell, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_SHELL=1 or MCP_ENABLE_EXECUTION=1.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "check_for_updates",
+      "title": "Check for Updates",
+      "description": "Check if a newer version of mcp-file-tools is available. Returns current version, latest version, and update instructions if outdated. Uses cached result (max 1 GitHub API call per 30 minutes). Call once at the start of each session.",
+      "annotations": {
+        "readOnlyHint": true
+      }
+    }
+  ]
+}

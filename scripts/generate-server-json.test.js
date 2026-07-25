@@ -9,6 +9,7 @@ const test = require('node:test');
 
 const repositoryRoot = path.resolve(__dirname, '..');
 const generator = path.join(repositoryRoot, 'scripts', 'generate-server-json.js');
+const toolCatalog = path.join(repositoryRoot, 'internal', 'toolcatalog', 'catalog.json');
 const expectedFiles = [
   'mcp-file-tools_windows_amd64.exe',
   'mcp-file-tools_windows_arm64.exe',
@@ -51,6 +52,12 @@ test('generates a fork-owned manifest from release checksums', (t) => {
     assert.equal(pkg.identifier, `https://github.com/zoster81/mcp-file-tools/releases/download/v2.3.4/${expectedFiles[index]}`);
     assert.equal(pkg.fileSha256, checksumFor(index));
   });
+
+  const catalog = JSON.parse(fs.readFileSync(toolCatalog, 'utf8'));
+  assert.deepEqual(
+    manifest.tools,
+    catalog.tools.map(({ name, description }) => ({ name, description })),
+  );
 });
 
 test('fails when a release binary checksum is missing', (t) => {

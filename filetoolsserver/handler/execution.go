@@ -1,27 +1,17 @@
 package handler
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-)
-
-const (
-	defaultExecutionTimeoutSeconds = 60
-	maximumExecutionTimeoutSeconds = 600
-	maximumExecutionOutputBytes    = 256 * 1024
+	internalexecution "github.com/zoster81/mcp-file-tools/internal/execution"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
 // RunScriptInput executes a script located inside an allowed directory.
@@ -42,16 +32,7 @@ type ShellInput struct {
 }
 
 // ExecutionOutput is returned by run_script and shell.
-type ExecutionOutput struct {
-	WorkingDirectory   string `json:"workingDirectory"`
-	ExitCode           int    `json:"exitCode"`
-	Stdout             string `json:"stdout,omitempty"`
-	Stderr             string `json:"stderr,omitempty"`
-	TimedOut           bool   `json:"timedOut,omitempty"`
-	OutputTruncated    bool   `json:"outputTruncated,omitempty"`
-	DurationMillis     int64  `json:"durationMillis"`
-	ExecutionCancelled bool   `json:"executionCancelled,omitempty"`
-}
+type ExecutionOutput = internalexecution.Result
 
 // HandleRunScript executes a supported script whose path is inside an allowed directory.
 func (h *Handler) HandleRunScript(ctx context.Context, req *mcp.CallToolRequest, input RunScriptInput) (*mcp.CallToolResult, ExecutionOutput, error) {
@@ -63,13 +44,9 @@ func (h *Handler) HandleRunScript(ctx context.Context, req *mcp.CallToolRequest,
 	if !validatedScript.Ok() {
 		return validatedScript.Result, ExecutionOutput{}, nil
 	}
-
-	info, err := os.Stat(validatedScript.Path)
+	scriptInfo, err := inspectScriptFile(validatedScript.Path)
 	if err != nil {
-		return errorResult(fmt.Sprintf("failed to inspect script: %v", err)), ExecutionOutput{}, nil
-	}
-	if info.IsDir() {
-		return errorResult("path must refer to a script file, not a directory"), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
 	cwd := input.Cwd
@@ -80,12 +57,10 @@ func (h *Handler) HandleRunScript(ctx context.Context, req *mcp.CallToolRequest,
 	if !validatedCwd.Ok() {
 		return validatedCwd.Result, ExecutionOutput{}, nil
 	}
-	if err := requireDirectory(validatedCwd.Path); err != nil {
+	if _, err := internalexecution.ValidateWorkingDirectory(validatedCwd.Path); err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
-
-	timeout, err := executionTimeout(input.TimeoutSeconds)
-	if err != nil {
+	if err := internalexecution.ValidateTimeoutSeconds(input.TimeoutSeconds); err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
@@ -93,8 +68,22 @@ func (h *Handler) HandleRunScript(ctx context.Context, req *mcp.CallToolRequest,
 	if err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
+	plan, err := internalexecution.Prepare(internalexecution.Request{
+		Program:          program,
+		Args:             args,
+		WorkingDirectory: validatedCwd.Path,
+		TimeoutSeconds:   input.TimeoutSeconds,
+	})
+	if err != nil {
+		return errorResultFromError(err), ExecutionOutput{}, nil
+	}
 
-	output, err := executeProcess(ctx, program, args, validatedCwd.Path, timeout)
+	output, err := plan.Run(ctx, func() error {
+		if err := h.revalidateWorkingDirectory(validatedCwd.Path); err != nil {
+			return err
+		}
+		return h.revalidateScript(validatedScript.Path, scriptInfo)
+	})
 	if err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
@@ -118,17 +107,14 @@ func (h *Handler) HandleShell(ctx context.Context, req *mcp.CallToolRequest, inp
 		}
 		cwd = allowedDirs[0]
 	}
-
 	validatedCwd := h.ValidatePath(cwd)
 	if !validatedCwd.Ok() {
 		return validatedCwd.Result, ExecutionOutput{}, nil
 	}
-	if err := requireDirectory(validatedCwd.Path); err != nil {
+	if _, err := internalexecution.ValidateWorkingDirectory(validatedCwd.Path); err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
-
-	timeout, err := executionTimeout(input.TimeoutSeconds)
-	if err != nil {
+	if err := internalexecution.ValidateTimeoutSeconds(input.TimeoutSeconds); err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
@@ -136,12 +122,58 @@ func (h *Handler) HandleShell(ctx context.Context, req *mcp.CallToolRequest, inp
 	if err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
+	plan, err := internalexecution.Prepare(internalexecution.Request{
+		Program:          program,
+		Args:             args,
+		WorkingDirectory: validatedCwd.Path,
+		TimeoutSeconds:   input.TimeoutSeconds,
+	})
+	if err != nil {
+		return errorResultFromError(err), ExecutionOutput{}, nil
+	}
 
-	output, err := executeProcess(ctx, program, args, validatedCwd.Path, timeout)
+	output, err := plan.Run(ctx, func() error {
+		return h.revalidateWorkingDirectory(validatedCwd.Path)
+	})
 	if err != nil {
 		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 	return executionResult(output), output, nil
+}
+
+func (h *Handler) revalidateWorkingDirectory(path string) error {
+	validated, err := h.validatePath(path)
+	if err != nil {
+		return err
+	}
+	_, err = internalexecution.ValidateWorkingDirectory(validated)
+	return err
+}
+
+func (h *Handler) revalidateScript(path string, original filesystem.FileSnapshot) error {
+	validated, err := h.validatePath(path)
+	if err != nil {
+		return err
+	}
+	if err := original.Verify(validated); err != nil {
+		return fmt.Errorf("script changed before execution: %s: %w", validated, err)
+	}
+	return nil
+}
+
+func inspectScriptFile(path string) (filesystem.FileSnapshot, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return filesystem.FileSnapshot{}, fmt.Errorf("failed to inspect script: %w", err)
+	}
+	if info.IsDir() {
+		return filesystem.FileSnapshot{}, fmt.Errorf("path must refer to a script file, not a directory")
+	}
+	snapshot, err := filesystem.CaptureSnapshotWithDigest(path)
+	if err != nil {
+		return filesystem.FileSnapshot{}, fmt.Errorf("failed to inspect script: %w", err)
+	}
+	return snapshot, nil
 }
 
 func executionFeatureEnabled(specificVariable string) bool {
@@ -155,27 +187,6 @@ func environmentFlagEnabled(name string) bool {
 	default:
 		return false
 	}
-}
-
-func executionTimeout(seconds int) (time.Duration, error) {
-	if seconds == 0 {
-		seconds = defaultExecutionTimeoutSeconds
-	}
-	if seconds < 1 || seconds > maximumExecutionTimeoutSeconds {
-		return 0, fmt.Errorf("timeoutSeconds must be between 1 and %d", maximumExecutionTimeoutSeconds)
-	}
-	return time.Duration(seconds) * time.Second, nil
-}
-
-func requireDirectory(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("failed to inspect working directory: %v", err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("working directory is not a directory: %s", path)
-	}
-	return nil
 }
 
 func buildScriptCommand(scriptPath string, scriptArgs []string) (string, []string, error) {
@@ -227,7 +238,7 @@ func buildScriptCommand(scriptPath string, scriptArgs []string) (string, []strin
 		return program, append([]string{scriptPath}, scriptArgs...), nil
 
 	case ".exe", ".com":
-		return scriptPath, scriptArgs, nil
+		return scriptPath, append([]string(nil), scriptArgs...), nil
 
 	default:
 		return "", nil, fmt.Errorf("unsupported script type %q; supported extensions: .ps1, .bat, .cmd, .py, .js, .mjs, .cjs, .sh, .exe, .com", extension)
@@ -304,125 +315,8 @@ func firstExecutable(candidates ...string) (string, error) {
 	return "", lastErr
 }
 
-func executeProcess(parent context.Context, program string, args []string, cwd string, timeout time.Duration) (ExecutionOutput, error) {
-	started := time.Now()
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-
-	stdout := newLimitedBuffer(maximumExecutionOutputBytes)
-	stderr := newLimitedBuffer(maximumExecutionOutputBytes)
-
-	cmd := exec.Command(program, args...)
-	cmd.Dir = cwd
-	cmd.Stdin = nil
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-
-	if err := cmd.Start(); err != nil {
-		return ExecutionOutput{}, fmt.Errorf("failed to start process: %w", err)
-	}
-
-	waitResult := make(chan error, 1)
-	go func() {
-		waitResult <- cmd.Wait()
-	}()
-
-	var runErr error
-	timedOut := false
-	cancelled := false
-
-	select {
-	case runErr = <-waitResult:
-	case <-ctx.Done():
-		timedOut = errors.Is(ctx.Err(), context.DeadlineExceeded)
-		cancelled = !timedOut
-		terminateProcessTree(cmd)
-		runErr = <-waitResult
-	}
-
-	exitCode := 0
-	if runErr != nil {
-		var exitError *exec.ExitError
-		if errors.As(runErr, &exitError) {
-			exitCode = exitError.ExitCode()
-		} else if timedOut || cancelled {
-			exitCode = -1
-		} else {
-			return ExecutionOutput{}, fmt.Errorf("failed while waiting for process: %w", runErr)
-		}
-	}
-
-	return ExecutionOutput{
-		WorkingDirectory:   cwd,
-		ExitCode:           exitCode,
-		Stdout:             stdout.String(),
-		Stderr:             stderr.String(),
-		TimedOut:           timedOut,
-		OutputTruncated:    stdout.Truncated() || stderr.Truncated(),
-		DurationMillis:     time.Since(started).Milliseconds(),
-		ExecutionCancelled: cancelled,
-	}, nil
-}
-
 func executionResult(output ExecutionOutput) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
 		IsError: output.ExitCode != 0 || output.TimedOut || output.ExecutionCancelled,
 	}
-}
-
-func terminateProcessTree(cmd *exec.Cmd) {
-	if cmd == nil || cmd.Process == nil {
-		return
-	}
-
-	if runtime.GOOS == "windows" {
-		killer := exec.Command("taskkill", "/PID", strconv.Itoa(cmd.Process.Pid), "/T", "/F")
-		killer.Stdout = io.Discard
-		killer.Stderr = io.Discard
-		_ = killer.Run()
-	}
-
-	_ = cmd.Process.Kill()
-}
-
-type limitedBuffer struct {
-	mu        sync.Mutex
-	buffer    bytes.Buffer
-	limit     int
-	truncated bool
-}
-
-func newLimitedBuffer(limit int) *limitedBuffer {
-	return &limitedBuffer{limit: limit}
-}
-
-func (b *limitedBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	originalLength := len(p)
-	remaining := b.limit - b.buffer.Len()
-	if remaining > 0 {
-		writeLength := len(p)
-		if writeLength > remaining {
-			writeLength = remaining
-		}
-		_, _ = b.buffer.Write(p[:writeLength])
-	}
-	if originalLength > remaining {
-		b.truncated = true
-	}
-	return originalLength, nil
-}
-
-func (b *limitedBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buffer.String()
-}
-
-func (b *limitedBuffer) Truncated() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.truncated
 }

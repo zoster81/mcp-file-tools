@@ -6,6 +6,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
 	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/mcp-file-tools/internal/toolcatalog"
 )
 
 // Version is set at build time via ldflags
@@ -39,9 +40,19 @@ If "no allowed directories configured" error: add directory paths as args in .mc
 
 IMPORTANT: Call check_for_updates once at the start of each session. If an update is available, inform the user before proceeding.`
 
-// Helper for bool pointers (DestructiveHint defaults to true, so we need explicit false)
-func boolPtr(b bool) *bool {
-	return &b
+func catalogTool(name string) *mcp.Tool {
+	definition := toolcatalog.Must(name)
+	return &mcp.Tool{
+		Name:        definition.Name,
+		Description: definition.Description,
+		Annotations: &mcp.ToolAnnotations{
+			Title:           definition.Title,
+			ReadOnlyHint:    definition.Annotations.ReadOnlyHint,
+			IdempotentHint:  definition.Annotations.IdempotentHint,
+			DestructiveHint: definition.Annotations.DestructiveHint,
+			OpenWorldHint:   definition.Annotations.OpenWorldHint,
+		},
+	}
 }
 
 // NewServer creates a new MCP server with all file tools registered.
@@ -74,273 +85,56 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	// All handlers are wrapped with recovery middleware (and logging if logger is provided)
 
 	// Read-only tools
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "read_text_file",
-		Description: "Read file with encoding auto-detection, converts to UTF-8, strips a Unicode transport BOM from returned content, and reports hasBOM/bomType metadata. PREFER THIS over built-in Read for non-UTF-8 files (Cyrillic, legacy codebases). For files >2000 lines, use offset/limit to paginate. Returns totalLines and fileSizeBytes for planning subsequent reads. Use maxCharacters to cap output size and prevent token overflow. Parameters: path (required), encoding (optional, auto-detected), offset (1-indexed start line), limit (max lines to return), maxCharacters (optional, truncates content).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Read Text File",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "read_text_file", h.HandleReadTextFile))
+	mcp.AddTool(server, catalogTool("read_text_file"), handler.Wrap(logger, "read_text_file", h.HandleReadTextFile))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "read_multiple_files",
-		Description: "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file. A bounded ordered worker coordinator limits in-flight work and preserves input order. PREFER THIS when reading several non-UTF-8 files at once. Individual failures do not stop the batch, and cancellation still returns one result per requested path. Partial results include stable per-file errorCode values from the centralized operation-error mapping. Each successful result may include hasBOM/bomType metadata. Parameters: paths (required array), encoding (optional, auto-detected per file).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Read Multiple Files",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "read_multiple_files", h.HandleReadMultipleFiles))
+	mcp.AddTool(server, catalogTool("read_multiple_files"), handler.Wrap(logger, "read_multiple_files", h.HandleReadMultipleFiles))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_directory",
-		Description: "List files and directories with optional glob pattern filtering (e.g., *.pas, *.dfm). Parameters: path (required), pattern (optional, default: *).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "List Directory",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "list_directory", h.HandleListDirectory))
+	mcp.AddTool(server, catalogTool("list_directory"), handler.Wrap(logger, "list_directory", h.HandleListDirectory))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_encodings",
-		Description: "List all 24 supported encodings with name, aliases, and description. Use this to find the correct encoding name for read/write/convert operations.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "List Encodings",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "list_encodings", h.HandleListEncodings))
+	mcp.AddTool(server, catalogTool("list_encodings"), handler.Wrap(logger, "list_encodings", h.HandleListEncodings))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "detect_encoding",
-		Description: "Auto-detect file encoding with confidence score (0-100) and BOM detection. ALWAYS use this first when encountering garbled text or � characters. Use before read_text_file to determine the correct encoding. Parameters: path (required), mode (sample=fast default, chunked=thorough, full=entire file).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Detect Encoding",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "detect_encoding", h.HandleDetectEncoding))
+	mcp.AddTool(server, catalogTool("detect_encoding"), handler.Wrap(logger, "detect_encoding", h.HandleDetectEncoding))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "grep_text_files",
-		Description: "Regex search through the shared encoding/BOM-aware document decoder, deterministic secure walker, and bounded ordered worker coordinator. Directory traversal skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. File results commit in lexical order, pending results stay bounded, and cancellation stops new dispatch. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Grep Text Files",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "grep_text_files", h.HandleGrep))
+	mcp.AddTool(server, catalogTool("grep_text_files"), handler.Wrap(logger, "grep_text_files", h.HandleGrep))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_allowed_directories",
-		Description: "Returns the list of directories this server is allowed to access. Subdirectories are also accessible. If empty, user needs to add directory paths as args in .mcp.json.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "List Allowed Directories",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "list_allowed_directories", h.HandleListAllowedDirectories))
+	mcp.AddTool(server, catalogTool("list_allowed_directories"), handler.Wrap(logger, "list_allowed_directories", h.HandleListAllowedDirectories))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_file_info",
-		Description: "Get file/directory metadata: size, timestamps, permissions, type. Use this to check file size before reading large files with read_text_file. Parameter: path (required).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Get File Info",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "get_file_info", h.HandleGetFileInfo))
+	mcp.AddTool(server, catalogTool("get_file_info"), handler.Wrap(logger, "get_file_info", h.HandleGetFileInfo))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "directory_tree",
-		Description: "DEPRECATED: Use 'tree' instead (85% fewer tokens). Returns a deterministic JSON tree through the shared secure walker and skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Parameters: path (required), excludePatterns (optional).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Directory Tree (JSON)",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "directory_tree", h.HandleDirectoryTree))
+	mcp.AddTool(server, catalogTool("directory_tree"), handler.Wrap(logger, "directory_tree", h.HandleDirectoryTree))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "tree",
-		Description: "Compact deterministic tree view through the shared secure walker. Uses 85% fewer tokens than directory_tree — PREFER THIS for directory visualization. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Set showEncoding=true to detect and display file encodings after immediate path revalidation. Parameters: path (required), maxDepth (0=unlimited), maxFiles (default 1000), dirsOnly (bool), exclude (array of patterns), showEncoding (bool, shows detected encoding per file).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Tree (Compact)",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "tree", h.HandleTree))
+	mcp.AddTool(server, catalogTool("tree"), handler.Wrap(logger, "tree", h.HandleTree))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "search_files",
-		Description: "Recursively search in deterministic lexical order through the shared secure walker. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Returns full paths matching a glob pattern (*.ext or **/*.ext). Parameters: path (required), pattern (required), excludePatterns, maxResults (default 10000).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Search Files",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "search_files", h.HandleSearchFiles))
+	mcp.AddTool(server, catalogTool("search_files"), handler.Wrap(logger, "search_files", h.HandleSearchFiles))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "detect_line_endings",
-		Description: "Detect line ending style (crlf/lf/mixed/none) after decoding any of the 24 registered encodings, including UTF-16 LE/BE. Rejects an explicit encoding that conflicts with a Unicode BOM. Suitable for MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh), which are commonly UTF-16 LE with BOM and CRLF endings. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:         "Detect Line Endings",
-			ReadOnlyHint:  true,
-			OpenWorldHint: boolPtr(false),
-		},
-	}, handler.Wrap(logger, "detect_line_endings", h.HandleDetectLineEndings))
+	mcp.AddTool(server, catalogTool("detect_line_endings"), handler.Wrap(logger, "detect_line_endings", h.HandleDetectLineEndings))
 
 	// Write tools
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "manage_bom",
-		Description: "Detect, strip, or add Unicode BOM (Byte Order Mark). Strip/add snapshot the original bytes, revalidate the path, and use synced atomic replacement so cancellation or detected concurrent changes leave the original unchanged. UTF-8 BOM breaks PHP/shell scripts; UTF-16 files need BOMs. Parameters: path (required), action (required: \"detect\"|\"strip\"|\"add\"), encoding (required for \"add\": utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Manage BOM",
-			ReadOnlyHint:    false,
-			IdempotentHint:  true,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "manage_bom", h.HandleManageBom))
+	mcp.AddTool(server, catalogTool("manage_bom"), handler.Wrap(logger, "manage_bom", h.HandleManageBom))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "change_line_endings",
-		Description: "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Changed output uses synced atomic replacement with path revalidation and concurrent-modification detection. Handles UTF-16 LE/BE code units separately and supports MetaTrader MQL sources (.mq4, .mq5, .mqh). Returns original style, new style, and number of lines changed. No-op if already correct. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Change Line Endings",
-			ReadOnlyHint:    false,
-			IdempotentHint:  true,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "change_line_endings", h.HandleChangeLineEndings))
+	mcp.AddTool(server, catalogTool("change_line_endings"), handler.Wrap(logger, "change_line_endings", h.HandleChangeLineEndings))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "create_directory",
-		Description: "Create a directory recursively (mkdir -p). Succeeds silently if already exists. Parameter: path (required).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Create Directory",
-			ReadOnlyHint:    false,
-			IdempotentHint:  true,
-			DestructiveHint: boolPtr(false),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "create_directory", h.HandleCreateDirectory))
+	mcp.AddTool(server, catalogTool("create_directory"), handler.Wrap(logger, "create_directory", h.HandleCreateDirectory))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "write_file",
-		Description: "Write UTF-8 content through the shared document encoder and durable mutation layer. Output is staged and synced before atomic commit; existing targets are checked for practical concurrent changes, and new targets use no-replace commit. The supplied line endings are written exactly. Parameters: path (required), content (required), encoding (preserves a confidently detected existing encoding or defaults to cp1251), bom (optional: auto|always|never|preserve; default auto).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Write File",
-			ReadOnlyHint:    false,
-			IdempotentHint:  true,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "write_file", h.HandleWriteFile))
+	mcp.AddTool(server, catalogTool("write_file"), handler.Wrap(logger, "write_file", h.HandleWriteFile))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "move_file",
-		Description: "Move or rename files/directories with a platform-native no-replace operation. A destination created concurrently is not overwritten; namespace changes are synced where supported. Parameters: source (required), destination (required).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Move File",
-			ReadOnlyHint:    false,
-			IdempotentHint:  false,
-			DestructiveHint: boolPtr(false),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "move_file", h.HandleMoveFile))
+	mcp.AddTool(server, catalogTool("move_file"), handler.Wrap(logger, "move_file", h.HandleMoveFile))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "copy_file",
-		Description: "Copy a regular file through synced same-directory staging, preserving source permissions and modification time where supported. Installs atomically without replacing an existing or concurrently created destination. Parameters: source (required), destination (required).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Copy File",
-			ReadOnlyHint:    false,
-			IdempotentHint:  true,
-			DestructiveHint: boolPtr(false),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "copy_file", h.HandleCopyFile))
+	mcp.AddTool(server, catalogTool("copy_file"), handler.Wrap(logger, "copy_file", h.HandleCopyFile))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "delete_file",
-		Description: "Delete a file after path revalidation and an optimistic metadata snapshot check, then sync the containing directory where supported. Does not delete directories. Parameter: path (required).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Delete File",
-			ReadOnlyHint:    false,
-			IdempotentHint:  false,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "delete_file", h.HandleDeleteFile))
+	mcp.AddTool(server, catalogTool("delete_file"), handler.Wrap(logger, "delete_file", h.HandleDeleteFile))
 
 	// WrapContentOnly: returns readable diff text instead of StructuredContent JSON.
-	mcp.AddTool(server, &mcp.Tool{
-		Name: "edit_file",
-		Description: "Replace text in a file with whitespace-flexible matching through the shared encoding/BOM-aware document pipeline and synced atomic replacement. Returns unified diff, rejects detected concurrent changes, preserves UTF-8/UTF-16 BOM state and consistent CRLF/LF endings, and skips logical no-op writes across all 24 encodings. " +
-			"In 'ask before edits' mode: ALWAYS call with dryRun=true first, show the diff, then dryRun=false after user confirms. " +
-			"With auto-edit permissions: call directly with dryRun=false. " +
-			"On no match, the error hints the closest matching content — use it to fix oldText and retry. " +
-			"Parameters: path, edits [{oldText, newText}], dryRun (false), encoding (auto).",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Edit File",
-			ReadOnlyHint:    false,
-			IdempotentHint:  false,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.WrapContentOnly(logger, "edit_file", h.HandleEditFile))
+	mcp.AddTool(server, catalogTool("edit_file"), handler.WrapContentOnly(logger, "edit_file", h.HandleEditFile))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "convert_encoding",
-		Description: "Convert through the shared encoding/BOM-aware document pipeline and synced atomic replacement while preserving decoded text and line endings exactly. Byte-identical results skip writes/backups. backup=true transactionally stages the original first and restores a previous backup if target commit fails. Detected concurrent source changes are rejected. Parameters: path, from, to, backup, bom=auto|always|never|preserve.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Convert Encoding",
-			ReadOnlyHint:    false,
-			IdempotentHint:  true,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}, handler.Wrap(logger, "convert_encoding", h.HandleConvertEncoding))
+	mcp.AddTool(server, catalogTool("convert_encoding"), handler.Wrap(logger, "convert_encoding", h.HandleConvertEncoding))
 
 	// Execution tools. Paths and working directories are validated against the
 	// directories supplied when the MCP server starts.
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "run_script",
-		Description: "Execute a script located inside an allowed directory. The script path and optional cwd are validated against the directories passed when the server starts. Supported: .ps1, .bat, .cmd, .py, .js, .mjs, .cjs, .sh, .exe, .com. Parameters: path, args, cwd, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_RUN_SCRIPT=1 or MCP_ENABLE_EXECUTION=1.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Run Script",
-			ReadOnlyHint:    false,
-			IdempotentHint:  false,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(true),
-		},
-	}, handler.Wrap(logger, "run_script", h.HandleRunScript))
+	mcp.AddTool(server, catalogTool("run_script"), handler.Wrap(logger, "run_script", h.HandleRunScript))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "shell",
-		Description: "Execute an arbitrary shell command. The optional cwd must be inside a directory passed when the server starts; if omitted, the first allowed directory is used. WARNING: the command itself is unrestricted and can access resources outside cwd. On Windows shell may be powershell (default), pwsh, or cmd. Parameters: command, cwd, shell, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_SHELL=1 or MCP_ENABLE_EXECUTION=1.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Shell Command",
-			ReadOnlyHint:    false,
-			IdempotentHint:  false,
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(true),
-		},
-	}, handler.Wrap(logger, "shell", h.HandleShell))
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "check_for_updates",
-		Description: "Check if a newer version of mcp-file-tools is available. Returns current version, latest version, and update instructions if outdated. Uses cached result (max 1 GitHub API call per 30 minutes). Call once at the start of each session.",
-		Annotations: &mcp.ToolAnnotations{
-			Title:        "Check for Updates",
-			ReadOnlyHint: true,
-		},
-	}, handler.Wrap(logger, "check_for_updates", handler.NewCheckUpdateHandler(Version)))
+	mcp.AddTool(server, catalogTool("shell"), handler.Wrap(logger, "shell", h.HandleShell))
+	mcp.AddTool(server, catalogTool("check_for_updates"), handler.Wrap(logger, "check_for_updates", handler.NewCheckUpdateHandler(Version)))
 
 	return server
 }

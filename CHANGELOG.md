@@ -6,6 +6,22 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ## Unreleased
 
+### Added
+
+- Added `internal/execution`, a shared process-preparation primitive for absolute working-directory validation, bounded timeout/output handling, cancellation, process-tree termination, and caller-supplied pre-launch revalidation.
+- Added an embedded authoritative tool catalog consumed by MCP runtime registration and Registry manifest generation, with tests enforcing runtime metadata and README/TOOLS coverage.
+- Added streaming SHA-256 filesystem snapshots for optimistic pre-execution verification without loading complete scripts into memory.
+
+### Changed
+
+- Refactored `run_script` and `shell` to share only process-level mechanics while retaining separate authorization policies and independent feature flags.
+- Made both execution tools revalidate their working directory immediately before launch; `run_script` also verifies script metadata and SHA-256 content before execution.
+- Made `server.template.json` release-neutral for tool metadata; `scripts/generate-server-json.js` now injects the Registry projection from the authoritative catalog.
+
+### Fixed
+
+- Rejected script replacement or in-place content changes between `run_script` preparation and launch, including same-size and restored-timestamp changes that metadata-only checks can miss.
+
 ## 1.8.0 - 2026-07-25
 
 ### Added

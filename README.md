@@ -35,11 +35,11 @@ Another browser-hosted LLM could use the current server only if its MCP connecto
 
 A future compatibility phase may add an optional native HTTP/JSON transport while preserving stdio support. That work requires a separate security, authentication, binding, and deployment design before implementation.
 
-The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware text-document core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, and bounded ordered concurrency for batch operations. The upstream project remains the source of the original encoding-aware file-tool implementation.
+The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware text-document core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency for batch operations, shared process preparation, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## Current Development Status
 
-The current source branch includes the completed R1 shared text-document refactor, R2 secure filesystem walker, R3 atomic mutation layer, R4 typed operation error model, and R5 bounded ordered concurrency utility. Recursive tools share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. File replacement, backup, copy, move, and delete operations share durable staging, platform-specific atomic/no-replace commits, rollback-aware backup handling, cleanup, and optimistic concurrent-modification checks. Domain failures use transport-independent typed categories with centralized MCP and batch mapping, while `read_multiple_files` and `grep_text_files` now share one bounded worker coordinator that preserves input order, cancellation behavior, partial results, and global limits without changing public schemas.
+The current source branch includes completed R1-R6 refactoring: the shared text-document core, secure filesystem walker, atomic mutation layer, typed operation error model, bounded ordered concurrency utility, and execution-preparation/tool-metadata consolidation. Recursive tools share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. File mutations share durable staging and optimistic conflict checks. Batch read and grep share one bounded ordered coordinator. `run_script` and `shell` share only process-level preparation, timeout, cancellation, output limiting, and pre-launch working-directory revalidation; their distinct security policies remain separate. Runtime registration and generated Registry metadata consume one embedded authoritative catalog, with tests enforcing runtime and documentation coverage without changing public schemas.
 
 Fork releases are produced from semantic version tags by the verified GoReleaser workflow. Each published version includes raw platform binaries, archives, and `checksums.txt`; the Claude Code plugin is pinned to the same version and refuses unverified downloads.
 
@@ -85,13 +85,14 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 
 See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
-**Security:** File operations and `run_script` paths are restricted to allowed directories. Recursive filesystem tools resolve every visited entry through a shared secure walker and skip symlinks, Windows junctions, and other reparse points that resolve outside those directories. Mutation handlers revalidate paths before commit, use optimistic snapshots where practical, and use atomic or no-replace platform operations; a fully handle-relative design would still be required to eliminate every possible path-based TOCTOU window. The optional `shell` tool validates only its working directory; the command itself is unrestricted and runs with the operating-system permissions of the MCP server process.
+**Security:** File operations and `run_script` paths are restricted to allowed directories. Recursive filesystem tools resolve every visited entry through a shared secure walker and skip symlinks, Windows junctions, and other reparse points that resolve outside those directories. Mutation handlers revalidate paths before commit and use optimistic snapshots plus atomic or no-replace platform operations. Before `run_script` starts, its script and working directory are revalidated and the script's metadata plus SHA-256 snapshot must still match; this reduces but cannot eliminate the final path-based TOCTOU window without handle-relative execution. The optional `shell` tool revalidates only its working directory; the command itself remains unrestricted and runs with the operating-system permissions of the MCP server process.
 
 ## Custom Fork Changes
 
 This repository has evolved from its original upstream codebase. Compared with that baseline, the current source branch adds:
 
-- optional `run_script` and `shell` MCP tools, disabled by default;
+- optional `run_script` and `shell` MCP tools, disabled by default, with shared bounded process preparation but separate authorization policies;
+- an authoritative embedded tool catalog consumed by runtime registration and Registry manifest generation, with drift tests for runtime metadata and documentation coverage;
 - CLI-provided allowed directories as the authoritative fallback for tunnel clients that do not implement MCP roots requests;
 - correct validation of descendants when a Windows drive root such as `D:\` is allowed;
 - encoding-aware `detect_line_endings` and byte-preserving `change_line_endings` support for all 24 registered encodings, including UTF-16 LE/BE;
