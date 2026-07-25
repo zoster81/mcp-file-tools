@@ -33,11 +33,11 @@ Another browser-hosted LLM could use the current server only if its MCP connecto
 
 A future compatibility phase may add an optional native HTTP/JSON transport while preserving stdio support. That work requires a separate security, authentication, binding, and deployment design before implementation.
 
-The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware text-document core, and deterministic secure traversal. The upstream project remains the source of the original encoding-aware file-tool implementation.
+The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware text-document core, deterministic secure traversal, durable atomic mutations, and transport-independent typed operation errors. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## Current Development Status
 
-The current source branch includes the completed R1 shared text-document refactor, R2 secure filesystem walker, and R3 atomic mutation layer. Recursive tools share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. File replacement, backup, copy, move, and delete operations now share durable staging, platform-specific atomic/no-replace commits, rollback-aware backup handling, cleanup, and optimistic concurrent-modification checks. The next planned refactoring milestone is R4, which will introduce typed operation errors and centralize MCP error mapping.
+The current source branch includes the completed R1 shared text-document refactor, R2 secure filesystem walker, R3 atomic mutation layer, and R4 typed operation error model. Recursive tools share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. File replacement, backup, copy, move, and delete operations share durable staging, platform-specific atomic/no-replace commits, rollback-aware backup handling, cleanup, and optimistic concurrent-modification checks. Domain failures now use transport-independent typed categories with centralized MCP and batch mapping while preserving public messages and schemas. The next planned refactoring milestone is R5, which will consolidate bounded ordered concurrency utilities.
 
 No GitHub Release has currently been published for this fork. The repository contains inherited version tags, but tags alone do not provide the fork binaries and `checksums.txt` required by the plugin launcher. Until a fork release is published and verified, build from source and treat the Claude Code plugin files as release preparation rather than a ready distribution channel.
 
@@ -45,7 +45,7 @@ No GitHub Release has currently been published for this fork. The repository con
 
 Provides 24 tools for file operations, encoding conversion, update checks, and optional local execution:
 - [`read_text_file`](TOOLS.md#read_text_file) - Read files with encoding auto-detection and conversion
-- [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read multiple files concurrently with encoding support
+- [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read multiple files concurrently with encoding support and stable per-file error codes
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
 - [`edit_file`](TOOLS.md#edit_file) - Encoding/BOM-aware edits with diff preview, preserved CRLF/LF, and byte-identical no-ops
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
@@ -96,7 +96,8 @@ This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://
 - real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests;
 - a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression;
 - a deterministic, cancellation-aware secure walker shared by `tree`, `directory_tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
-- a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection.
+- a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
+- transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 

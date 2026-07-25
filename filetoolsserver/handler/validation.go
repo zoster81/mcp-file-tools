@@ -18,7 +18,7 @@ func (r PathValidationResult) Ok() bool {
 func (h *Handler) ValidatePath(path string) PathValidationResult {
 	if path == "" {
 		return PathValidationResult{
-			Result: errorResult(ErrPathRequired.Error()),
+			Result: errorResultFromError(ErrPathRequired),
 			Err:    ErrPathRequired,
 		}
 	}
@@ -26,7 +26,7 @@ func (h *Handler) ValidatePath(path string) PathValidationResult {
 	validatedPath, err := h.validatePath(path)
 	if err != nil {
 		return PathValidationResult{
-			Result: errorResult(err.Error()),
+			Result: errorResultFromError(err),
 			Err:    err,
 		}
 	}
@@ -54,7 +54,7 @@ func (h *Handler) validateSourcePath(path string) PathValidationResult {
 	validatedPath, err := h.validatePath(path)
 	if err != nil {
 		return PathValidationResult{
-			Result: errorResult(err.Error()),
+			Result: errorResultFromError(err),
 			Err:    err,
 		}
 	}
@@ -73,7 +73,7 @@ func (h *Handler) validateDestPath(path string) PathValidationResult {
 	validatedPath, err := h.validatePath(path)
 	if err != nil {
 		return PathValidationResult{
-			Result: errorResult(err.Error()),
+			Result: errorResultFromError(err),
 			Err:    err,
 		}
 	}

@@ -81,22 +81,22 @@ func (h *Handler) HandleRunScript(ctx context.Context, req *mcp.CallToolRequest,
 		return validatedCwd.Result, ExecutionOutput{}, nil
 	}
 	if err := requireDirectory(validatedCwd.Path); err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
 	timeout, err := executionTimeout(input.TimeoutSeconds)
 	if err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
 	program, args, err := buildScriptCommand(validatedScript.Path, input.Args)
 	if err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
 	output, err := executeProcess(ctx, program, args, validatedCwd.Path, timeout)
 	if err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 	return executionResult(output), output, nil
 }
@@ -124,22 +124,22 @@ func (h *Handler) HandleShell(ctx context.Context, req *mcp.CallToolRequest, inp
 		return validatedCwd.Result, ExecutionOutput{}, nil
 	}
 	if err := requireDirectory(validatedCwd.Path); err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
 	timeout, err := executionTimeout(input.TimeoutSeconds)
 	if err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
 	program, args, err := buildShellCommand(input.Shell, input.Command)
 	if err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 
 	output, err := executeProcess(ctx, program, args, validatedCwd.Path, timeout)
 	if err != nil {
-		return errorResult(err.Error()), ExecutionOutput{}, nil
+		return errorResultFromError(err), ExecutionOutput{}, nil
 	}
 	return executionResult(output), output, nil
 }

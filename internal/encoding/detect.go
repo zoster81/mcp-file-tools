@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
 	"github.com/wlynxg/chardet"
 )
 
@@ -96,7 +97,11 @@ func BOMSize(charset string) int {
 
 // DetectFromFile detects encoding from a file path using streaming I/O.
 // Modes: "sample" (~384KB max), "chunked" (streams entire file), "full" (loads entire file).
-func DetectFromFile(path string, mode string) (DetectionResult, error) {
+func DetectFromFile(path string, mode string) (result DetectionResult, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("detect_encoding", path, err)
+	}()
+
 	file, err := os.Open(path)
 	if err != nil {
 		return DetectionResult{}, fmt.Errorf("failed to open file: %w", err)
@@ -217,7 +222,12 @@ func detectFromReader(r io.ReaderAt, size int64, mode string) (DetectionResult, 
 	case "full":
 		return detectFullFromReader(r, size)
 	default:
-		return DetectionResult{}, fmt.Errorf("invalid mode: %s (valid: sample, chunked, full)", mode)
+		return DetectionResult{}, operation.Wrap(
+			operation.KindInvalidInput,
+			"detect_encoding",
+			"",
+			fmt.Errorf("invalid mode: %s (valid: sample, chunked, full)", mode),
+		)
 	}
 }
 

@@ -1,5 +1,11 @@
 # Tools Reference
 
+## Error Handling
+
+Reusable domain failures carry transport-independent typed categories for invalid input or paths, access denial, symlink escapes, missing files, permissions, encoding, decoding, output encoding, conflicts, cancellation, limits, and filesystem failures. MCP tool errors preserve their existing human-readable messages and public schemas.
+
+`read_multiple_files` uses the same centralized mapping for each failed item and exposes one of these stable `errorCode` values: `NOT_FOUND`, `PERMISSION`, `ACCESS_DENIED`, `ENCODING`, `IO_ERROR`, `INVALID_PATH`, `SYMLINK_ESCAPE`, or `OPERATION_FAILED`. Successful items omit `errorCode`. No new error metadata is added to single-tool output schemas.
+
 ## File Operations
 
 Mutating file tools share a durable filesystem layer. Replacement data is staged in the destination directory, synced before commit, and installed with platform-specific atomic operations. Existing-file snapshots detect practical concurrent modifications; initially missing destinations use no-replace commits. On Unix, containing directories are synced after namespace changes; on Windows, replacement and no-replace moves use write-through flags. These protections reduce but do not eliminate every path-based TOCTOU window.
@@ -42,7 +48,7 @@ Read file contents with automatic encoding detection and optional partial readin
 
 ### read_multiple_files
 
-Read multiple files concurrently through the same encoding/BOM-aware document pipeline used by `read_text_file`. Individual file failures don't stop the operation.
+Read multiple files concurrently through the same encoding/BOM-aware document pipeline used by `read_text_file`. Individual file failures don't stop the operation. Each failure is converted by the centralized operation-error mapping into a stable `errorCode` and a compatibility-preserving message.
 
 **Parameters:**
 - `paths` (required): Array of file paths to read
@@ -75,6 +81,15 @@ Read multiple files concurrently through the same encoding/BOM-aware document pi
   ],
   "successCount": 2,
   "errorCount": 0
+}
+```
+
+**Per-file failure example:**
+```json
+{
+  "path": "/path/to/missing.pas",
+  "error": "file not found: /path/to/missing.pas",
+  "errorCode": "NOT_FOUND"
 }
 ```
 

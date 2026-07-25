@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
 )
 
 // isASCIICompatible checks if charset is UTF-8 compatible (utf-8 or ascii)
@@ -150,6 +152,9 @@ func TestDetectFromFile_NonExistent(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for non-existent file")
 	}
+	if got := operation.KindOf(err); got != operation.KindNotFound {
+		t.Fatalf("error kind = %v, want %v", got, operation.KindNotFound)
+	}
 }
 
 func TestDetectFromFile_InvalidMode(t *testing.T) {
@@ -162,6 +167,9 @@ func TestDetectFromFile_InvalidMode(t *testing.T) {
 	_, err := DetectFromFile(path, "invalid")
 	if err == nil {
 		t.Error("expected error for invalid mode")
+	}
+	if got := operation.KindOf(err); got != operation.KindInvalidInput {
+		t.Fatalf("error kind = %v, want %v", got, operation.KindInvalidInput)
 	}
 }
 
@@ -447,4 +455,3 @@ func TestLooksLikeGBK(t *testing.T) {
 		})
 	}
 }
-

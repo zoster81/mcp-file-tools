@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
 )
 
 func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) bool {
@@ -45,7 +47,11 @@ func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) b
 }
 
 // ValidatePath resolves a path and ensures it's within allowed directories.
-func ValidatePath(requestedPath string, allowedDirs []string) (string, error) {
+func ValidatePath(requestedPath string, allowedDirs []string) (validated string, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("validate_path", requestedPath, err)
+	}()
+
 	if len(allowedDirs) == 0 {
 		return "", ErrNoAllowedDirs
 	}
@@ -196,8 +202,12 @@ func ExpandHome(path string) string {
 	return path
 }
 
-func NormalizeAllowedDirs(dirs []string) ([]string, error) {
-	var normalized []string
+func NormalizeAllowedDirs(dirs []string) (normalized []string, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("normalize_allowed_directories", "", err)
+	}()
+
+	normalized = make([]string, 0, len(dirs))
 	for _, dir := range dirs {
 		expanded := ExpandHome(dir)
 

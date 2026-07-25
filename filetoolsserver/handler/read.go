@@ -30,7 +30,7 @@ func (h *Handler) HandleReadTextFile(ctx context.Context, req *mcp.CallToolReque
 
 	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
 	if err != nil {
-		return errorResult(err.Error()), ReadTextFileOutput{}, nil
+		return errorResultFromError(err), ReadTextFileOutput{}, nil
 	}
 
 	content := document.Text

@@ -9,6 +9,7 @@ import (
 
 	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
 )
 
 type bomInfo struct {
@@ -49,7 +50,12 @@ func parseBOMPolicy(value string, defaultPolicy bomPolicy) (bomPolicy, error) {
 	case bomPreserve, bomAlways, bomNever, bomAuto:
 		return policy, nil
 	default:
-		return "", fmt.Errorf("invalid BOM policy %q: valid values are auto, always, never, preserve", value)
+		return "", operation.Wrap(
+			operation.KindInvalidInput,
+			"parse_bom_policy",
+			"",
+			fmt.Errorf("invalid BOM policy %q: valid values are auto, always, never, preserve", value),
+		)
 	}
 }
 
@@ -132,7 +138,13 @@ func (h *Handler) resolveEncodingFromDataDetailed(inputEncoding string, data []b
 	return result, nil
 }
 
-func encodeTextDocument(document textDocument, content string, policy bomPolicy) ([]byte, error) {
+func encodeTextDocument(document textDocument, content string, policy bomPolicy) (result []byte, err error) {
+	defer func() {
+		if err != nil {
+			err = operation.Wrap(operation.KindEncodingOutput, "encode_text_document", "", err)
+		}
+	}()
+
 	var encoded []byte
 	if fileEncoding.IsUTF8(document.Charset) {
 		encoded = []byte(content)
@@ -156,7 +168,7 @@ func encodeTextDocument(document textDocument, content string, policy bomPolicy)
 		return encoded, nil
 	}
 
-	result := make([]byte, 0, len(bom)+len(encoded))
+	result = make([]byte, 0, len(bom)+len(encoded))
 	result = append(result, bom...)
 	result = append(result, encoded...)
 	return result, nil
@@ -220,7 +232,11 @@ func (h *Handler) readTextDocument(ctx context.Context, path, requestedEncoding 
 	return document, err
 }
 
-func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedEncoding string) (textDocument, []byte, error) {
+func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedEncoding string) (document textDocument, data []byte, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("read_text_document", path, err)
+	}()
+
 	select {
 	case <-ctx.Done():
 		return textDocument{}, nil, ctx.Err()
@@ -235,7 +251,7 @@ func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedE
 		slog.Warn("loading large file into memory", "path", path, "size", info.Size(), "threshold", h.config.MemoryThreshold)
 	}
 
-	data, err := os.ReadFile(path)
+	data, err = os.ReadFile(path)
 	if err != nil {
 		return textDocument{}, nil, fmt.Errorf("failed to read file: %w", err)
 	}

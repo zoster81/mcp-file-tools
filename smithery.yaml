@@ -1,5 +1,5 @@
 # Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
-# Encoding-aware filesystem MCP server for 24 encodings with BOM-safe text operations, secure traversal, and durable atomic mutations.
+# Encoding-aware filesystem MCP server for 24 encodings with BOM-safe text operations, secure traversal, durable atomic mutations, and typed operation errors.
 
 runtime: container
 

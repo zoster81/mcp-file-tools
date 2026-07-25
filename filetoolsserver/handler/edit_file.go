@@ -25,7 +25,7 @@ func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, 
 
 	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
 	if err != nil {
-		return errorResult(err.Error()), EditFileOutput{}, nil
+		return errorResultFromError(err), EditFileOutput{}, nil
 	}
 
 	originalMode := document.Mode
@@ -42,7 +42,7 @@ func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, 
 	content := ConvertLineEndings(document.Text, LineEndingLF)
 	modifiedContent, err := applyEdits(content, input.Edits)
 	if err != nil {
-		return errorResult(err.Error()), EditFileOutput{}, nil
+		return errorResultFromError(err), EditFileOutput{}, nil
 	}
 
 	diff := createUnifiedDiff(content, modifiedContent, input.Path)

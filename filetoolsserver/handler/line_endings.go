@@ -138,7 +138,7 @@ func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallTool
 
 	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
 	if err != nil {
-		return errorResult(err.Error()), DetectLineEndingsOutput{}, nil
+		return errorResultFromError(err), DetectLineEndingsOutput{}, nil
 	}
 
 	style, totalLines, inconsistentLines, err := analyzeLineEndings(strings.NewReader(document.Text))

@@ -21,7 +21,7 @@ func (h *Handler) HandleDetectEncoding(ctx context.Context, req *mcp.CallToolReq
 
 	result, err := encoding.DetectFromFile(v.Path, mode)
 	if err != nil {
-		return errorResult(err.Error()), DetectEncodingOutput{}, nil
+		return errorResultFromError(err), DetectEncodingOutput{}, nil
 	}
 
 	if result.Charset == "" {

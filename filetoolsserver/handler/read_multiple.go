@@ -2,13 +2,10 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
 	"runtime"
 	"sync"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -38,10 +35,11 @@ func (h *Handler) HandleReadMultipleFiles(ctx context.Context, req *mcp.CallTool
 			for j := range jobs {
 				select {
 				case <-ctx.Done():
+					mapped := mapOperationError(ctx.Err(), j.filePath)
 					results[j.idx] = FileReadResult{
 						Path:      j.filePath,
-						Error:     "operation cancelled",
-						ErrorCode: ErrCodeOperationFailed,
+						Error:     mapped.Message,
+						ErrorCode: mapped.BatchCode,
 					}
 				default:
 					results[j.idx] = h.readSingleFile(ctx, j.filePath, input.Encoding)
@@ -80,14 +78,17 @@ func (h *Handler) readSingleFile(ctx context.Context, path, requestedEncoding st
 
 	v := h.ValidatePath(path)
 	if !v.Ok() {
-		result.Error = v.Err.Error()
-		result.ErrorCode = classifyPathError(v.Err)
+		mapped := mapOperationError(v.Err, path)
+		result.Error = mapped.Message
+		result.ErrorCode = mapped.BatchCode
 		return result
 	}
 
 	document, err := h.readTextDocument(ctx, v.Path, requestedEncoding)
 	if err != nil {
-		result.Error, result.ErrorCode = classifyReadError(err, v.Path)
+		mapped := mapOperationError(err, v.Path)
+		result.Error = mapped.Message
+		result.ErrorCode = mapped.BatchCode
 		return result
 	}
 
@@ -100,38 +101,4 @@ func (h *Handler) readSingleFile(ctx context.Context, path, requestedEncoding st
 	}
 
 	return result
-}
-
-// classifyPathError returns an error code based on the path validation error type.
-func classifyPathError(err error) string {
-	switch {
-	case errors.Is(err, ErrPathRequired):
-		return ErrCodeInvalidPath
-	case errors.Is(err, security.ErrPathDenied):
-		return ErrCodeAccessDenied
-	case errors.Is(err, security.ErrSymlinkDenied):
-		return ErrCodeSymlinkEscape
-	case errors.Is(err, security.ErrNoAllowedDirs):
-		return ErrCodeAccessDenied
-	case errors.Is(err, security.ErrParentDirDenied):
-		return ErrCodeAccessDenied
-	default:
-		return ErrCodeInvalidPath
-	}
-}
-
-// classifyReadError returns a descriptive error message and code for file read errors.
-func classifyReadError(err error, path string) (string, string) {
-	switch {
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		return "operation cancelled", ErrCodeOperationFailed
-	case errors.Is(err, ErrEncodingUnsupported), errors.Is(err, ErrBOMEncodingConflict), errors.Is(err, ErrEncodingDecode):
-		return err.Error(), ErrCodeEncoding
-	case errors.Is(err, fs.ErrNotExist):
-		return fmt.Sprintf("file not found: %s", path), ErrCodeNotFound
-	case errors.Is(err, fs.ErrPermission):
-		return fmt.Sprintf("permission denied: %s", path), ErrCodePermission
-	default:
-		return err.Error(), ErrCodeIO
-	}
 }

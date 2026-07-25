@@ -29,12 +29,12 @@ func (h *Handler) HandleConvertEncoding(ctx context.Context, req *mcp.CallToolRe
 
 	policy, err := parseBOMPolicy(input.BOM, bomAuto)
 	if err != nil {
-		return errorResult(err.Error()), ConvertEncodingOutput{}, nil
+		return errorResultFromError(err), ConvertEncodingOutput{}, nil
 	}
 
 	document, originalData, err := h.readTextDocumentWithData(ctx, v.Path, input.From)
 	if err != nil {
-		return errorResult(err.Error()), ConvertEncodingOutput{}, nil
+		return errorResultFromError(err), ConvertEncodingOutput{}, nil
 	}
 	sourceEncodingName := document.Charset
 

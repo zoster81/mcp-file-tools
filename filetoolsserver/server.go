@@ -23,6 +23,7 @@ PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encodi
 - grep_text_files: deterministic regex search through the shared decoder and secure walker; skips symlink/junction/reparse escapes, auto-detects BOM-bearing UTF-16 LE/BE, and accepts explicit encoding for BOMless files
 - tree/search_files/directory_tree: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
 - mutating file tools: synced same-directory staging, atomic/no-replace commits, path revalidation, practical conflict detection, and transactional conversion backups
+- operation errors: transport-independent typed categories with centralized MCP and batch mapping; public messages and schemas remain compatible, and read_multiple_files exposes stable per-file errorCode values
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
 - detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
 - change_line_endings: preserve encoding, BOM state, and non-line-ending bytes while converting LF/CRLF
@@ -84,7 +85,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "read_multiple_files",
-		Description: "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file. PREFER THIS when reading several non-UTF-8 files at once. Individual failures don't stop the batch — partial results are returned. Each successful result may include hasBOM/bomType metadata. Parameters: paths (required array), encoding (optional, auto-detected per file).",
+		Description: "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file. PREFER THIS when reading several non-UTF-8 files at once. Individual failures do not stop the batch; partial results are returned with stable per-file errorCode values from the centralized operation-error mapping. Each successful result may include hasBOM/bomType metadata. Parameters: paths (required array), encoding (optional, auto-detected per file).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Read Multiple Files",
 			ReadOnlyHint:  true,

@@ -22,13 +22,13 @@ func (h *Handler) HandleWriteFile(ctx context.Context, req *mcp.CallToolRequest,
 
 	policy, err := parseBOMPolicy(input.BOM, bomAuto)
 	if err != nil {
-		return errorResult(err.Error()), WriteFileOutput{}, nil
+		return errorResultFromError(err), WriteFileOutput{}, nil
 	}
 
 	// Resolve encoding: explicit > preserve existing > configured default.
 	encodingName, err := h.resolveWriteEncoding(input.Encoding, v.Path)
 	if err != nil {
-		return errorResult(err.Error()), WriteFileOutput{}, nil
+		return errorResultFromError(err), WriteFileOutput{}, nil
 	}
 
 	document := textDocument{Charset: encodingName}

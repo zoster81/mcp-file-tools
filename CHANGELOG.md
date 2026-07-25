@@ -11,6 +11,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added `examples/start-openai-tunnel.ps1`, a sanitized English Windows PowerShell 5.1 quick start for ChatGPT Web through the official OpenAI Secure MCP Tunnel.
 - Added real upstream encoding fixtures and byte-identical line-ending round-trip tests for all 24 registered encodings, including UTF-16 LE/BE and GBK/GB18030.
 - Added optional `hasBOM` and `bomType` metadata to single-file and batch read results.
+- Added transport-independent typed operation errors for validation, access control, encoding, decoding, output encoding, conflicts, cancellation, limits, permissions, and filesystem failures.
 
 ### Changed
 
@@ -37,7 +38,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Consolidated recursive traversal for `search_files`, `grep_text_files`, `tree`, and `directory_tree` into one deterministic, cancellation-aware filesystem walker while preserving each tool's public filtering, limit, ordering, and error behavior.
 - Added a shared durable mutation layer for write, edit, encoding conversion, line-ending conversion, BOM changes, copy, move, and delete operations, with exclusive same-directory staging, file sync, platform-specific atomic/no-replace commits, directory sync where supported, cleanup, and optimistic concurrent-modification snapshots.
 - Made encoding-conversion backups transactional: the original is staged and synced before target commit, an existing backup is preserved until success, and target failures restore the previous backup or remove a newly created backup.
-- Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1/R2/R3 capabilities, unreleased fork status, and planned R4 typed-error work.
+- Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1/R2/R3/R4 capabilities, unreleased fork status, and planned R5 concurrency work.
+- Centralized conversion of operation failures into MCP error results and `read_multiple_files` per-file error codes, removing duplicated string-based classification while preserving public messages and schemas.
 
 ### Fixed
 

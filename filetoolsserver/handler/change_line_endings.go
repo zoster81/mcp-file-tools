@@ -141,7 +141,7 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 
 	document, data, err := h.readTextDocumentWithData(ctx, v.Path, input.Encoding)
 	if err != nil {
-		return errorResult(err.Error()), ChangeLineEndingsOutput{}, nil
+		return errorResultFromError(err), ChangeLineEndingsOutput{}, nil
 	}
 	payload := data[len(document.BOM.Bytes):]
 

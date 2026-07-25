@@ -127,6 +127,51 @@ func TestHandleReadMultipleFiles_ErrorCodes(t *testing.T) {
 	}
 }
 
+func TestHandleReadMultipleFiles_EncodingErrorUsesCentralMapping(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "file.txt")
+	if err := os.WriteFile(path, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, output, err := h.HandleReadMultipleFiles(context.Background(), nil, ReadMultipleFilesInput{
+		Paths:    []string{path},
+		Encoding: "not-an-encoding",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := output.Results[0].ErrorCode; got != ErrCodeEncoding {
+		t.Fatalf("error code = %q, want %q", got, ErrCodeEncoding)
+	}
+	if !strings.Contains(output.Results[0].Error, "unsupported encoding") {
+		t.Fatalf("error = %q, want unsupported encoding message", output.Results[0].Error)
+	}
+}
+
+func TestHandleReadMultipleFiles_CancellationUsesCentralMapping(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "file.txt")
+	if err := os.WriteFile(path, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, output, err := h.HandleReadMultipleFiles(ctx, nil, ReadMultipleFilesInput{Paths: []string{path}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := output.Results[0].ErrorCode; got != ErrCodeOperationFailed {
+		t.Fatalf("error code = %q, want %q", got, ErrCodeOperationFailed)
+	}
+	if got := output.Results[0].Error; got != "operation cancelled" {
+		t.Fatalf("error = %q, want operation cancelled", got)
+	}
+}
+
 func TestHandleReadMultipleFiles_ErrorsSummary(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})

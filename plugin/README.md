@@ -5,11 +5,12 @@ fork into Claude Code via `/plugin install`.
 
 The server provides 24 MCP tools for encoding-aware filesystem operations,
 BOM-preserving text handling, MetaTrader MQL support, deterministic secure
-traversal, durable atomic mutations with rollback-aware backups, fork-specific
-stdio tunnel compatibility, and optional execution tools documented in the main
+traversal, durable atomic mutations with rollback-aware backups, typed operation
+errors with centralized MCP/batch mapping, fork-specific stdio tunnel compatibility,
+and optional execution tools documented in the main
 [README](../README.md) and [TOOLS reference](../TOOLS.md).
 
-> **Current status (2026-07-24):** no GitHub Release has been published for this
+> **Current status (2026-07-25):** no GitHub Release has been published for this
 > fork. The plugin launcher downloads a matching fork release and therefore does
 > not work yet. Inherited repository tags are not sufficient: the requested version
 > must provide the expected platform binaries and `checksums.txt` asset.

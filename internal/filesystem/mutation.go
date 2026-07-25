@@ -10,15 +10,17 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
 )
 
 var (
 	// ErrConcurrentModification is returned when a path no longer matches the
 	// snapshot captured while an operation was prepared.
-	ErrConcurrentModification = errors.New("file changed during operation")
+	ErrConcurrentModification = operation.New(operation.KindConflict, "file changed during operation")
 
 	// ErrDestinationExists is returned by no-replace copy and move operations.
-	ErrDestinationExists = errors.New("destination already exists")
+	ErrDestinationExists = operation.New(operation.KindConflict, "destination already exists")
 )
 
 // FileSnapshot records the observable state used for optimistic concurrency
@@ -35,7 +37,11 @@ type FileSnapshot struct {
 
 // CaptureSnapshot records metadata for path. A missing path is represented by
 // Exists=false and is not an error.
-func CaptureSnapshot(path string) (FileSnapshot, error) {
+func CaptureSnapshot(path string) (snapshot FileSnapshot, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("capture_snapshot", path, err)
+	}()
+
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -48,8 +54,12 @@ func CaptureSnapshot(path string) (FileSnapshot, error) {
 
 // CaptureSnapshotWithData records metadata plus a digest of data. The caller
 // should pass bytes read from path during operation preparation.
-func CaptureSnapshotWithData(path string, data []byte) (FileSnapshot, error) {
-	snapshot, err := CaptureSnapshot(path)
+func CaptureSnapshotWithData(path string, data []byte) (snapshot FileSnapshot, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("capture_snapshot_with_data", path, err)
+	}()
+
+	snapshot, err = CaptureSnapshot(path)
 	if err != nil {
 		return FileSnapshot{}, err
 	}
@@ -74,7 +84,11 @@ func snapshotFromInfo(info fs.FileInfo) FileSnapshot {
 }
 
 // Verify confirms that path still matches the captured state.
-func (snapshot FileSnapshot) Verify(path string) error {
+func (snapshot FileSnapshot) Verify(path string) (err error) {
+	defer func() {
+		err = operation.WrapFilesystem("verify_snapshot", path, err)
+	}()
+
 	if err := snapshot.verifyMetadata(path); err != nil {
 		return err
 	}
@@ -118,8 +132,12 @@ func (snapshot FileSnapshot) verifyInfo(path string, info fs.FileInfo) error {
 
 // RefreshMetadata updates metadata from path while retaining an existing digest.
 // It is used when an operation intentionally changes permissions before commit.
-func (snapshot FileSnapshot) RefreshMetadata(path string) (FileSnapshot, error) {
-	current, err := CaptureSnapshot(path)
+func (snapshot FileSnapshot) RefreshMetadata(path string) (current FileSnapshot, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("refresh_snapshot", path, err)
+	}()
+
+	current, err = CaptureSnapshot(path)
 	if err != nil {
 		return FileSnapshot{}, err
 	}
@@ -161,7 +179,10 @@ var defaultMutationOps = mutationOps{
 
 // ReplaceFile stages data beside path, syncs it, optionally commits a backup of
 // the original, atomically replaces path, and syncs the containing directory.
-func ReplaceFile(path string, data []byte, options ReplaceOptions) error {
+func ReplaceFile(path string, data []byte, options ReplaceOptions) (err error) {
+	defer func() {
+		err = operation.WrapFilesystem("replace_file", path, err)
+	}()
 	return replaceFile(path, data, options, defaultMutationOps)
 }
 
@@ -277,6 +298,10 @@ func replaceFile(path string, data []byte, options ReplaceOptions, ops mutationO
 // CopyFile copies a regular file through the same durable staging layer and
 // atomically fails when the destination already exists.
 func CopyFile(source, destination string) (err error) {
+	defer func() {
+		err = operation.WrapFilesystem("copy_file", destination, err)
+	}()
+
 	sourceSnapshot, err := CaptureSnapshot(source)
 	if err != nil {
 		return err
@@ -324,7 +349,11 @@ func CopyFile(source, destination string) (err error) {
 
 // MoveNoReplace moves a file or directory without replacing an existing
 // destination. Platform-specific implementations use native exclusion flags.
-func MoveNoReplace(source, destination string) error {
+func MoveNoReplace(source, destination string) (err error) {
+	defer func() {
+		err = operation.WrapFilesystem("move_no_replace", destination, err)
+	}()
+
 	if _, err := os.Stat(source); err != nil {
 		return err
 	}
@@ -350,7 +379,11 @@ func MoveNoReplace(source, destination string) error {
 }
 
 // RemoveFile verifies the optional snapshot, removes path, and syncs its parent.
-func RemoveFile(path string, expected *FileSnapshot) error {
+func RemoveFile(path string, expected *FileSnapshot) (err error) {
+	defer func() {
+		err = operation.WrapFilesystem("remove_file", path, err)
+	}()
+
 	if expected != nil {
 		if err := expected.Verify(path); err != nil {
 			return err
