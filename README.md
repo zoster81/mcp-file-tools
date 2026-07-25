@@ -5,7 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/zoster81/mcp-file-tools)](https://goreportcard.com/report/github.com/zoster81/mcp-file-tools)
 [![Release](https://img.shields.io/github/v/release/zoster81/mcp-file-tools)](https://github.com/zoster81/mcp-file-tools/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/github/license/zoster81/mcp-file-tools)](LICENSE)
-[![Upstream MCP Registry](https://img.shields.io/badge/Upstream-MCP_Registry-blue)](https://registry.modelcontextprotocol.io/?search=mcp-file-tools)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.zoster81%2Fmcp--file--tools-blue)](https://registry.modelcontextprotocol.io/?search=io.github.zoster81%2Fmcp-file-tools)
 
 ChatGPT Web sees `Настройки` — not `????` or `Íàñòðîéêè`.
 
@@ -41,7 +41,7 @@ The custom tunnel-oriented changes include authoritative CLI roots, Windows driv
 
 The current source branch includes the completed R1 shared text-document refactor, R2 secure filesystem walker, R3 atomic mutation layer, R4 typed operation error model, and R5 bounded ordered concurrency utility. Recursive tools share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. File replacement, backup, copy, move, and delete operations share durable staging, platform-specific atomic/no-replace commits, rollback-aware backup handling, cleanup, and optimistic concurrent-modification checks. Domain failures use transport-independent typed categories with centralized MCP and batch mapping, while `read_multiple_files` and `grep_text_files` now share one bounded worker coordinator that preserves input order, cancellation behavior, partial results, and global limits without changing public schemas.
 
-No GitHub Release has currently been published for this fork. The repository contains inherited version tags, but tags alone do not provide the fork binaries and `checksums.txt` required by the plugin launcher. Until a fork release is published and verified, build from source and treat the Claude Code plugin files as release preparation rather than a ready distribution channel.
+Fork releases are produced from semantic version tags by the verified GoReleaser workflow. Each published version includes raw platform binaries, archives, and `checksums.txt`; the Claude Code plugin is pinned to the same version and refuses unverified downloads.
 
 ## What It Does
 
@@ -134,11 +134,11 @@ go test ./...
 go build -o mcp-file-tools_windows_amd64.exe ./cmd/mcp-file-tools
 ```
 
-The Go module is `github.com/zoster81/mcp-file-tools`, and all internal imports resolve through the fork namespace. Until a fork-specific release tag and matching assets are published, use clone-and-build rather than relying on inherited tags.
+The Go module is `github.com/zoster81/mcp-file-tools`, and all internal imports resolve through the fork namespace. Build from source for development commits; use only fork-owned release tags with matching assets for packaged installations.
 
 #### Download a fork release
 
-After this fork publishes its first GitHub Release, the Windows binary can be downloaded with:
+Published fork releases provide a directly downloadable Windows binary:
 
 ```powershell
 New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Programs\mcp-file-tools" | Out-Null
@@ -147,7 +147,7 @@ Invoke-WebRequest `
     -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools_windows_amd64.exe"
 ```
 
-Until a fork release exists, build from source as shown above.
+For unreleased development commits, build from source as shown above.
 
 #### OpenAI Tunnel quick start
 

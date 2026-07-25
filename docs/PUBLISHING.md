@@ -14,12 +14,12 @@ Git remote.
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
 - Current source capabilities: completed shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors with centralized MCP/batch mapping (R4), and bounded ordered concurrency for batch read and grep processing (R5)
 - Next source milestone: shared execution preparation and authoritative tool metadata (R6), not implemented yet
-- Fork release status as of 2026-07-25: no published GitHub Release; inherited tags do not provide fork binaries or checksums
+- Release source: fork-owned semantic tags whose plugin, marketplace, binary, and Registry versions must match
 - Go module path: `github.com/zoster81/mcp-file-tools`
 
-The fork owns its Go module identity and all internal imports. Clone-and-build remains
-the recommended installation method until a fork-specific release tag and matching
-binary assets are published and verified.
+The fork owns its Go module identity and all internal imports. Clone-and-build is
+recommended for development commits; packaged installations must use a fork-owned
+semantic tag with matching binary assets and verified checksums.
 
 ## Fork release flow
 
@@ -28,23 +28,29 @@ binary assets are published and verified.
 3. Update the version in:
    - `plugin/.claude-plugin/plugin.json`
    - `.claude-plugin/marketplace.json`
-4. Run the complete test and verification baseline.
-5. Create and push the release tag:
+4. Verify the prepared version and run the complete test baseline:
+
+   ```bash
+   node scripts/verify-release-version.js vX.Y.Z
+   ```
+
+5. Push `main` and wait for its GitHub Actions checks to pass.
+6. Create and push the release tag:
 
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
 
-6. `.github/workflows/release.yml` runs tests and GoReleaser.
-7. `.goreleaser.yml` publishes the release to `zoster81/mcp-file-tools` with:
+7. `.github/workflows/release.yml` revalidates the tag/metadata match, then runs tests and GoReleaser.
+8. `.goreleaser.yml` publishes the release to `zoster81/mcp-file-tools` with:
    - platform archives;
    - raw platform binaries;
    - `checksums.txt`;
    - `README.md`, `TOOLS.md`, `CHANGELOG.md`, `LICENSE`;
    - `examples/start-openai-tunnel.ps1`.
-8. Verify the release asset names and SHA-256 values before announcing it.
-9. `.github/workflows/release.yml` invokes the reusable `.github/workflows/publish-registry.yml`, which generates and publishes the fork-owned `server.json` from those verified assets.
+9. Verify the release asset names and SHA-256 values before announcing it.
+10. `.github/workflows/release.yml` invokes the reusable `.github/workflows/publish-registry.yml`, which generates and publishes the fork-owned `server.json` from those verified assets.
 
 The plugin launcher reads its pinned version from
 `plugin/.claude-plugin/plugin.json` and downloads binaries from the fork release.
@@ -79,11 +85,10 @@ The upstream Claude Code marketplace and existing MCP Registry listing install
 the upstream implementation. They do not include this fork's execution tools,
 tunnel compatibility changes, or Windows drive-root fix.
 
-The fork contains plugin files for future compatibility. Their repository and
-download references point to `zoster81/mcp-file-tools`, but they are not a working
-distribution channel until a matching fork release with platform binaries and
-`checksums.txt` has been published and tested end to end. Mirrored or inherited
-tags alone are insufficient.
+The fork plugin references `zoster81/mcp-file-tools` and is versioned together with
+the matching platform binaries and `checksums.txt`. The release workflow rejects a
+tag whose version differs from the plugin or marketplace metadata. Mirrored or
+inherited tags without the fork assets remain insufficient.
 
 ## Upstream synchronization
 
@@ -139,5 +144,6 @@ available.
 - Gitleaks reports no tracked-history secrets;
 - GoReleaser configuration targets `zoster81/mcp-file-tools` and passes `goreleaser check`;
 - a generated manifest passes `mcp-publisher validate` without publication;
+- `scripts/verify-release-version.js` confirms the release tag, plugin version, and marketplace version match before GoReleaser runs;
 - release tag, embedded binary version, plugin version, and marketplace version match;
 - release assets and checksums are verified after publication.

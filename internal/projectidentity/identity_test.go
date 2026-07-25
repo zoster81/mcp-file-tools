@@ -97,6 +97,7 @@ func TestOperationalMetadataTargetsFork(t *testing.T) {
 	assertFileContains(t, root, ".goreleaser.yml", "-X "+forkModule+"/filetoolsserver.Version={{.Version}}")
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/publish-registry.yml"), "github.repository == 'zoster81/mcp-file-tools'")
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/release.yml"), "uses: ./.github/workflows/publish-registry.yml")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/release.yml"), "node scripts/verify-release-version.js")
 	assertFileContains(t, root, filepath.FromSlash("scripts/generate-server-json.js"), "const forkRepository = '"+forkRepository+"'")
 }
 
@@ -130,7 +131,7 @@ func TestRegistryTemplateTargetsFork(t *testing.T) {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Homepage    string `json:"homepage"`
-		Repository struct {
+		Repository  struct {
 			URL string `json:"url"`
 		} `json:"repository"`
 		Packages []struct {

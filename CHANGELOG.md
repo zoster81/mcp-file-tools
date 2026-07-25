@@ -6,6 +6,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ## Unreleased
 
+## 1.8.0 - 2026-07-25
+
 ### Added
 
 - Added `examples/start-openai-tunnel.ps1`, a sanitized English Windows PowerShell 5.1 quick start for ChatGPT Web through the official OpenAI Secure MCP Tunnel.
@@ -41,10 +43,11 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Consolidated recursive traversal for `search_files`, `grep_text_files`, `tree`, and `directory_tree` into one deterministic, cancellation-aware filesystem walker while preserving each tool's public filtering, limit, ordering, and error behavior.
 - Added a shared durable mutation layer for write, edit, encoding conversion, line-ending conversion, BOM changes, copy, move, and delete operations, with exclusive same-directory staging, file sync, platform-specific atomic/no-replace commits, directory sync where supported, cleanup, and optimistic concurrent-modification snapshots.
 - Made encoding-conversion backups transactional: the original is staged and synced before target commit, an existing backup is preserved until success, and target failures restore the previous backup or remove a newly created backup.
-- Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1/R2/R3/R4 capabilities, unreleased fork status, and planned R5 concurrency work.
+- Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1-R5 capabilities and fork-owned release pipeline.
 - Centralized conversion of operation failures into MCP error results and `read_multiple_files` per-file error codes, removing duplicated string-based classification while preserving public messages and schemas.
 - Replaced the duplicated `read_multiple_files` and `grep_text_files` worker pools with the shared bounded ordered coordinator while preserving input order, partial failures, cancellation behavior, exact global match limits, and bounded pending results.
 - Kept `tree`, `directory_tree`, and `search_files` on the serial secure walker because traversal-time pruning, deterministic lexical order, and early limits are part of their public behavior.
+- Added a fail-closed release-version check that requires the Git tag, Claude plugin metadata, and marketplace metadata to use the same semantic version before GoReleaser runs.
 
 ### Fixed
 

@@ -52,8 +52,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: bash scripts/validate-workflows.sh
 
-      - name: Test registry manifest generation
-        run: node --test scripts/generate-server-json.test.js
+      - name: Test release scripts
+        run: node --test scripts/generate-server-json.test.js scripts/verify-release-version.test.js
 
       - name: Test all server operations
         run: go run test_server.go
