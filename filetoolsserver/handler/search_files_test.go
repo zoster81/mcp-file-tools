@@ -216,8 +216,8 @@ func TestHandleSearchFiles_DeterministicOrder(t *testing.T) {
 		t.Fatalf("files = %v, want %v", output.Files, want)
 	}
 	for i := range want {
-		if output.Files[i] != want[i] {
-			t.Fatalf("files[%d] = %q, want %q", i, output.Files[i], want[i])
+		if !sameExistingTestFile(t, output.Files[i], want[i]) {
+			t.Fatalf("files[%d] = %q, want same file as %q", i, output.Files[i], want[i])
 		}
 	}
 }

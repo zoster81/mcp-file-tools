@@ -33,8 +33,8 @@ func TestHandleConvertEncoding_ReplacesExistingBackupWithOriginal(t *testing.T) 
 	if result.IsError {
 		t.Fatalf("expected success, got %v", result.Content)
 	}
-	if output.BackupPath != backupPath {
-		t.Fatalf("backup path = %q, want %q", output.BackupPath, backupPath)
+	if !sameExistingTestFile(t, output.BackupPath, backupPath) {
+		t.Fatalf("backup path = %q, want same file as %q", output.BackupPath, backupPath)
 	}
 	backup, err := os.ReadFile(backupPath)
 	if err != nil {

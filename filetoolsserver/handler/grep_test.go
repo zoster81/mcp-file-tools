@@ -439,8 +439,8 @@ func TestHandleGrep_MaxMatchesUsesDeterministicFileOrder(t *testing.T) {
 	if output.TotalMatches != 1 || !output.Truncated {
 		t.Fatalf("unexpected limited output: %+v", output)
 	}
-	if output.Matches[0].Path != slowPath {
-		t.Fatalf("first match path = %q, want deterministic path %q", output.Matches[0].Path, slowPath)
+	if !sameExistingTestFile(t, output.Matches[0].Path, slowPath) {
+		t.Fatalf("first match path = %q, want deterministic file %q", output.Matches[0].Path, slowPath)
 	}
 }
 
