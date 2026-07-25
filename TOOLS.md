@@ -48,7 +48,7 @@ Read file contents with automatic encoding detection and optional partial readin
 
 ### read_multiple_files
 
-Read multiple files concurrently through the same encoding/BOM-aware document pipeline used by `read_text_file`. Individual file failures don't stop the operation. Each failure is converted by the centralized operation-error mapping into a stable `errorCode` and a compatibility-preserving message.
+Read multiple files concurrently through the same encoding/BOM-aware document pipeline used by `read_text_file`. A shared bounded worker coordinator limits in-flight work and commits results in the original input order. Individual file failures don't stop the operation, and cancellation still produces one stable result for every requested path. Each failure is converted by the centralized operation-error mapping into a stable `errorCode` and a compatibility-preserving message.
 
 **Parameters:**
 - `paths` (required): Array of file paths to read
@@ -336,7 +336,7 @@ Recursively search for files and directories matching a glob pattern in determin
 
 ### grep_text_files
 
-Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. BOM-bearing UTF-16 LE/BE files are auto-detected; pass `encoding` explicitly for BOMless or otherwise ambiguous files. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. Binary classification is performed after decoding, results are committed in deterministic traversal order, and `maxMatches` is enforced while scanning rather than after unbounded collection.
+Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. BOM-bearing UTF-16 LE/BE files are auto-detected; pass `encoding` explicitly for BOMless or otherwise ambiguous files. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. File scans run through the shared bounded ordered worker coordinator: results commit in deterministic traversal order, pending per-file results remain bounded, cancellation stops new dispatch, and `maxMatches` is enforced while scanning rather than after unbounded collection.
 
 **Parameters:**
 - `pattern` (required): Regular expression pattern to search for

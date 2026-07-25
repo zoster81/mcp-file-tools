@@ -12,8 +12,8 @@ Git remote.
 - Implemented MCP transport: stdio
 - Native HTTP/JSON or Streamable HTTP transport: not implemented
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
-- Current source capabilities: completed shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), and typed operation errors with centralized MCP/batch mapping (R4)
-- Next source milestone: bounded ordered concurrency utilities (R5), not implemented yet
+- Current source capabilities: completed shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors with centralized MCP/batch mapping (R4), and bounded ordered concurrency for batch read and grep processing (R5)
+- Next source milestone: shared execution preparation and authoritative tool metadata (R6), not implemented yet
 - Fork release status as of 2026-07-25: no published GitHub Release; inherited tags do not provide fork binaries or checksums
 - Go module path: `github.com/zoster81/mcp-file-tools`
 
@@ -134,6 +134,7 @@ available.
 - secure traversal tests cover Unix symlinks and Windows junction/reparse-point escapes;
 - mutation tests cover synced staging, transactional backup rollback, cleanup, no-replace creation, concurrent-modification rejection, and platform cross-builds;
 - typed-error tests cover standard and joined causes, security/path categories, encoding categories, mutation conflicts, cancellation, and stable batch error codes;
+- ordered-concurrency tests cover bounded in-flight work, deterministic commit order, cancellation modes, early stop, saturation, and race detection;
 - Staticcheck and govulncheck succeed at the versions pinned by CI;
 - Gitleaks reports no tracked-history secrets;
 - GoReleaser configuration targets `zoster81/mcp-file-tools` and passes `goreleaser check`;

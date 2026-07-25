@@ -20,9 +20,10 @@ PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encodi
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
 - write_file: encodes UTF-8 content through the shared document encoder; supports bom=auto|always|never|preserve (default: auto)
 - edit_file: in-place edits through the shared encoding/BOM-aware document pipeline; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff. Use dryRun=true to preview changes before applying.
-- grep_text_files: deterministic regex search through the shared decoder and secure walker; skips symlink/junction/reparse escapes, auto-detects BOM-bearing UTF-16 LE/BE, and accepts explicit encoding for BOMless files
+- grep_text_files: deterministic regex search through the shared decoder, secure walker, and bounded ordered worker coordinator; skips symlink/junction/reparse escapes, auto-detects BOM-bearing UTF-16 LE/BE, and accepts explicit encoding for BOMless files
 - tree/search_files/directory_tree: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
 - mutating file tools: synced same-directory staging, atomic/no-replace commits, path revalidation, practical conflict detection, and transactional conversion backups
+- ordered batch work: read_multiple_files and grep_text_files share bounded parallel execution with deterministic commits, cancellation-aware dispatch, and bounded pending results
 - operation errors: transport-independent typed categories with centralized MCP and batch mapping; public messages and schemas remain compatible, and read_multiple_files exposes stable per-file errorCode values
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
 - detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
@@ -85,7 +86,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "read_multiple_files",
-		Description: "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file. PREFER THIS when reading several non-UTF-8 files at once. Individual failures do not stop the batch; partial results are returned with stable per-file errorCode values from the centralized operation-error mapping. Each successful result may include hasBOM/bomType metadata. Parameters: paths (required array), encoding (optional, auto-detected per file).",
+		Description: "Read multiple files concurrently through the same encoding/BOM-aware document pipeline as read_text_file. A bounded ordered worker coordinator limits in-flight work and preserves input order. PREFER THIS when reading several non-UTF-8 files at once. Individual failures do not stop the batch, and cancellation still returns one result per requested path. Partial results include stable per-file errorCode values from the centralized operation-error mapping. Each successful result may include hasBOM/bomType metadata. Parameters: paths (required array), encoding (optional, auto-detected per file).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Read Multiple Files",
 			ReadOnlyHint:  true,
@@ -125,7 +126,7 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "grep_text_files",
-		Description: "Regex search through the shared encoding/BOM-aware document decoder and deterministic secure walker. Directory traversal skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
+		Description: "Regex search through the shared encoding/BOM-aware document decoder, deterministic secure walker, and bounded ordered worker coordinator. Directory traversal skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. File results commit in lexical order, pending results stay bounded, and cancellation stops new dispatch. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:         "Grep Text Files",
 			ReadOnlyHint:  true,

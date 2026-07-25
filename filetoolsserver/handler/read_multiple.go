@@ -3,10 +3,9 @@ package handler
 import (
 	"context"
 	"fmt"
-	"runtime"
-	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/concurrency"
 )
 
 // HandleReadMultipleFiles reads multiple files concurrently.
@@ -16,42 +15,22 @@ func (h *Handler) HandleReadMultipleFiles(ctx context.Context, req *mcp.CallTool
 		return errorResult("paths array is required and must contain at least one path"), ReadMultipleFilesOutput{}, nil
 	}
 	results := make([]FileReadResult, len(input.Paths))
-
-	numWorkers := runtime.NumCPU()
-	if numWorkers > len(input.Paths) {
-		numWorkers = len(input.Paths)
-	}
-
-	type job struct {
-		idx      int
-		filePath string
-	}
-	jobs := make(chan job, len(input.Paths))
-	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := range jobs {
-				select {
-				case <-ctx.Done():
-					mapped := mapOperationError(ctx.Err(), j.filePath)
-					results[j.idx] = FileReadResult{
-						Path:      j.filePath,
-						Error:     mapped.Message,
-						ErrorCode: mapped.BatchCode,
-					}
-				default:
-					results[j.idx] = h.readSingleFile(ctx, j.filePath, input.Encoding)
-				}
+	concurrency.ProcessOrdered(ctx, input.Paths, concurrency.Options{
+		ContinueOnCancellation: true,
+	}, func(ctx context.Context, _ int, filePath string) FileReadResult {
+		if err := ctx.Err(); err != nil {
+			mapped := mapOperationError(err, filePath)
+			return FileReadResult{
+				Path:      filePath,
+				Error:     mapped.Message,
+				ErrorCode: mapped.BatchCode,
 			}
-		}()
-	}
-	for i, path := range input.Paths {
-		jobs <- job{idx: i, filePath: path}
-	}
-	close(jobs)
-	wg.Wait()
+		}
+		return h.readSingleFile(ctx, filePath, input.Encoding)
+	}, func(index int, result FileReadResult) bool {
+		results[index] = result
+		return true
+	})
 
 	var successCount, errorCount int
 	var errorSummary []string

@@ -12,6 +12,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added real upstream encoding fixtures and byte-identical line-ending round-trip tests for all 24 registered encodings, including UTF-16 LE/BE and GBK/GB18030.
 - Added optional `hasBOM` and `bomType` metadata to single-file and batch read results.
 - Added transport-independent typed operation errors for validation, access control, encoding, decoding, output encoding, conflicts, cancellation, limits, permissions, and filesystem failures.
+- Added a generic bounded ordered concurrency coordinator with deterministic serial commits, cancellation modes, early stop, and run statistics.
 
 ### Changed
 
@@ -42,6 +43,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Made encoding-conversion backups transactional: the original is staged and synced before target commit, an existing backup is preserved until success, and target failures restore the previous backup or remove a newly created backup.
 - Aligned `README.md`, `TOOLS.md`, publishing notes, plugin and marketplace metadata, Smithery metadata, runtime tool descriptions, and the project roadmap with the completed R1/R2/R3/R4 capabilities, unreleased fork status, and planned R5 concurrency work.
 - Centralized conversion of operation failures into MCP error results and `read_multiple_files` per-file error codes, removing duplicated string-based classification while preserving public messages and schemas.
+- Replaced the duplicated `read_multiple_files` and `grep_text_files` worker pools with the shared bounded ordered coordinator while preserving input order, partial failures, cancellation behavior, exact global match limits, and bounded pending results.
+- Kept `tree`, `directory_tree`, and `search_files` on the serial secure walker because traversal-time pruning, deterministic lexical order, and early limits are part of their public behavior.
 
 ### Fixed
 

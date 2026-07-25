@@ -7,13 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/concurrency"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
@@ -133,14 +133,7 @@ func shouldIncludeFile(path string, include, exclude string) bool {
 	return true
 }
 
-type grepJob struct {
-	index      int
-	path       string
-	maxMatches int
-}
-
 type grepFileResult struct {
-	index     int
 	matches   []GrepMatch
 	truncated bool
 	err       error
@@ -149,108 +142,38 @@ type grepFileResult struct {
 // searchFiles searches files concurrently while committing results in file order.
 // Only a bounded window is in flight, so per-file results cannot grow without limit.
 func (h *Handler) searchFiles(ctx context.Context, files []string, re *regexp.Regexp, input GrepInput, maxMatches int) ([]GrepMatch, int, bool) {
-	numWorkers := runtime.NumCPU()
-	if numWorkers > len(files) {
-		numWorkers = len(files)
-	}
-
-	searchCtx, cancelSearch := context.WithCancel(ctx)
-	defer cancelSearch()
-
-	jobs := make(chan grepJob, numWorkers)
-	results := make(chan grepFileResult, numWorkers)
-	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for job := range jobs {
-				result := h.searchSingleFile(searchCtx, job.path, re, input, job.maxMatches)
-				result.index = job.index
-				results <- result
-			}
-		}()
-	}
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	nextDispatch := 0
-	jobsClosed := false
-	closeJobs := func() {
-		if !jobsClosed {
-			close(jobs)
-			jobsClosed = true
-		}
-	}
-	dispatch := func(limit int) {
-		jobs <- grepJob{index: nextDispatch, path: files[nextDispatch], maxMatches: limit}
-		nextDispatch++
-	}
-	for i := 0; i < numWorkers && nextDispatch < len(files); i++ {
-		dispatch(maxMatches)
-	}
-	if nextDispatch == len(files) {
-		closeJobs()
-	}
-
-	pending := make(map[int]grepFileResult, numWorkers)
-	nextCommit := 0
 	remaining := maxMatches
+	var remainingBudget atomic.Int64
+	remainingBudget.Store(int64(maxMatches))
 	allMatches := make([]GrepMatch, 0, min(maxMatches, 64))
 	matchedFiles := make(map[string]struct{})
 	truncated := false
 
-	for result := range results {
-		pending[result.index] = result
-		if ctx.Err() != nil {
-			cancelSearch()
-			closeJobs()
+	concurrency.ProcessOrdered(ctx, files, concurrency.Options{}, func(ctx context.Context, _ int, path string) grepFileResult {
+		limit := int(remainingBudget.Load())
+		if limit <= 0 {
+			limit = 1
+		}
+		return h.searchSingleFile(ctx, path, re, input, limit)
+	}, func(_ int, current grepFileResult) bool {
+		if current.err == nil && len(current.matches) > 0 {
+			take := min(remaining, len(current.matches))
+			allMatches = append(allMatches, current.matches[:take]...)
+			remaining -= take
+			remainingBudget.Store(int64(remaining))
+			for _, match := range current.matches[:take] {
+				matchedFiles[match.Path] = struct{}{}
+			}
+			if current.truncated || take < len(current.matches) {
+				truncated = true
+			}
 		}
 
-		for {
-			current, ok := pending[nextCommit]
-			if !ok {
-				break
-			}
-			delete(pending, nextCommit)
-
-			if current.err == nil && len(current.matches) > 0 {
-				take := min(remaining, len(current.matches))
-				allMatches = append(allMatches, current.matches[:take]...)
-				remaining -= take
-				for _, match := range current.matches[:take] {
-					matchedFiles[match.Path] = struct{}{}
-				}
-				if current.truncated || take < len(current.matches) {
-					truncated = true
-				}
-			}
-
-			nextCommit++
-			if remaining == 0 && truncated {
-				cancelSearch()
-				closeJobs()
-				break
-			}
-			if ctx.Err() != nil {
-				cancelSearch()
-				closeJobs()
-				break
-			}
-			if nextDispatch < len(files) {
-				limit := remaining
-				if limit == 0 {
-					limit = 1
-				}
-				dispatch(limit)
-				if nextDispatch == len(files) {
-					closeJobs()
-				}
-			}
+		if remaining == 0 && truncated {
+			return false
 		}
-	}
+		return ctx.Err() == nil
+	})
 
 	return allMatches, len(matchedFiles), truncated
 }

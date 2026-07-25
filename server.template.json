@@ -91,7 +91,7 @@
     },
     {
       "name": "read_multiple_files",
-      "description": "Read multiple files concurrently through the shared document pipeline with partial results and stable per-file error codes"
+      "description": "Bounded ordered concurrent reads through the shared document pipeline with partial results and stable per-file error codes"
     },
     {
       "name": "write_file",
@@ -119,7 +119,7 @@
     },
     {
       "name": "grep_text_files",
-      "description": "Deterministic regex search through the shared decoder and secure walker, including UTF-16 LE/BE and junction/reparse escape protection"
+      "description": "Bounded ordered regex search through the shared decoder and secure walker, including UTF-16 LE/BE and junction/reparse protection"
     },
     {
       "name": "detect_encoding",
