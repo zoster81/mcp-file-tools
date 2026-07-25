@@ -30,10 +30,10 @@ func TestHandleGrep_SimpleMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.IsError {
-		t.Errorf("expected success, got error")
+		t.Fatalf("expected success, got %v", result.Content)
 	}
-	if output.TotalMatches != 1 {
-		t.Errorf("expected 1 match, got %d", output.TotalMatches)
+	if output.TotalMatches != 1 || len(output.Matches) != 1 {
+		t.Fatalf("expected 1 match, got total=%d matches=%d", output.TotalMatches, len(output.Matches))
 	}
 	if output.Matches[0].Line != 2 {
 		t.Errorf("expected match on line 2, got %d", output.Matches[0].Line)

@@ -69,8 +69,16 @@ func TestResolveExistingPath_ResolvesJunctionTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Clean(resolved) != filepath.Clean(target) {
-		t.Fatalf("resolved path = %q, want %q", resolved, target)
+	resolvedInfo, err := os.Stat(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(resolvedInfo, targetInfo) {
+		t.Fatalf("resolved path = %q, want same directory as %q", resolved, target)
 	}
 }
 

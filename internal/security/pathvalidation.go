@@ -29,7 +29,7 @@ func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) b
 	for _, allowedDir := range allowedDirs {
 		cleanAllowed := normalizePath(filepath.Clean(allowedDir))
 
-		if normalized == cleanAllowed {
+		if pathsEqual(normalized, cleanAllowed) {
 			return true
 		}
 
@@ -38,7 +38,7 @@ func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) b
 		if !strings.HasSuffix(allowedPrefix, separator) {
 			allowedPrefix += separator
 		}
-		if strings.HasPrefix(normalized, allowedPrefix) {
+		if pathHasPrefix(normalized, allowedPrefix) {
 			return true
 		}
 	}
@@ -142,11 +142,27 @@ func resolvePathAllowMissing(path string) (resolved string, exists bool, err err
 func normalizePath(p string) string {
 	p = strings.Trim(p, "\"' \t\n")
 	p = filepath.Clean(p)
+	p = normalizePlatformPath(p)
+	p = filepath.Clean(p)
 	if runtime.GOOS == "windows" && len(p) >= 2 && p[1] == ':' {
 		p = strings.ToUpper(p[:1]) + p[1:]
 	}
 
 	return p
+}
+
+func pathsEqual(first, second string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(first, second)
+	}
+	return first == second
+}
+
+func pathHasPrefix(path, prefix string) bool {
+	if runtime.GOOS == "windows" {
+		return len(path) >= len(prefix) && strings.EqualFold(path[:len(prefix)], prefix)
+	}
+	return strings.HasPrefix(path, prefix)
 }
 
 // ResolveAllowedDirs resolves allowed directories once. Missing directories

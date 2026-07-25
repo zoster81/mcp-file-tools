@@ -55,19 +55,20 @@ func TestGetAllowedDirectories_ReturnsCopy(t *testing.T) {
 }
 
 func TestUpdateAllowedDirectories(t *testing.T) {
-	h := NewHandler([]string{"/tmp"})
+	h := NewHandler([]string{t.TempDir()})
 
-	newDirs := []string{"/home", "/var", "/opt"}
+	newDirs := []string{t.TempDir(), t.TempDir(), t.TempDir()}
 	h.UpdateAllowedDirectories(newDirs)
+	want := normalizeAllowedDirectories(newDirs)
 
 	got := h.GetAllowedDirectories()
-	if len(got) != len(newDirs) {
-		t.Fatalf("expected %d dirs, got %d", len(newDirs), len(got))
+	if len(got) != len(want) {
+		t.Fatalf("expected %d dirs, got %d", len(want), len(got))
 	}
 
-	for i, d := range newDirs {
+	for i, d := range want {
 		if got[i] != d {
-			t.Errorf("dir[%d] = %q, want %q", i, got[i], d)
+			t.Errorf("dir[%d] = %q, want canonical %q", i, got[i], d)
 		}
 	}
 }

@@ -148,8 +148,8 @@ func TestWalk_OnErrorCanSkipChangedSubtree(t *testing.T) {
 	if !reflect.DeepEqual(visited, []string{"a-dir", "b.txt"}) {
 		t.Fatalf("visited = %v, want traversal to continue after subtree error", visited)
 	}
-	if errorDepth != 1 || filepath.Clean(errorPath) != filepath.Clean(dir) {
-		t.Fatalf("error callback = (%q, %d), want (%q, 1)", errorPath, errorDepth, dir)
+	if errorDepth != 1 || !sameTestPath(t, errorPath, dir) {
+		t.Fatalf("error callback = (%q, %d), want path equivalent to (%q, 1)", errorPath, errorDepth, dir)
 	}
 }
 
@@ -209,8 +209,8 @@ func TestWalk_OnErrorReceivesUnsafeDirectorySwap(t *testing.T) {
 	if !reflect.DeepEqual(visited, []string{"a-dir", "b.txt"}) {
 		t.Fatalf("visited = %v, want traversal to continue after unsafe swap", visited)
 	}
-	if filepath.Clean(errorPath) != filepath.Clean(dir) || errorDepth != 1 {
-		t.Fatalf("error callback = (%q, %d), want (%q, 1)", errorPath, errorDepth, dir)
+	if !sameTestPath(t, errorPath, dir) || errorDepth != 1 {
+		t.Fatalf("error callback = (%q, %d), want path equivalent to (%q, 1)", errorPath, errorDepth, dir)
 	}
 }
 

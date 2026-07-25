@@ -94,19 +94,19 @@ func TestHandleConvertEncoding_WithBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.IsError {
-		t.Errorf("expected success, got error")
+		t.Fatalf("expected success, got %v", result.Content)
 	}
 	if output.BackupPath == "" {
-		t.Error("expected backup path to be set")
+		t.Fatal("expected backup path to be set")
 	}
 
 	// Verify backup file exists with original content
 	backupContent, err := os.ReadFile(output.BackupPath)
 	if err != nil {
-		t.Errorf("backup file should exist: %v", err)
+		t.Fatalf("backup file should exist: %v", err)
 	}
 	if string(backupContent) != string(originalContent) {
-		t.Error("backup should contain original content")
+		t.Fatalf("backup = %q, want original %q", backupContent, originalContent)
 	}
 }
 

@@ -37,17 +37,15 @@ func WithConfig(cfg *config.Config) Option {
 // NewHandler creates a new Handler with allowed directories and optional configuration.
 // If no config is provided via WithConfig, default configuration is used.
 func NewHandler(allowedDirs []string, opts ...Option) *Handler {
-	// Normalize the CLI baseline so it dedups reliably against normalized roots.
-	cliDirs, err := security.NormalizeAllowedDirs(allowedDirs)
-	if err != nil {
-		cliDirs = make([]string, len(allowedDirs))
-		copy(cliDirs, allowedDirs)
-	}
+	// Keep both the immutable CLI baseline and active roots in one canonical
+	// representation. This prevents Windows 8.3 aliases from diverging from the
+	// long paths returned by final-path resolution during later validations.
+	cliDirs := normalizeAllowedDirectories(allowedDirs)
 
 	h := &Handler{
 		config:      config.Load(), // Load defaults from environment
 		cliDirs:     cliDirs,
-		allowedDirs: allowedDirs,
+		allowedDirs: append([]string(nil), cliDirs...),
 	}
 
 	for _, opt := range opts {
@@ -75,7 +73,7 @@ func (h *Handler) ResolvedAllowedDirs() []string {
 func (h *Handler) UpdateAllowedDirectories(newDirs []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.allowedDirs = newDirs
+	h.allowedDirs = normalizeAllowedDirectories(newDirs)
 }
 
 // MergeAllowedDirectories sets the allowed directories to the deduped union of the
@@ -84,9 +82,10 @@ func (h *Handler) MergeAllowedDirectories(newDirs []string) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	seen := make(map[string]struct{}, len(h.cliDirs)+len(newDirs))
-	merged := make([]string, 0, len(h.cliDirs)+len(newDirs))
-	for _, dirs := range [][]string{h.cliDirs, newDirs} {
+	normalizedNewDirs := normalizeAllowedDirectories(newDirs)
+	seen := make(map[string]struct{}, len(h.cliDirs)+len(normalizedNewDirs))
+	merged := make([]string, 0, len(h.cliDirs)+len(normalizedNewDirs))
+	for _, dirs := range [][]string{h.cliDirs, normalizedNewDirs} {
 		for _, dir := range dirs {
 			if _, ok := seen[dir]; ok {
 				continue
@@ -100,6 +99,19 @@ func (h *Handler) MergeAllowedDirectories(newDirs []string) []string {
 	result := make([]string, len(merged))
 	copy(result, merged)
 	return result
+}
+
+func normalizeAllowedDirectories(dirs []string) []string {
+	normalized := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		current, err := security.NormalizeAllowedDirs([]string{dir})
+		if err == nil && len(current) == 1 {
+			normalized = append(normalized, current[0])
+			continue
+		}
+		normalized = append(normalized, dir)
+	}
+	return normalized
 }
 
 // validatePath validates a path against allowed directories
