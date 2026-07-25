@@ -51,6 +51,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Fixed
 
+- Fixed the Unix backup-permission regression test so it performs a byte-changing conversion instead of entering the intentional byte-identical no-op path with no backup.
 - Fixed `detect_line_endings` so it decodes the selected or auto-detected encoding before analyzing CRLF/LF sequences, including UTF-16 LE/BE.
 - Fixed `change_line_endings` so it preserves encoding, BOM state, and every non-line-ending byte across all 24 registered encodings.
 - Fixed four Staticcheck `ST1005` diagnostics in execution-tool error messages.

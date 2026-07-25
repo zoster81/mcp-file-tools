@@ -167,10 +167,13 @@ func TestConvertEncoding_BackupPreservesPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Convert encoding with backup
+	// Force a byte-changing conversion so the backup path is created. A
+	// byte-identical UTF-8 to UTF-8 conversion intentionally skips both the
+	// replacement and the requested backup.
 	input := ConvertEncodingInput{
 		Path:   testFile,
-		To:     "utf-8",
+		From:   "utf-8",
+		To:     "utf-16-le",
 		Backup: true,
 	}
 
@@ -179,10 +182,13 @@ func TestConvertEncoding_BackupPreservesPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.IsError {
-		t.Errorf("expected success")
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	if output.BackupPath == "" {
+		t.Fatal("expected backup path for byte-changing conversion")
 	}
 
-	// Verify backup file has original permissions
+	// Verify backup file has original permissions.
 	backupInfo, err := os.Stat(output.BackupPath)
 	if err != nil {
 		t.Fatal(err)
