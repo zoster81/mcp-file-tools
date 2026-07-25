@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 const mqlFixtureDir = "testdata/mql"

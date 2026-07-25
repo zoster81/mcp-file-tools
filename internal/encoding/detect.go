@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
 	"github.com/wlynxg/chardet"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
 // Detection constants

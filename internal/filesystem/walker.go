@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
+	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
 // WalkAction controls traversal after an entry is visited.

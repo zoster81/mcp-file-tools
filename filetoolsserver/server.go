@@ -3,9 +3,9 @@ package filetoolsserver
 import (
 	"log/slog"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/filetoolsserver/handler"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/config"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
+	"github.com/zoster81/mcp-file-tools/internal/config"
 )
 
 // Version is set at build time via ldflags

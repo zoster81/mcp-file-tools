@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
 // HandleConvertEncoding converts a file from one encoding to another.

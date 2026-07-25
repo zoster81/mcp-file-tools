@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
 func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) bool {

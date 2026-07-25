@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 const (

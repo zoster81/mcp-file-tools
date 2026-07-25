@@ -12,9 +12,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/filetoolsserver"
-	"github.com/dimitar-grigorov/mcp-file-tools/filetoolsserver/handler"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/filetoolsserver"
+	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
+	"github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 var failed = 0

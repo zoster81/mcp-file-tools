@@ -12,7 +12,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 const realLineEndingFixtureDir = "testdata/line_endings_real"

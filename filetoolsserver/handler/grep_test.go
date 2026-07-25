@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 func TestHandleGrep_SimpleMatch(t *testing.T) {

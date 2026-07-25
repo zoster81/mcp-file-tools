@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
 // HandleEditFile applies line-based edits to a text file with encoding support.

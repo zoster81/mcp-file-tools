@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 // HandleDetectEncoding detects the encoding of a file

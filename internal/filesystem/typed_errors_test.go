@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
 func TestCopyFileReturnsTypedNotFound(t *testing.T) {

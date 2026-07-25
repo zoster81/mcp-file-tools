@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
 // HandleMoveFile moves or renames a file or directory.

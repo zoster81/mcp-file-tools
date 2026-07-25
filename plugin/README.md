@@ -54,5 +54,4 @@ Then reference the built executable from a stdio MCP client configuration or use
 the OpenAI Tunnel example in
 [`examples/start-openai-tunnel.ps1`](../examples/start-openai-tunnel.ps1).
 
-The original project and upstream plugin are maintained at
-[`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools).
+Project lineage and upstream synchronization policy are documented in the main [README](../README.md) and [publishing notes](../docs/PUBLISHING.md).

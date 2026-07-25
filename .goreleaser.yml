@@ -17,11 +17,11 @@ builds:
     goarch:
       - amd64
       - arm64
-    # The Go module path intentionally remains upstream-compatible.
+    # Embed the fork version in both the command and server package.
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
-      - -X github.com/dimitar-grigorov/mcp-file-tools/filetoolsserver.Version={{.Version}}
+      - -X github.com/zoster81/mcp-file-tools/filetoolsserver.Version={{.Version}}
 
 archives:
   - id: default

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 func TestDetectLineEndings(t *testing.T) {

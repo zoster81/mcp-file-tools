@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
 // validBOMEncodings lists encodings that have a defined BOM.

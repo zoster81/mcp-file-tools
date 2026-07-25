@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/filetoolsserver/handler"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
+	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
 func createInitializedHandler(h *handler.Handler) func(context.Context, *mcp.InitializedRequest) {

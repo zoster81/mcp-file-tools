@@ -15,12 +15,11 @@ Git remote.
 - Current source capabilities: completed shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), and typed operation errors with centralized MCP/batch mapping (R4)
 - Next source milestone: bounded ordered concurrency utilities (R5), not implemented yet
 - Fork release status as of 2026-07-25: no published GitHub Release; inherited tags do not provide fork binaries or checksums
-- Go module path: intentionally retained as `github.com/dimitar-grigorov/mcp-file-tools`
-  for source compatibility with the upstream codebase
+- Go module path: `github.com/zoster81/mcp-file-tools`
 
-Because the module path remains upstream-compatible, fork users should clone and
-build the repository or download a fork release. A `go install` command using the
-upstream module path installs upstream code rather than the custom fork.
+The fork owns its Go module identity and all internal imports. Clone-and-build remains
+the recommended installation method until a fork-specific release tag and matching
+binary assets are published and verified.
 
 ## Fork release flow
 
@@ -45,6 +44,7 @@ upstream module path installs upstream code rather than the custom fork.
    - `README.md`, `TOOLS.md`, `CHANGELOG.md`, `LICENSE`;
    - `examples/start-openai-tunnel.ps1`.
 8. Verify the release asset names and SHA-256 values before announcing it.
+9. `.github/workflows/release.yml` invokes the reusable `.github/workflows/publish-registry.yml`, which generates and publishes the fork-owned `server.json` from those verified assets.
 
 The plugin launcher reads its pinned version from
 `plugin/.claude-plugin/plugin.json` and downloads binaries from the fork release.
@@ -67,20 +67,11 @@ Real credentials belong in a private copy outside the Git checkout.
 
 ## MCP Registry status
 
-The checked-in `server.json` describes the existing upstream MCP Registry entry
-and its upstream release hashes. It must not be presented or published as the
-fork entry.
+`server.template.json` is a release-neutral template owned by `zoster81/mcp-file-tools`. It contains the fork namespace, repository, homepage, complete tool catalog, package filenames, and zeroed checksum placeholders; it is not published directly.
 
-`.github/workflows/publish-registry.yml` is guarded so it does not publish from
-this fork. Before enabling registry publication for `zoster81/mcp-file-tools`,
-all of the following are required:
+`.github/workflows/publish-registry.yml` runs only in `zoster81/mcp-file-tools`. After a fork release is published, it downloads that release's `checksums.txt`, generates a temporary `server.json` with the exact version, fork download URLs, and SHA-256 values, rejects missing or unexpected MCP binaries, and then authenticates to the MCP Registry through GitHub OIDC.
 
-1. approve a fork-specific registry namespace;
-2. update repository and homepage metadata;
-3. include all fork tools and security descriptions;
-4. publish matching fork release assets;
-5. calculate and verify every asset SHA-256;
-6. test OIDC publication from the fork repository.
+The target registry identity is `io.github.zoster81/mcp-file-tools`. Publishing remains dependent on a real fork release with all six platform binaries and `checksums.txt`; inherited tags alone are insufficient.
 
 ## Upstream integrations
 
@@ -114,6 +105,21 @@ git diff main...upstream/main
 Integrate upstream changes only after reviewing conflicts with fork-specific
 roots, execution, update-check, release, and tunnel behavior.
 
+## Validation toolchain
+
+The repository pins the release-validation toolchain instead of resolving
+floating `latest` versions during CI:
+
+- actionlint 1.7.12 and ShellCheck 0.11.0 for GitHub Actions workflows;
+- Staticcheck v0.7.0 and govulncheck v1.1.4 for Go analysis;
+- GoReleaser v2.17.0 for release generation;
+- MCP Publisher v1.8.0 for registry validation and publication.
+
+The workflow-linter archives and MCP Publisher archive are verified against
+fixed SHA-256 values before extraction. Local release preparation should also
+run Gitleaks and use Cosign to verify signed release assets when bundles are
+available.
+
 ## Release verification checklist
 
 - working tree clean;
@@ -123,11 +129,14 @@ roots, execution, update-check, release, and tunnel behavior.
 - `go vet ./...` succeeds;
 - `go mod verify` succeeds;
 - PowerShell example parses under Windows PowerShell 5.1;
-- JSON, YAML, JavaScript, and Markdown checks succeed;
-- README, tool reference, changelog, plugin metadata, Smithery metadata, runtime descriptions, and roadmap describe the same released and unreleased capabilities;
+- JSON, YAML, JavaScript, Markdown, actionlint, and ShellCheck checks succeed;
+- README, tool reference, changelog, plugin metadata, Smithery metadata, runtime descriptions, roadmap, and `server.template.json` describe the same fork-owned capabilities;
 - secure traversal tests cover Unix symlinks and Windows junction/reparse-point escapes;
 - mutation tests cover synced staging, transactional backup rollback, cleanup, no-replace creation, concurrent-modification rejection, and platform cross-builds;
 - typed-error tests cover standard and joined causes, security/path categories, encoding categories, mutation conflicts, cancellation, and stable batch error codes;
-- GoReleaser configuration targets `zoster81/mcp-file-tools`;
+- Staticcheck and govulncheck succeed at the versions pinned by CI;
+- Gitleaks reports no tracked-history secrets;
+- GoReleaser configuration targets `zoster81/mcp-file-tools` and passes `goreleaser check`;
+- a generated manifest passes `mcp-publisher validate` without publication;
 - release tag, embedded binary version, plugin version, and marketplace version match;
 - release assets and checksums are verified after publication.

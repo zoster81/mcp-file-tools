@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 // Helper to extract text from MCP content

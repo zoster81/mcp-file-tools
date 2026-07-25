@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 func TestHandleReadMultipleFiles_Success(t *testing.T) {

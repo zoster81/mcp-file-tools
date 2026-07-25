@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
 // isASCIICompatible checks if charset is UTF-8 compatible (utf-8 or ascii)

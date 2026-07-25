@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/filesystem"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
 func (h *Handler) HandleWriteFile(ctx context.Context, req *mcp.CallToolRequest, input WriteFileInput) (*mcp.CallToolResult, WriteFileOutput, error) {

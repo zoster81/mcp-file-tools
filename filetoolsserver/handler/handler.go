@@ -4,8 +4,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/config"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
+	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
 // Default permissions for new files and directories

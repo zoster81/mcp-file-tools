@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
 var (

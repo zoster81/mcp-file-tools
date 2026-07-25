@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/filetoolsserver"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/filetoolsserver"
+	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
 // version is set at build time via ldflags

@@ -1,6 +1,6 @@
 package handler
 
-import "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+import "github.com/zoster81/mcp-file-tools/internal/encoding"
 
 // ReadTextFileInput for reading files with encoding support.
 // Offset/Limit are 1-indexed line numbers for partial reads.

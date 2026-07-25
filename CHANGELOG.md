@@ -18,9 +18,11 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Updated fork installation, download, update, plugin, and release commands to target `zoster81/mcp-file-tools`.
 - Linked the official `openai/tunnel-client` repository and OpenAI Secure MCP Tunnel guide.
 - Added complete PowerShell and Command Prompt launch commands plus explicit instructions for enabling `run_script` and `shell`.
-- Kept upstream references only where they represent attribution, the retained Go module path, or the existing upstream MCP Registry entry.
+- Limited original-project references to historical attribution and upstream synchronization documentation.
 - Configured GoReleaser and the plugin launcher to download and publish fork releases.
-- Guarded the upstream MCP Registry workflow so it cannot publish upstream metadata from this fork.
+- Migrated the Go module path, all internal imports, linker flags, manual test harness, and operational metadata to `github.com/zoster81/mcp-file-tools`.
+- Replaced the inherited registry manifest with a fork-owned release template and checksum-driven generator, and restricted OIDC publication to `zoster81/mcp-file-tools`.
+- Pinned actionlint, ShellCheck, Staticcheck, govulncheck, GoReleaser, and MCP Publisher versions in CI, with SHA-256 verification for downloaded workflow and registry tools.
 - Documented the fork-specific execution tools, environment flags, limits, result fields, and security boundaries.
 - Added an explicit summary of differences from the upstream project to `README.md`.
 - Added the previously missing `check_for_updates` reference and corrected its exposed cache interval from two hours to the implemented 30 minutes.

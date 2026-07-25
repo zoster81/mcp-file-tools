@@ -6,9 +6,9 @@ import (
 	"io/fs"
 	"testing"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/operation"
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/security"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
 func TestMapOperationErrorToBatch(t *testing.T) {

@@ -31,6 +31,21 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
+      - name: Run staticcheck
+        if: matrix.os == 'ubuntu-latest'
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+
+      - name: Run govulncheck
+        if: matrix.os == 'ubuntu-latest'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+      - name: Lint GitHub Actions workflows
+        if: matrix.os == 'ubuntu-latest'
+        run: bash scripts/validate-workflows.sh
+
+      - name: Test registry manifest generation
+        run: node --test scripts/generate-server-json.test.js
+
   release:
     needs: test
     runs-on: ubuntu-latest
@@ -49,8 +64,16 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: '~> v2'
+          version: 'v2.17.0'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  publish-registry:
+    needs: release
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-registry.yml
+    with:
+      version: ${{ github.ref_name }}

@@ -3,7 +3,7 @@ package handler
 import (
 	"testing"
 
-	"github.com/dimitar-grigorov/mcp-file-tools/internal/config"
+	"github.com/zoster81/mcp-file-tools/internal/config"
 )
 
 func TestNewHandler(t *testing.T) {

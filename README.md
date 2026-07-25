@@ -1,5 +1,7 @@
 # MCP File Tools
 
+<!-- mcp-name: io.github.zoster81/mcp-file-tools -->
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/zoster81/mcp-file-tools)](https://goreportcard.com/report/github.com/zoster81/mcp-file-tools)
 [![Release](https://img.shields.io/github/v/release/zoster81/mcp-file-tools)](https://github.com/zoster81/mcp-file-tools/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/github/license/zoster81/mcp-file-tools)](LICENSE)
@@ -87,7 +89,7 @@ See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
 ## Custom Fork Changes
 
-This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). Compared with the upstream project, the current source branch adds:
+This repository has evolved from its original upstream codebase. Compared with that baseline, the current source branch adds:
 
 - optional `run_script` and `shell` MCP tools, disabled by default;
 - CLI-provided allowed directories as the authoritative fallback for tunnel clients that do not implement MCP roots requests;
@@ -101,7 +103,7 @@ This repository is a custom fork of [`dimitar-grigorov/mcp-file-tools`](https://
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 
-`server.json` retains the upstream MCP Registry package identity, release URLs, and hashes until this fork publishes its own release artifacts. Its functional description and tool catalog are kept synchronized with the fork, but the guarded registry workflow does not publish those upstream package coordinates from this repository.
+`server.template.json` contains only the fork-owned MCP Registry identity and release-neutral placeholders. On a fork release, the registry workflow downloads the published `checksums.txt`, generates a temporary `server.json` with the exact release URLs and SHA-256 values, and publishes only after every expected binary is represented.
 
 ## Installation
 
@@ -131,7 +133,7 @@ go test ./...
 go build -o mcp-file-tools_windows_amd64.exe ./cmd/mcp-file-tools
 ```
 
-The Go module currently retains the upstream module path for source compatibility. For that reason, use clone-and-build for the fork; `go install github.com/dimitar-grigorov/...` installs the upstream project and does not include the fork-specific tunnel and execution changes.
+The Go module is `github.com/zoster81/mcp-file-tools`, and all internal imports resolve through the fork namespace. Until a fork-specific release tag and matching assets are published, use clone-and-build rather than relying on inherited tags.
 
 #### Download a fork release
 
@@ -244,18 +246,9 @@ Invoke-WebRequest `
 
 Set `MCP_NO_UPDATE_CHECK=1` before starting the server to disable release checks.
 
-### Upstream integrations and registry
+### Project lineage
 
-This fork originates from [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). The existing MCP Registry entry and the original Claude Code marketplace integration belong to the upstream project and do not represent this fork or its additional tools.
-
-The fork retains plugin files for a future fork distribution, but they require a matching published fork release with platform binaries and `checksums.txt`. No such fork release is currently published, so the fork plugin is not yet a working installation path. The upstream plugin can still be installed separately with:
-
-```text
-/plugin marketplace add dimitar-grigorov/mcp-file-tools
-/plugin install mcp-file-tools
-```
-
-That command installs the upstream implementation, not this fork.
+This project originated from the [original upstream repository](https://github.com/dimitar-grigorov/mcp-file-tools). The fork now owns its module path, release pipeline, plugin metadata, update source, and MCP Registry namespace. Upstream integrations are separate from this distribution and are retained here only as historical lineage.
 
 ## How to Use
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 func encodeUTF16LEWithBOM(t *testing.T, content string) []byte {

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	fileEncoding "github.com/dimitar-grigorov/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
 func TestHandleConvertEncoding_UTF8ToCP1251(t *testing.T) {

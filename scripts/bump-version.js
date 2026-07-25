@@ -2,8 +2,9 @@
 // Bump the release version from one command:
 //   node scripts/bump-version.js 1.7.4
 // plugin.json is the source of truth. run.js reads it at runtime, and
-// server.json is rewritten by the publish-registry workflow in CI, so neither
-// is touched here -- only plugin.json and the marketplace catalog entry.
+// server.template.json is release-neutral, and the publish-registry workflow
+// generates server.json from real fork release checksums. Only plugin.json and
+// the marketplace catalog entry are versioned here.
 
 const fs = require('fs');
 const path = require('path');
