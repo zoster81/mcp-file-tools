@@ -7,7 +7,7 @@ This guide applies to `internal/filesystem/`. Follow the repository root [`AGENT
 - Treat every path and filesystem result as untrusted.
 - Use `internal/security` for path resolution and allowed-root enforcement; do not add weaker local prefix checks.
 - Recursive traversal must remain deterministic, cancellation-aware, and fail closed for symlinks, Windows junctions, and other reparse points that escape allowed roots.
-- Mutations stage data in the destination directory, sync staged content before commit, and use the platform-specific atomic or no-replace primitive.
+- Mutations stage bytes or reader streams in the destination directory, sync staged content before commit, and use the platform-specific atomic or no-replace primitive.
 - Existing targets use optimistic snapshots. Initially missing destinations must not overwrite a path created concurrently.
 - Preserve source permissions and timestamps where the public operation promises them.
 - Backup replacement must remain transactional. On target failure, restore the previous backup or preserve an explicit recovery artifact.
@@ -22,7 +22,7 @@ Prefer small reusable primitives over handler-specific mutation paths. A new mut
 - overwrite/no-replace behavior;
 - staging location and permissions;
 - file and directory sync policy;
-- cancellation boundary;
+- cancellation boundary and reader ownership;
 - rollback and cleanup behavior;
 - concurrent source or destination changes;
 - Windows, Linux, and macOS behavior.

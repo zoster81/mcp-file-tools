@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zoster81/mcp-file-tools/internal/config"
 	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
@@ -125,6 +126,30 @@ func TestConvertLineEndings(t *testing.T) {
 				t.Errorf("ConvertLineEndings(%q, %q) = %q, want %q", tt.input, tt.target, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHandleDetectLineEndingsBoundsInconsistentLineOutput(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
+		DefaultEncoding: "utf-8",
+		MemoryThreshold: 8,
+	}))
+	path := filepath.Join(tempDir, "mixed.txt")
+	content := "a\r\nb\r\nc\r\nd\ne\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleDetectLineEndings(context.Background(), nil, DetectLineEndingsInput{Path: path, Encoding: "utf-8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected inconsistent-line output budget error")
+	}
+	if message := extractTextFromResultRead(result.Content); !strings.Contains(message, "inconsistent line list exceeds") {
+		t.Fatalf("unexpected error: %q", message)
 	}
 }
 

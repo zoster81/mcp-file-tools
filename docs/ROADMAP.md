@@ -24,8 +24,8 @@ Current milestone status and completion gates live in this document. Reusable en
 |---|---|---|
 | R7 | COMPLETE | Replaced the historical roadmap with a clear operating plan and removed domain-specific MQL emphasis. |
 | R8 | COMPLETE | Generic, conservative, extension-independent encoding detection, including BOMless UTF-16. |
-| R9 | ACTIVE | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
-| R10 | QUEUED | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
+| R9 | COMPLETE | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
+| R10 | ACTIVE | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
 | R11 | QUEUED | Separate transport bootstrap from the shared MCP server and tool policies. |
 | R12 | QUEUED | Approve the Streamable HTTP threat model and security design. |
 | R13 | QUEUED | Implement and verify native MCP Streamable HTTP while preserving stdio. |
@@ -113,7 +113,7 @@ Completed on 2026-07-26. Detection now uses one conservative UTF-16 LE/BE classi
 
 ## Goal
 
-Make large-file behavior match the documented memory guarantees. The current shared document path warns above `MCP_MEMORY_THRESHOLD` but still loads the full file with `os.ReadFile`; R9 removes that mismatch.
+Make large-file behavior match the documented memory guarantees. Streaming operations must not load complete source files, while operations that inherently require full-document state must reject oversized input before allocation.
 
 ## Architecture requirements
 
@@ -124,27 +124,31 @@ Make large-file behavior match the documented memory guarantees. The current sha
 
 ## Checklist
 
-- [ ] Define explicit per-operation memory and line-length limits.
-- [ ] Add a shared incremental decoder for all registered encodings.
-- [ ] Add chunk-boundary tests for multibyte text, surrogate pairs, BOMs, CRLF, and lone CR/LF.
-- [ ] Stream `read_text_file` while preserving offset, limit, total line count, and character truncation semantics.
-- [ ] Bound aggregate memory in `read_multiple_files`, not only worker count.
-- [ ] Stream `grep_text_files` with a bounded previous-line ring buffer and bounded following context.
-- [ ] Preserve deterministic file and match order with streaming workers.
-- [ ] Stream `convert_encoding` from decoder to staged encoder output.
-- [ ] Preserve exact CRLF, LF, CR, and mixed line-ending sequences during conversion.
-- [ ] Add writer/reader-based mutation staging APIs.
-- [ ] Stream `detect_line_endings` and `change_line_endings`.
-- [ ] Stream `manage_bom` prefix inspection and staged copy.
-- [ ] Define and enforce an explicit full-document size limit for `edit_file` and unified diff generation.
-- [ ] Remove or make private `DetectSample` after all byte-slice consumers migrate.
-- [ ] Remove inaccurate streaming comments and warnings from configuration and documentation.
-- [ ] Test cancellation, read failures, write failures, disk-full simulation, cleanup, and concurrent source changes mid-stream.
-- [ ] Benchmark memory and throughput on representative small, medium, and large files.
+- [x] Define explicit per-operation memory and line-length limits.
+- [x] Add a shared incremental decoder for all registered encodings.
+- [x] Add chunk-boundary tests for multibyte text, surrogate pairs, BOMs, CRLF, and lone CR/LF.
+- [x] Stream `read_text_file` while preserving offset, limit, total line count, and character truncation semantics.
+- [x] Bound aggregate memory in `read_multiple_files`, not only worker count.
+- [x] Stream `grep_text_files` with a bounded previous-line ring buffer and bounded following context.
+- [x] Preserve deterministic file and match order with streaming workers.
+- [x] Stream `convert_encoding` from decoder to staged encoder output.
+- [x] Preserve exact CRLF, LF, CR, and mixed line-ending sequences during conversion.
+- [x] Add writer/reader-based mutation staging APIs.
+- [x] Stream `detect_line_endings` and `change_line_endings`.
+- [x] Stream `manage_bom` prefix inspection and staged copy.
+- [x] Define and enforce an explicit full-document size limit for `edit_file` and unified diff generation.
+- [x] Remove or make private `DetectSample` after all byte-slice consumers migrate.
+- [x] Remove inaccurate streaming comments and warnings from configuration and documentation.
+- [x] Test cancellation, read failures, write failures, disk-full simulation, cleanup, and concurrent source changes mid-stream.
+- [x] Benchmark memory and throughput on representative small, medium, and large files.
 
 ## Completion gate
 
 Every operation documented as streaming must have a verified bounded-memory path. Large-file tests must demonstrate that memory does not scale linearly with complete input size except for explicitly bounded full-document operations such as editing.
+
+## Completion record
+
+Completed on 2026-07-26. A shared read session now separates random-access detection from one sequential SHA-256 pass; incremental decoders support all 24 registered encodings; bounded line framing rejects decoded lines above 16 MiB; and `MCP_MEMORY_THRESHOLD` is enforced as the default hard budget for single-read output, aggregate batch output, retained grep state, inconsistent-line results, and full-document editing. Read, batch, grep, encoding conversion, line-ending detection/conversion, and BOM mutation now use bounded streams or disk staging while preserving BOM, encoding, ordering, cancellation, no-op, backup, and concurrent-modification behavior. Benchmarks on 1, 16, and 64 MiB inputs showed constant allocation footprints for line scanning and line-ending transformation; the applicable Go, static-analysis, vulnerability, manual MCP, documentation, and repository gates passed. The race detector and release-adjacent multi-platform checks remain deferred to R14.
 
 ---
 

@@ -119,6 +119,17 @@ func snapshotFromInfo(info fs.FileInfo) FileSnapshot {
 	}
 }
 
+// Equal reports whether two snapshots describe the same existence, metadata,
+// and digest evidence. Digest-bearing snapshots compare their SHA-256 values.
+func (snapshot FileSnapshot) Equal(other FileSnapshot) bool {
+	if snapshot.Exists != other.Exists || snapshot.Size != other.Size ||
+		!snapshot.ModTime.Equal(other.ModTime) || snapshot.Mode != other.Mode ||
+		snapshot.hasDigest != other.hasDigest {
+		return false
+	}
+	return !snapshot.hasDigest || bytes.Equal(snapshot.digest[:], other.digest[:])
+}
+
 // Verify confirms that path still matches the captured state.
 func (snapshot FileSnapshot) Verify(path string) (err error) {
 	defer func() {
@@ -200,13 +211,15 @@ func (snapshot FileSnapshot) RefreshMetadata(path string) (current FileSnapshot,
 
 // ReplaceOptions controls a durable atomic replacement.
 type ReplaceOptions struct {
-	Mode       fs.FileMode
-	ModTime    *time.Time
-	Expected   *FileSnapshot
-	BackupPath string
+	Mode          fs.FileMode
+	ModTime       *time.Time
+	Expected      *FileSnapshot
+	BackupPath    string
+	SkipIdentical bool
 }
 
 type mutationOps struct {
+	copyStream          func(destination io.Writer, source io.Reader) (int64, error)
 	replacePath         func(source, destination string) error
 	installNoReplace    func(source, destination string) error
 	moveNoReplace       func(source, destination string) error
@@ -217,6 +230,7 @@ type mutationOps struct {
 }
 
 var defaultMutationOps = mutationOps{
+	copyStream:          io.Copy,
 	replacePath:         replacePath,
 	installNoReplace:    installPathNoReplace,
 	moveNoReplace:       movePathNoReplace,
@@ -235,18 +249,100 @@ func ReplaceFile(path string, data []byte, options ReplaceOptions) (err error) {
 	return replaceFile(path, data, options, defaultMutationOps)
 }
 
-func replaceFile(path string, data []byte, options ReplaceOptions, ops mutationOps) (err error) {
+// StagedReplacement owns a synced same-directory temporary file until Commit
+// installs it or Cleanup removes it. The fields are intentionally private so
+// callers cannot bypass the commit and cleanup invariants.
+type StagedReplacement struct {
+	targetPath string
+	tempPath   string
+	size       int64
+	digest     [sha256.Size]byte
+	ops        mutationOps
+}
+
+// StageReplacement streams source into a synced same-directory temporary file.
+// It does not inspect or modify the current target.
+func StageReplacement(target string, source io.Reader, mode fs.FileMode, modTime *time.Time) (staged *StagedReplacement, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("stage_replacement", target, err)
+	}()
+	return stageReplacement(target, source, mode, modTime, defaultMutationOps)
+}
+
+func stageReplacement(target string, source io.Reader, mode fs.FileMode, modTime *time.Time, ops mutationOps) (*StagedReplacement, error) {
+	if mode.Perm() == 0 {
+		mode = 0600
+	}
+	tempPath, size, digest, err := stageReader(target, source, mode, modTime, ops)
+	if err != nil {
+		return nil, err
+	}
+	return &StagedReplacement{
+		targetPath: target,
+		tempPath:   tempPath,
+		size:       size,
+		digest:     digest,
+		ops:        ops,
+	}, nil
+}
+
+// Commit verifies expected state, optionally suppresses a byte-identical
+// replacement, and installs the staged file through the durable mutation path.
+// A staged replacement is single-use.
+func (staged *StagedReplacement) Commit(options ReplaceOptions) (changed bool, err error) {
+	if staged == nil || staged.tempPath == "" {
+		return false, errors.New("staged replacement is not available")
+	}
+	defer func() {
+		if cleanupErr := staged.Cleanup(); cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+	}()
+
+	if options.SkipIdentical && options.Expected != nil && options.Expected.hasDigest &&
+		options.Expected.Size == staged.size && bytes.Equal(options.Expected.digest[:], staged.digest[:]) {
+		if err := options.Expected.Verify(staged.targetPath); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	if err := commitStagedReplacement(staged.targetPath, staged.tempPath, options, staged.ops); err != nil {
+		return false, err
+	}
+	staged.tempPath = ""
+	return true, nil
+}
+
+// Cleanup removes an uncommitted staged replacement. It is safe to call more
+// than once and after a successful Commit.
+func (staged *StagedReplacement) Cleanup() error {
+	if staged == nil || staged.tempPath == "" {
+		return nil
+	}
+	err := cleanupMutationPath(staged.tempPath, staged.ops)
+	if err == nil {
+		staged.tempPath = ""
+	}
+	return err
+}
+
+func replaceFile(path string, data []byte, options ReplaceOptions, ops mutationOps) error {
 	if options.Mode.Perm() == 0 {
 		options.Mode = 0600
 	}
-	if options.BackupPath != "" && filepath.Clean(options.BackupPath) == filepath.Clean(path) {
-		return errors.New("backup path must differ from target path")
-	}
-
 	targetTemp, err := stageBytes(path, data, options.Mode, options.ModTime, ops)
 	if err != nil {
 		return err
 	}
+	return commitStagedReplacement(path, targetTemp, options, ops)
+}
+
+func commitStagedReplacement(path, targetTemp string, options ReplaceOptions, ops mutationOps) (err error) {
+	if options.BackupPath != "" && filepath.Clean(options.BackupPath) == filepath.Clean(path) {
+		return errors.New("backup path must differ from target path")
+	}
+
 	var backupTemp string
 	var previousBackupTemp string
 	defer func() {
@@ -447,10 +543,15 @@ func RemoveFile(path string, expected *FileSnapshot) (err error) {
 	return nil
 }
 
-func stageBytes(target string, data []byte, mode fs.FileMode, modTime *time.Time, ops mutationOps) (path string, err error) {
+func stageBytes(target string, data []byte, mode fs.FileMode, modTime *time.Time, ops mutationOps) (string, error) {
+	path, _, _, err := stageReader(target, bytes.NewReader(data), mode, modTime, ops)
+	return path, err
+}
+
+func stageReader(target string, source io.Reader, mode fs.FileMode, modTime *time.Time, ops mutationOps) (path string, size int64, digest [sha256.Size]byte, err error) {
 	file, err := os.CreateTemp(filepath.Dir(target), mutationTempPattern(target))
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
+		return "", 0, digest, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tempPath := file.Name()
 	path = tempPath
@@ -461,27 +562,36 @@ func stageBytes(target string, data []byte, mode fs.FileMode, modTime *time.Time
 		if err != nil {
 			err = errors.Join(err, cleanupMutationPath(tempPath, ops))
 			path = ""
+			size = 0
+			digest = [sha256.Size]byte{}
 		}
 	}()
 
 	if err = file.Chmod(mode.Perm()); err != nil {
-		return "", fmt.Errorf("failed to set temp file mode: %w", err)
+		return "", 0, digest, fmt.Errorf("failed to set temp file mode: %w", err)
 	}
-	if _, err = io.Copy(file, bytes.NewReader(data)); err != nil {
-		return "", fmt.Errorf("failed to write temp file: %w", err)
+	hasher := sha256.New()
+	copyStream := ops.copyStream
+	if copyStream == nil {
+		copyStream = io.Copy
 	}
+	size, err = copyStream(io.MultiWriter(file, hasher), source)
+	if err != nil {
+		return "", 0, digest, fmt.Errorf("failed to write temp file: %w", err)
+	}
+	copy(digest[:], hasher.Sum(nil))
 	if modTime != nil {
 		if err = os.Chtimes(path, *modTime, *modTime); err != nil {
-			return "", fmt.Errorf("failed to set temp file time: %w", err)
+			return "", 0, digest, fmt.Errorf("failed to set temp file time: %w", err)
 		}
 	}
 	if err = ops.syncFile(file); err != nil {
-		return "", fmt.Errorf("failed to sync temp file: %w", err)
+		return "", 0, digest, fmt.Errorf("failed to sync temp file: %w", err)
 	}
 	if err = file.Close(); err != nil {
-		return "", fmt.Errorf("failed to close temp file: %w", err)
+		return "", 0, digest, fmt.Errorf("failed to close temp file: %w", err)
 	}
-	return path, nil
+	return path, size, digest, nil
 }
 
 func stageFileCopy(source, destinationHint string, expected *FileSnapshot, ops mutationOps) (path string, err error) {

@@ -35,11 +35,11 @@ Another browser-hosted LLM could use the current server only if its MCP connecto
 
 The planned `2.0.0` release will add native MCP Streamable HTTP while preserving stdio support. Security design, transport separation, implementation, hardening, and release gates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware text-document core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency for batch operations, shared process preparation, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
+The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## Current Development Status
 
-R1-R6 are complete. R7 completed the roadmap, contributor-documentation, and scoped agent-guidance reset. R8 completed conservative extension-independent encoding detection, including structurally validated BOMless UTF-16. R9 is now active; R10-R14 cover API cleanup, transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
+R1-R6 are complete. R7 completed the roadmap, contributor-documentation, and scoped agent-guidance reset. R8 completed conservative extension-independent encoding detection, including structurally validated BOMless UTF-16. R9 completed bounded-memory streaming and disk-staged large-file mutations. R10 is now active; R11-R14 cover transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
 
 Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
 
@@ -50,22 +50,22 @@ The existing semantic-tag release workflow remains available for the final 2.0 r
 ## What It Does
 
 Provides 24 tools for file operations, encoding conversion, update checks, and optional local execution:
-- [`read_text_file`](TOOLS.md#read_text_file) - Read files with encoding auto-detection and conversion
-- [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read multiple files concurrently with encoding support and stable per-file error codes
+- [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line and output memory
+- [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
-- [`edit_file`](TOOLS.md#edit_file) - Encoding/BOM-aware edits with diff preview, preserved CRLF/LF, and byte-identical no-ops
+- [`edit_file`](TOOLS.md#edit_file) - Encoding/BOM-aware full-document edits with a hard configured size limit
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with pattern filtering
 - [`tree`](TOOLS.md#tree) - Compact deterministic tree through the shared secure walker (85% fewer tokens than JSON)
 - [`directory_tree`](TOOLS.md#directory_tree-deprecated) - Get a deterministic secure recursive tree as JSON (deprecated, use `tree`)
 - [`search_files`](TOOLS.md#search_files) - Deterministic glob search that skips symlink, junction, and reparse-point escapes
-- [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic regex search through the shared decoder and secure walker, including UTF-16 LE/BE
+- [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic streaming regex search with bounded context and aggregate retained state
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
-- [`convert_encoding`](TOOLS.md#convert_encoding) - Convert encoding while preserving decoded text and line endings, with explicit BOM policy and byte-identical no-op suppression
-- [`detect_line_endings`](TOOLS.md#detect_line_endings) - Detect CRLF/LF/mixed endings after decoding UTF-8, legacy, or UTF-16 text
-- [`change_line_endings`](TOOLS.md#change_line_endings) - Convert LF/CRLF while preserving encoding, BOM state, and non-line-ending bytes
-- [`manage_bom`](TOOLS.md#manage_bom) - Detect, strip, or add Unicode BOM
+- [`convert_encoding`](TOOLS.md#convert_encoding) - Stream decoder-to-encoder conversion into durable staging with exact no-op suppression
+- [`detect_line_endings`](TOOLS.md#detect_line_endings) - Stream CRLF/LF/mixed detection with bounded inconsistent-line output
+- [`change_line_endings`](TOOLS.md#change_line_endings) - Stream LF/CRLF conversion while preserving encoding, BOM, and unrelated bytes
+- [`manage_bom`](TOOLS.md#manage_bom) - Inspect a bounded prefix or stream BOM add/strip through durable staging
 - [`list_encodings`](TOOLS.md#list_encodings) - Show all supported encodings
 - [`get_file_info`](TOOLS.md#get_file_info) - Get file/directory metadata
 - [`create_directory`](TOOLS.md#create_directory) - Create directories recursively (mkdir -p)
@@ -106,7 +106,8 @@ This repository has evolved from its original upstream codebase. Compared with t
 - a deterministic, cancellation-aware secure walker shared by `tree`, `directory_tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
-- a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, bounded in-flight results, cancellation-aware dispatch, partial-result preservation, and early stop for global match limits.
+- a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
+- a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 
@@ -280,7 +281,7 @@ The server can be configured via environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MCP_DEFAULT_ENCODING` | Default encoding for newly created files when `write_file` is called without `encoding`. Existing files keep a confidently detected encoding. Legacy encodings such as `cp1251` remain available as explicit overrides. | `utf-8` |
-| `MCP_MEMORY_THRESHOLD` | Advisory large-file threshold in bytes. The current shared document path logs a warning above this value but still loads the complete file; bounded-memory streaming is planned in R9. | `67108864` (64MB) |
+| `MCP_MEMORY_THRESHOLD` | Hard byte budget for `read_text_file` output, aggregate `read_multiple_files` output, retained grep state, inconsistent-line results, and full-document `edit_file` input. Streaming conversion, line-ending, and BOM mutations stage on disk and are not limited by total source size. | `67108864` (64 MiB) |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_SHELL` | Enables only the unrestricted `shell` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_EXECUTION` | Enables both `run_script` and `shell`; use only in a trusted environment. | disabled |

@@ -10,8 +10,37 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zoster81/mcp-file-tools/internal/config"
 	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
+
+func TestHandleGrepBoundsAggregateOutput(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
+		DefaultEncoding: "utf-8",
+		MemoryThreshold: 10,
+	}))
+	path := filepath.Join(tempDir, "large-match.txt")
+	if err := os.WriteFile(path, []byte("12345678901\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleGrep(context.Background(), nil, GrepInput{
+		Pattern:  "123",
+		Paths:    []string{path},
+		Encoding: "utf-8",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected grep output budget error")
+	}
+	if message := extractTextFromResultRead(result.Content); !strings.Contains(message, "grep output budget") {
+		t.Fatalf("unexpected error: %q", message)
+	}
+}
 
 func TestHandleGrep_SimpleMatch(t *testing.T) {
 	tempDir := t.TempDir()
@@ -427,7 +456,7 @@ func TestHandleGrep_MaxMatchesUsesDeterministicFileOrder(t *testing.T) {
 
 	slowPath := filepath.Join(tempDir, "a-slow.txt")
 	fastPath := filepath.Join(tempDir, "z-fast.txt")
-	if err := os.WriteFile(slowPath, []byte(strings.Repeat("x", 16<<20)+"match-a\n"), 0644); err != nil {
+	if err := os.WriteFile(slowPath, []byte(strings.Repeat("x", 8<<20)+"match-a\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(fastPath, []byte("match-z\n"), 0644); err != nil {
@@ -525,6 +554,41 @@ func TestSearchSingleFile_StopsAtLimit(t *testing.T) {
 	}
 	if !result.truncated {
 		t.Fatal("truncated = false, want true after finding an additional match")
+	}
+}
+
+func TestHandleGrep_DoesNotTreatSplitUTF8ProbeRuneAsBinary(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "probe-boundary.txt")
+	content := strings.Repeat("a", binaryCheckSize-1) + "🌍\nfindme\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, output, err := h.HandleGrep(context.Background(), nil, GrepInput{Pattern: "findme", Paths: []string{path}, Encoding: "utf-8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.TotalMatches != 1 {
+		t.Fatalf("output = %+v, want one match", output)
+	}
+}
+
+func TestSearchSingleFile_RejectsOversizedLine(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "oversized.txt")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", 16*1024*1024+1)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := h.searchSingleFile(context.Background(), path, regexp.MustCompile("x"), GrepInput{Encoding: "utf-8"}, 1)
+	if operation.KindOf(result.err) != operation.KindLimit {
+		t.Fatalf("error = %v, kind=%v; want limit", result.err, operation.KindOf(result.err))
+	}
+	if len(result.matches) != 0 {
+		t.Fatalf("matches = %d, want 0", len(result.matches))
 	}
 }
 

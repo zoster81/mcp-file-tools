@@ -15,11 +15,14 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added `internal/execution`, a shared process-preparation primitive for absolute working-directory validation, bounded timeout/output handling, cancellation, process-tree termination, and caller-supplied pre-launch revalidation.
 - Added an embedded authoritative tool catalog consumed by MCP runtime registration and Registry manifest generation, with tests enforcing runtime metadata and README/TOOLS coverage.
 - Added streaming SHA-256 filesystem snapshots for optimistic pre-execution verification without loading complete scripts into memory.
+- Added shared incremental decoder/encoder readers for all 24 registered encodings, bounded decoded-line framing, and context-aware streaming transforms.
+- Added digesting read sessions and reader-based same-directory mutation staging with byte-identical no-op detection.
+- Added focused chunk-boundary, cancellation, output-budget, oversized-line, disk-full, cleanup, concurrent-change, and 1/16/64 MiB benchmark coverage.
 
 ### Changed
 
 - Unified BOMless UTF-16 decisions across sample, chunked, and full detection modes; chunked analysis now preserves code-unit and surrogate state across 128 KiB boundaries and resolves equal legacy weights deterministically.
-- Updated runtime instructions, tool metadata, README, tool reference, roadmap, and publishing notes for completed R8 detection behavior and the active R9 streaming milestone.
+- Updated runtime instructions, tool metadata, README, tool reference, roadmap, and publishing notes for completed R8 detection behavior and completed R9 bounded-memory streaming.
 - Made the public development checklist and roadmap portable to normal repository clones, and replaced the private session-style history with a concise R1-R6 engineering history.
 - Generalized the Windows drive-root security fixture so tests do not embed a private workstation path.
 - Changed the default encoding for newly created files from legacy `cp1251` to standard UTF-8; existing files still preserve a confidently detected encoding, and `MCP_DEFAULT_ENCODING` or an explicit `encoding` can select legacy formats.
@@ -28,6 +31,9 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Refactored `run_script` and `shell` to share only process-level mechanics while retaining separate authorization policies and independent feature flags.
 - Made both execution tools revalidate their working directory immediately before launch; `run_script` also verifies script metadata and SHA-256 content before execution.
 - Made `server.template.json` release-neutral for tool metadata; `scripts/generate-server-json.js` now injects the Registry projection from the authoritative catalog.
+- Migrated `read_text_file`, `read_multiple_files`, `grep_text_files`, encoding conversion, line-ending detection/conversion, and BOM add/strip to bounded streams or disk staging while preserving deterministic ordering, encoding, BOM, line endings, backups, cancellation, and concurrent-modification checks.
+- Enforced `MCP_MEMORY_THRESHOLD` as the default hard budget for single-read output, aggregate batch output, retained grep state, inconsistent-line lists, and full-document editing; decoded lines above 16 MiB are rejected.
+- Made the legacy byte-slice sample detector private and removed obsolete full-buffer read/grep helpers.
 
 ### Fixed
 

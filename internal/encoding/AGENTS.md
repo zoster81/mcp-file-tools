@@ -19,7 +19,7 @@ Keep candidate scoring deterministic and composable. Separate structural validat
 
 Sampling, chunked, and full modes must share the same candidate semantics. Account for chunk boundaries before claiming mode equivalence.
 
-Do not mix R8 detection work with the R9 streaming rewrite unless the roadmap explicitly changes scope.
+Keep encoding detection, incremental decoding, and consuming operation policy separate. Detection works on `ReaderAt` evidence; streaming consumers use registered decoder/encoder readers without adding filename-based behavior.
 
 ## Tests
 

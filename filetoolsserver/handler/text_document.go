@@ -104,7 +104,7 @@ func (h *Handler) resolveEncodingFromDataDetailed(inputEncoding string, data []b
 	}
 
 	result.autoDetected = true
-	detection, _ := fileEncoding.DetectSample(data)
+	detection := fileEncoding.Detect(data)
 	result.detectedEncoding = detection.Charset
 	result.encodingConfidence = detection.Confidence
 
@@ -247,8 +247,14 @@ func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedE
 	if err != nil {
 		return textDocument{}, nil, fmt.Errorf("failed to stat file: %w", err)
 	}
-	if info.Size() > h.config.MemoryThreshold {
-		slog.Warn("loading large file into memory", "path", path, "size", info.Size(), "threshold", h.config.MemoryThreshold)
+	budget := h.memoryBudget()
+	if info.Size() > budget {
+		return textDocument{}, nil, operation.Wrap(
+			operation.KindLimit,
+			"read_text_document",
+			path,
+			fmt.Errorf("file size %d exceeds the %d-byte edit limit", info.Size(), budget),
+		)
 	}
 
 	data, err = os.ReadFile(path)

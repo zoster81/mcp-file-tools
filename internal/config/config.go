@@ -16,7 +16,7 @@ const (
 
 	// Default values
 	DefaultEncoding = "utf-8"
-	DefaultMaxSize  = int64(64 * 1024 * 1024) // 64MB advisory large-file threshold
+	DefaultMaxSize  = int64(64 * 1024 * 1024) // 64MB full-document and aggregate-output budget
 )
 
 // Config holds server configuration loaded from environment variables.
@@ -26,9 +26,9 @@ type Config struct {
 	// Default: "utf-8"; legacy encodings remain available as explicit overrides.
 	DefaultEncoding string
 
-	// MemoryThreshold is the advisory size threshold for large-file diagnostics.
-	// The current shared text-document path still loads complete files into memory;
-	// bounded-memory streaming is tracked as roadmap milestone R9.
+	// MemoryThreshold limits full-document editing and aggregate decoded content
+	// returned by read_multiple_files. Streaming single-file operations are
+	// bounded by line/result state rather than total source size.
 	// Set via MCP_MEMORY_THRESHOLD environment variable.
 	// Default: 67108864 (64MB)
 	MemoryThreshold int64

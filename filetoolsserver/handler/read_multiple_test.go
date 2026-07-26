@@ -7,8 +7,42 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zoster81/mcp-file-tools/internal/config"
 	"github.com/zoster81/mcp-file-tools/internal/encoding"
 )
+
+func TestHandleReadMultipleFilesBoundsAggregateContent(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
+		DefaultEncoding: "utf-8",
+		MemoryThreshold: 10,
+	}))
+	first := filepath.Join(tempDir, "first.txt")
+	second := filepath.Join(tempDir, "second.txt")
+	if err := os.WriteFile(first, []byte("123456"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("abcdef"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, output, err := h.HandleReadMultipleFiles(context.Background(), nil, ReadMultipleFilesInput{Paths: []string{first, second}, Encoding: "utf-8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.SuccessCount != 1 || output.ErrorCount != 1 {
+		t.Fatalf("output = %+v, want one success and one limit error", output)
+	}
+	if output.Results[0].Content != "123456" {
+		t.Fatalf("first content = %q", output.Results[0].Content)
+	}
+	if output.Results[1].Content != "" || !strings.Contains(output.Results[1].Error, "batch output budget") {
+		t.Fatalf("second result = %+v", output.Results[1])
+	}
+	if got := len(output.Results[0].Content) + len(output.Results[1].Content); got > 10 {
+		t.Fatalf("aggregate content bytes = %d, want <= 10", got)
+	}
+}
 
 func TestHandleReadMultipleFiles_Success(t *testing.T) {
 	tempDir := t.TempDir()

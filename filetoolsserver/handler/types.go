@@ -10,6 +10,9 @@ type ReadTextFileInput struct {
 	Offset        *int   `json:"offset,omitempty"`
 	Limit         *int   `json:"limit,omitempty"`
 	MaxCharacters *int   `json:"maxCharacters,omitempty"`
+
+	maxOutputBytes  int
+	outputLimitName string
 }
 
 type ReadTextFileOutput struct {

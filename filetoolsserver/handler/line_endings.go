@@ -1,12 +1,15 @@
 package handler
 
 import (
-	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/textstream"
 )
 
 // LineEndingStyle constants for line ending types.
@@ -77,56 +80,38 @@ func ConvertLineEndings(text string, targetStyle string) string {
 	return strings.ReplaceAll(text, "\r\n", "\n")
 }
 
-type detectedLineEnding struct {
-	lineNum int
-	isCRLF  bool
+type lineEndingScan struct {
+	TotalLines int
+	CRLFCount  int
+	LFCount    int
+	Collected  []int
 }
 
-// analyzeLineEndings reads decoded UTF-8 text and reports its line-ending style.
-func analyzeLineEndings(r io.Reader) (string, int, []int, error) {
-	var lineEndings []detectedLineEnding
-	br := bufio.NewReader(r)
-	lineNum := 1
-	prevWasCR := false
-
-	for {
-		b, err := br.ReadByte()
-		if err == io.EOF {
-			break
+func scanLineEndings(ctx context.Context, reader io.Reader, collectEnding string, maxCollectedBytes int64) (lineEndingScan, error) {
+	scan := lineEndingScan{}
+	totalLines, err := textstream.ScanLines(ctx, reader, textstream.DefaultMaxLineBytes, func(line textstream.Line) error {
+		ending := string(line.Ending)
+		switch ending {
+		case "\r\n":
+			scan.CRLFCount++
+		case "\n":
+			scan.LFCount++
 		}
-		if err != nil {
-			return "", 0, nil, err
-		}
-
-		if b == '\n' {
-			lineEndings = append(lineEndings, detectedLineEnding{lineNum: lineNum, isCRLF: prevWasCR})
-			lineNum++
-		}
-		prevWasCR = b == '\r'
-	}
-
-	crlfCount := 0
-	lfCount := 0
-	for _, ending := range lineEndings {
-		if ending.isCRLF {
-			crlfCount++
-		} else {
-			lfCount++
-		}
-	}
-
-	style := determineStyle(crlfCount, lfCount)
-	inconsistentLines := make([]int, 0)
-	if style == LineEndingMixed {
-		dominantIsCRLF := crlfCount >= lfCount
-		for _, ending := range lineEndings {
-			if ending.isCRLF != dominantIsCRLF {
-				inconsistentLines = append(inconsistentLines, ending.lineNum)
+		if collectEnding != "" && ending == collectEnding {
+			if maxCollectedBytes > 0 && int64(len(scan.Collected)+1)*8 > maxCollectedBytes {
+				return operation.Wrap(
+					operation.KindLimit,
+					"detect_line_endings",
+					"",
+					fmt.Errorf("inconsistent line list exceeds the %d-byte output budget", maxCollectedBytes),
+				)
 			}
+			scan.Collected = append(scan.Collected, line.Number)
 		}
-	}
-
-	return style, lineNum, inconsistentLines, nil
+		return nil
+	})
+	scan.TotalLines = totalLines
+	return scan, err
 }
 
 // HandleDetectLineEndings detects line ending style and returns inconsistent line numbers.
@@ -136,19 +121,57 @@ func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallTool
 		return v.Result, DetectLineEndingsOutput{}, nil
 	}
 
-	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
+	stream, err := h.openDecodedTextStream(ctx, v.Path, input.Encoding)
 	if err != nil {
 		return errorResultFromError(err), DetectLineEndingsOutput{}, nil
 	}
+	defer stream.Close()
 
-	style, totalLines, inconsistentLines, err := analyzeLineEndings(strings.NewReader(document.Text))
+	first, err := scanLineEndings(ctx, stream.Reader, "", 0)
 	if err != nil {
-		return errorResult("failed to decode or read file: " + err.Error()), DetectLineEndingsOutput{}, nil
+		return errorResultFromError(err), DetectLineEndingsOutput{}, nil
+	}
+	firstSnapshot, err := stream.Finish()
+	if err != nil {
+		return errorResultFromError(err), DetectLineEndingsOutput{}, nil
+	}
+	if err := stream.Close(); err != nil {
+		return errorResult(fmt.Sprintf("failed to close file after line-ending scan: %v", err)), DetectLineEndingsOutput{}, nil
+	}
+
+	style := determineStyle(first.CRLFCount, first.LFCount)
+	var inconsistentLines []int
+	if style == LineEndingMixed {
+		minorityEnding := "\r\n"
+		if first.CRLFCount >= first.LFCount {
+			minorityEnding = "\n"
+		}
+
+		secondStream, err := h.openDecodedTextStream(ctx, v.Path, stream.Charset)
+		if err != nil {
+			return errorResultFromError(err), DetectLineEndingsOutput{}, nil
+		}
+		defer secondStream.Close()
+		second, err := scanLineEndings(ctx, secondStream.Reader, minorityEnding, h.memoryBudget())
+		if err != nil {
+			return errorResultFromError(err), DetectLineEndingsOutput{}, nil
+		}
+		secondSnapshot, err := secondStream.Finish()
+		if err != nil {
+			return errorResultFromError(err), DetectLineEndingsOutput{}, nil
+		}
+		if err := secondStream.Close(); err != nil {
+			return errorResult(fmt.Sprintf("failed to close file after line-ending rescan: %v", err)), DetectLineEndingsOutput{}, nil
+		}
+		if !firstSnapshot.Equal(secondSnapshot) || first.TotalLines != second.TotalLines {
+			return errorResultFromError(fmt.Errorf("%w: file changed between line-ending scans", filesystem.ErrConcurrentModification)), DetectLineEndingsOutput{}, nil
+		}
+		inconsistentLines = second.Collected
 	}
 
 	return &mcp.CallToolResult{}, DetectLineEndingsOutput{
 		Style:             style,
-		TotalLines:        totalLines,
+		TotalLines:        first.TotalLines,
 		InconsistentLines: inconsistentLines,
 	}, nil
 }

@@ -19,11 +19,11 @@ Preserve the flow:
 
 - Treat input/output structs and JSON field names as public API.
 - Preserve existing messages and error codes unless an explicit compatibility milestone changes them.
-- Keep text operations on the shared `textDocument` pipeline.
+- Keep streaming text operations on the shared decoded-stream and `internal/textstream` primitives; reserve `textDocument` for explicitly bounded full-document operations such as editing.
 - Preserve encoding, BOM, and line-ending semantics promised by each tool.
 - Do not add filename- or extension-based encoding behavior.
 - Keep `run_script` and `shell` authorization separate even when they share process mechanics.
-- Bound batches, matches, output, worker coordination, and memory according to the current operation contract.
+- Bound decoded lines, batches, matches, context, output, worker coordination, and full-document memory according to the current operation contract and `MCP_MEMORY_THRESHOLD`.
 
 ## Tool metadata
 

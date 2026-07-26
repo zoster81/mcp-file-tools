@@ -8,8 +8,43 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zoster81/mcp-file-tools/internal/config"
 	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
+
+func TestHandleEditFileRejectsFileAboveFullDocumentLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
+		DefaultEncoding: "utf-8",
+		MemoryThreshold: 8,
+	}))
+	path := filepath.Join(tempDir, "too-large.txt")
+	original := []byte("123456789")
+	if err := os.WriteFile(path, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
+		Path:  path,
+		Edits: []EditOperation{{OldText: "1", NewText: "x"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected full-document size limit error")
+	}
+	if message := extractTextFromResultRead(result.Content); !strings.Contains(message, "exceeds the 8-byte edit limit") {
+		t.Fatalf("unexpected error: %q", message)
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, original) {
+		t.Fatalf("file changed: got %q, want %q", actual, original)
+	}
+}
 
 func TestHandleEditFile_SimpleReplacement(t *testing.T) {
 	tempDir := t.TempDir()

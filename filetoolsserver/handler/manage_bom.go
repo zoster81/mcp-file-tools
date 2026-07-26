@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -8,186 +9,171 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/mcp-file-tools/internal/textstream"
 )
 
-// validBOMEncodings lists encodings that have a defined BOM.
-var validBOMEncodings = map[string]bool{
-	"utf-8":     true,
-	"utf-16-le": true,
-	"utf-16-be": true,
-	"utf-32-le": true,
-	"utf-32-be": true,
+func readFileHead(path string, maxBytes int) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	buffer := make([]byte, max(0, maxBytes))
+	read, err := io.ReadFull(file, buffer)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, err
+	}
+	return buffer[:read], nil
 }
 
-// HandleManageBom detects, strips, or adds a Unicode BOM (Byte Order Mark).
+func detectBOMPrefix(session *filesystem.ReadSession) (fileEncoding.DetectionResult, bool, error) {
+	length := min(int64(4), session.Size())
+	prefix := make([]byte, int(length))
+	if length > 0 {
+		read, err := session.ReadAt(prefix, 0)
+		if err != nil && err != io.EOF {
+			return fileEncoding.DetectionResult{}, false, err
+		}
+		prefix = prefix[:read]
+	}
+	result, found := fileEncoding.DetectBOM(prefix)
+	return result, found, nil
+}
+
+// HandleManageBom detects or mutates Unicode BOMs through bounded prefix and
+// staged-copy operations.
 func (h *Handler) HandleManageBom(ctx context.Context, req *mcp.CallToolRequest, input ManageBomInput) (*mcp.CallToolResult, ManageBomOutput, error) {
-	v := h.ValidatePath(input.Path)
-	if !v.Ok() {
-		return v.Result, ManageBomOutput{}, nil
+	validated := h.ValidatePath(input.Path)
+	if !validated.Ok() {
+		return validated.Result, ManageBomOutput{}, nil
 	}
 
 	action := strings.ToLower(input.Action)
 	if action != "detect" && action != "strip" && action != "add" {
-		return errorResult(`action must be "detect", "strip", or "add"`), ManageBomOutput{}, nil
+		return errorResult("action must be \"detect\", \"strip\", or \"add\""), ManageBomOutput{}, nil
+	}
+
+	session, err := filesystem.OpenReadSession(validated.Path)
+	if err != nil {
+		return errorResultFromError(err), ManageBomOutput{}, nil
+	}
+	defer session.Close()
+
+	detected, hasBOM, err := detectBOMPrefix(session)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to inspect BOM: %v", err)), ManageBomOutput{}, nil
+	}
+	bomSize := 0
+	if hasBOM {
+		bomSize = fileEncoding.BOMSize(detected.Charset)
 	}
 
 	switch action {
 	case "detect":
-		return h.bomDetect(v.Path)
+		if !hasBOM {
+			return &mcp.CallToolResult{}, ManageBomOutput{Message: "No BOM detected"}, nil
+		}
+		return &mcp.CallToolResult{}, ManageBomOutput{
+			Message:  fmt.Sprintf("BOM detected: %s (%d bytes)", detected.Charset, bomSize),
+			HasBOM:   true,
+			BOMType:  detected.Charset,
+			BOMBytes: bomSize,
+		}, nil
+
 	case "strip":
-		return h.bomStrip(ctx, input.Path, v.Path)
+		if !hasBOM {
+			return &mcp.CallToolResult{}, ManageBomOutput{Message: "No BOM to strip"}, nil
+		}
+		if err := session.Start(int64(bomSize)); err != nil {
+			return errorResultFromError(err), ManageBomOutput{}, nil
+		}
+		staged, err := filesystem.StageReplacement(
+			validated.Path,
+			textstream.WithContext(ctx, session),
+			session.Mode().Perm(),
+			nil,
+		)
+		if err != nil {
+			return errorResult(fmt.Sprintf("failed to stage BOM removal: %v", err)), ManageBomOutput{}, nil
+		}
+		defer staged.Cleanup()
+		snapshot, err := session.Finish()
+		if err != nil {
+			return errorResultFromError(err), ManageBomOutput{}, nil
+		}
+		if err := session.Close(); err != nil {
+			return errorResult(fmt.Sprintf("failed to close source file before commit: %v", err)), ManageBomOutput{}, nil
+		}
+		if result := h.commitBOMReplacement(input.Path, validated.Path, staged, snapshot); result != nil {
+			return result, ManageBomOutput{}, nil
+		}
+		return &mcp.CallToolResult{}, ManageBomOutput{
+			Message:  fmt.Sprintf("Stripped %s BOM (%d bytes) from %s", detected.Charset, bomSize, input.Path),
+			BOMType:  detected.Charset,
+			BOMBytes: bomSize,
+			Changed:  true,
+		}, nil
+
 	case "add":
-		enc := strings.ToLower(input.Encoding)
-		if enc == "" {
-			return errorResult(`encoding is required for "add" action (utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be)`), ManageBomOutput{}, nil
+		if input.Encoding == "" {
+			return errorResult("encoding is required for add action"), ManageBomOutput{}, nil
 		}
-		if !validBOMEncodings[enc] {
-			return errorResult(fmt.Sprintf("unsupported BOM encoding %q — valid: utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be", enc)), ManageBomOutput{}, nil
+		bom := fileEncoding.BOMBytesFor(input.Encoding)
+		if len(bom) == 0 {
+			return errorResult("encoding must be utf-8, utf-16-le, utf-16-be, utf-32-le, or utf-32-be"), ManageBomOutput{}, nil
 		}
-		return h.bomAdd(ctx, input.Path, v.Path, enc)
-	}
-	// unreachable
-	return errorResult("unexpected action"), ManageBomOutput{}, nil
-}
-
-// bomDetect reads the first 4 bytes and checks for a BOM.
-func (h *Handler) bomDetect(path string) (*mcp.CallToolResult, ManageBomOutput, error) {
-	data, err := readFileHead(path, 4)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ManageBomOutput{}, nil
-	}
-
-	result, found := encoding.DetectBOM(data)
-	if !found {
+		if hasBOM {
+			return errorResult(fmt.Sprintf("file already has a %s BOM", detected.Charset)), ManageBomOutput{}, nil
+		}
+		if err := session.Start(0); err != nil {
+			return errorResultFromError(err), ManageBomOutput{}, nil
+		}
+		staged, err := filesystem.StageReplacement(
+			validated.Path,
+			io.MultiReader(bytes.NewReader(bom), textstream.WithContext(ctx, session)),
+			session.Mode().Perm(),
+			nil,
+		)
+		if err != nil {
+			return errorResult(fmt.Sprintf("failed to stage BOM addition: %v", err)), ManageBomOutput{}, nil
+		}
+		defer staged.Cleanup()
+		snapshot, err := session.Finish()
+		if err != nil {
+			return errorResultFromError(err), ManageBomOutput{}, nil
+		}
+		if err := session.Close(); err != nil {
+			return errorResult(fmt.Sprintf("failed to close source file before commit: %v", err)), ManageBomOutput{}, nil
+		}
+		if result := h.commitBOMReplacement(input.Path, validated.Path, staged, snapshot); result != nil {
+			return result, ManageBomOutput{}, nil
+		}
+		charset := canonicalBOMEncoding(input.Encoding)
 		return &mcp.CallToolResult{}, ManageBomOutput{
-			Message: "No BOM detected",
-			HasBOM:  false,
-			Changed: false,
+			Message:  fmt.Sprintf("Added %s BOM (%d bytes) to %s", charset, len(bom), input.Path),
+			HasBOM:   true,
+			BOMType:  charset,
+			BOMBytes: len(bom),
+			Changed:  true,
 		}, nil
 	}
 
-	return &mcp.CallToolResult{}, ManageBomOutput{
-		Message:  fmt.Sprintf("BOM detected: %s (%d bytes)", result.Charset, encoding.BOMSize(result.Charset)),
-		HasBOM:   true,
-		BOMType:  result.Charset,
-		BOMBytes: encoding.BOMSize(result.Charset),
-		Changed:  false,
-	}, nil
+	return errorResult("unsupported BOM action"), ManageBomOutput{}, nil
 }
 
-// bomStrip removes the BOM if present, otherwise returns a no-op result.
-func (h *Handler) bomStrip(ctx context.Context, requestedPath, path string) (*mcp.CallToolResult, ManageBomOutput, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ManageBomOutput{}, nil
-	}
-
-	result, found := encoding.DetectBOM(data)
-	if !found {
-		return &mcp.CallToolResult{}, ManageBomOutput{
-			Message: "No BOM found, nothing to strip",
-			HasBOM:  false,
-			Changed: false,
-		}, nil
-	}
-
-	bomSize := encoding.BOMSize(result.Charset)
-	stripped := data[bomSize:]
-	expected, err := filesystem.CaptureSnapshotWithData(path, data)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to snapshot file: %v", err)), ManageBomOutput{}, nil
-	}
-	select {
-	case <-ctx.Done():
-		return errorResult(ctx.Err().Error()), ManageBomOutput{}, nil
-	default:
-	}
-	commit := h.ValidatePath(requestedPath)
+func (h *Handler) commitBOMReplacement(inputPath, preparedPath string, staged *filesystem.StagedReplacement, snapshot filesystem.FileSnapshot) *mcp.CallToolResult {
+	commit := h.ValidatePath(inputPath)
 	if !commit.Ok() {
-		return commit.Result, ManageBomOutput{}, nil
+		return commit.Result
 	}
-	if commit.Path != path {
-		return errorResult("path changed while preparing BOM removal"), ManageBomOutput{}, nil
+	if commit.Path != preparedPath {
+		return errorResult("path changed while preparing BOM mutation")
 	}
-	if err := filesystem.ReplaceFile(commit.Path, stripped, filesystem.ReplaceOptions{
-		Mode:     expected.Mode.Perm(),
-		Expected: &expected,
-	}); err != nil {
-		return errorResult(fmt.Sprintf("failed to write file: %v", err)), ManageBomOutput{}, nil
+	if _, err := staged.Commit(filesystem.ReplaceOptions{Expected: &snapshot}); err != nil {
+		return errorResult(fmt.Sprintf("failed to write file: %v", err))
 	}
-
-	return &mcp.CallToolResult{}, ManageBomOutput{
-		Message:  fmt.Sprintf("Stripped %s BOM (%d bytes) from %s", result.Charset, bomSize, path),
-		HasBOM:   false,
-		BOMType:  result.Charset,
-		BOMBytes: bomSize,
-		Changed:  true,
-	}, nil
-}
-
-// bomAdd prepends a BOM for the given encoding. Fails if a BOM already exists.
-func (h *Handler) bomAdd(ctx context.Context, requestedPath, path, enc string) (*mcp.CallToolResult, ManageBomOutput, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to read file: %v", err)), ManageBomOutput{}, nil
-	}
-
-	// Check if file already has a BOM
-	if existingResult, found := encoding.DetectBOM(data); found {
-		return errorResult(fmt.Sprintf("file already has a %s BOM — strip it first if you want to change it", existingResult.Charset)), ManageBomOutput{}, nil
-	}
-
-	bomBytes := encoding.BOMBytesFor(enc)
-	// Prepend BOM
-	withBOM := make([]byte, len(bomBytes)+len(data))
-	copy(withBOM, bomBytes)
-	copy(withBOM[len(bomBytes):], data)
-	expected, err := filesystem.CaptureSnapshotWithData(path, data)
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to snapshot file: %v", err)), ManageBomOutput{}, nil
-	}
-	select {
-	case <-ctx.Done():
-		return errorResult(ctx.Err().Error()), ManageBomOutput{}, nil
-	default:
-	}
-	commit := h.ValidatePath(requestedPath)
-	if !commit.Ok() {
-		return commit.Result, ManageBomOutput{}, nil
-	}
-	if commit.Path != path {
-		return errorResult("path changed while preparing BOM addition"), ManageBomOutput{}, nil
-	}
-	if err := filesystem.ReplaceFile(commit.Path, withBOM, filesystem.ReplaceOptions{
-		Mode:     expected.Mode.Perm(),
-		Expected: &expected,
-	}); err != nil {
-		return errorResult(fmt.Sprintf("failed to write file: %v", err)), ManageBomOutput{}, nil
-	}
-
-	return &mcp.CallToolResult{}, ManageBomOutput{
-		Message:  fmt.Sprintf("Added %s BOM (%d bytes) to %s", enc, len(bomBytes), path),
-		HasBOM:   true,
-		BOMType:  enc,
-		BOMBytes: len(bomBytes),
-		Changed:  true,
-	}, nil
-}
-
-// readFileHead reads up to n bytes from the beginning of a file.
-func readFileHead(path string, n int) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	buf := make([]byte, n)
-	read, err := f.Read(buf)
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-	return buf[:read], nil
+	return nil
 }

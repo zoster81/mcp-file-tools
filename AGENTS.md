@@ -27,6 +27,7 @@ Link to these documents instead of duplicating their detailed content.
 - `internal/filesystem`: secure traversal and durable mutation primitives.
 - `internal/operation`: transport-independent error categories.
 - `internal/concurrency`: bounded deterministic worker coordination.
+- `internal/textstream`: incremental decoding consumers, bounded line framing, and streaming line-ending transforms.
 - `internal/toolcatalog`: embedded tool metadata and drift checks.
 - `scripts`: release metadata and workflow validation utilities.
 - `plugin`: optional Claude Code packaging, frozen until the final 2.0 decision.
@@ -47,6 +48,8 @@ Use focused TDD when practical: reproduce, confirm the expected failure, impleme
 - Encoding detection is derived from bytes and decoded-content evidence, never filenames or extensions.
 - Unicode BOM evidence is authoritative. Ambiguous data must not be classified with unjustified confidence.
 - New files default to UTF-8; existing files preserve a confidently detected encoding unless explicitly overridden.
+- Streaming text operations must bound line, result, context, and aggregate output memory independently of complete source size.
+- Full-document operations such as editing must reject inputs above their configured hard limit before reading or diffing them.
 - Preserve encoding, BOM policy, and line endings exactly where a tool promises preservation.
 - All filesystem access must remain inside validated allowed roots after symlink, junction, and reparse-point resolution.
 - Missing paths must be validated through their nearest existing ancestor.

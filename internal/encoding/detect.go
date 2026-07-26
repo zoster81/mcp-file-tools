@@ -199,10 +199,9 @@ func looksLikeGBK(data []byte) bool {
 	return total >= minSequences && float64(common)/float64(total) > minCommonRatio
 }
 
-// DetectSample detects encoding by sampling beginning, middle, and end of data.
-// Returns the result and whether it should be trusted.
-// TODO: Make private or remove when grep.go and convert_encoding.go use streaming I/O.
-func DetectSample(data []byte) (DetectionResult, bool) {
+// detectSample detects encoding by sampling beginning, middle, and end of an
+// already-loaded byte slice. File-based consumers use DetectFromReaderAt.
+func detectSample(data []byte) (DetectionResult, bool) {
 	size := len(data)
 	if size <= SmallFileThreshold {
 		result := Detect(data)
@@ -252,6 +251,13 @@ func joinDetectionSamples(samples []byteSample) []byte {
 		joined = append(joined, sample.data...)
 	}
 	return joined
+}
+
+// DetectFromReaderAt detects encoding from a random-access source without
+// taking ownership of it. The caller supplies the stable byte size used by the
+// selected detection mode.
+func DetectFromReaderAt(r io.ReaderAt, size int64, mode string) (DetectionResult, error) {
+	return detectFromReader(r, size, mode)
 }
 
 // --- Internal streaming implementation ---

@@ -10,6 +10,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/textstream"
 	textEncoding "golang.org/x/text/encoding"
 )
 
@@ -28,56 +30,147 @@ func (h *Handler) HandleReadTextFile(ctx context.Context, req *mcp.CallToolReque
 		return v.Result, ReadTextFileOutput{}, nil
 	}
 
-	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
+	if input.maxOutputBytes <= 0 {
+		input.maxOutputBytes = clampBudgetToInt(h.memoryBudget())
+		input.outputLimitName = "read output limit"
+	}
+	output, err := h.readTextFileStream(ctx, v.Path, input)
 	if err != nil {
 		return errorResultFromError(err), ReadTextFileOutput{}, nil
 	}
+	return &mcp.CallToolResult{}, output, nil
+}
 
-	content := document.Text
-	totalLines := strings.Count(content, "\n") + 1
+type runeLimitedBuilder struct {
+	builder           strings.Builder
+	maxRunes          int
+	maxBytes          int
+	runeCount         int
+	truncated         bool
+	byteLimitExceeded bool
+}
 
-	var startLine, endLine int
-	if input.Offset != nil || input.Limit != nil {
-		lines := strings.Split(content, "\n")
-		content, startLine, endLine = applyOffsetLimit(lines, input.Offset, input.Limit)
-	} else {
+func (builder *runeLimitedBuilder) append(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	if builder.maxRunes <= 0 && builder.maxBytes <= 0 {
+		_, _ = builder.builder.Write(data)
+		return
+	}
+
+	for len(data) > 0 {
+		if builder.maxRunes > 0 && builder.runeCount >= builder.maxRunes {
+			builder.truncated = true
+			return
+		}
+		_, size := utf8.DecodeRune(data)
+		if size == 0 {
+			return
+		}
+		if builder.maxBytes > 0 && builder.builder.Len()+size > builder.maxBytes {
+			builder.byteLimitExceeded = true
+			return
+		}
+		_, _ = builder.builder.Write(data[:size])
+		builder.runeCount++
+		data = data[size:]
+	}
+}
+
+func (h *Handler) readTextFileStream(ctx context.Context, path string, input ReadTextFileInput) (ReadTextFileOutput, error) {
+	stream, err := h.openDecodedTextStream(ctx, path, input.Encoding)
+	if err != nil {
+		return ReadTextFileOutput{}, err
+	}
+	defer stream.Close()
+
+	rangeRequested := input.Offset != nil || input.Limit != nil
+	startWanted := 1
+	if input.Offset != nil && *input.Offset > 1 {
+		startWanted = *input.Offset
+	}
+	lineLimit := 0
+	if input.Limit != nil && *input.Limit > 0 {
+		lineLimit = *input.Limit
+	}
+	maxCharacters := 0
+	if input.MaxCharacters != nil && *input.MaxCharacters > 0 {
+		maxCharacters = *input.MaxCharacters
+	}
+
+	collector := runeLimitedBuilder{maxRunes: maxCharacters, maxBytes: input.maxOutputBytes}
+	selectedCount := 0
+	firstSelectedLine := 0
+	lastSelectedLine := 0
+	totalLines, err := textstream.ScanLines(ctx, stream.Reader, textstream.DefaultMaxLineBytes, func(line textstream.Line) error {
+		if line.Number < startWanted || lineLimit > 0 && selectedCount >= lineLimit {
+			return nil
+		}
+		if firstSelectedLine == 0 {
+			firstSelectedLine = line.Number
+		}
+		lastSelectedLine = line.Number
+		if rangeRequested {
+			if selectedCount > 0 {
+				collector.append([]byte{'\n'})
+			}
+			collector.append(line.Data)
+		} else {
+			collector.append(line.Data)
+			collector.append(line.Ending)
+		}
+		selectedCount++
+		return nil
+	})
+	if err != nil {
+		return ReadTextFileOutput{}, err
+	}
+	if _, err := stream.Finish(); err != nil {
+		return ReadTextFileOutput{}, err
+	}
+	if collector.byteLimitExceeded {
+		limitName := input.outputLimitName
+		if limitName == "" {
+			limitName = "output limit"
+		}
+		return ReadTextFileOutput{}, operation.Wrap(
+			operation.KindLimit,
+			"read_text_file",
+			path,
+			fmt.Errorf("decoded content exceeds the %d-byte %s", input.maxOutputBytes, limitName),
+		)
+	}
+
+	startLine, endLine := firstSelectedLine, lastSelectedLine
+	if !rangeRequested {
 		startLine = 1
+		endLine = totalLines
+	} else if selectedCount == 0 {
+		startLine = totalLines + 1
 		endLine = totalLines
 	}
 
-	// Apply maxCharacters truncation (counts Unicode runes, not bytes)
-	truncated := false
-	if input.MaxCharacters != nil && *input.MaxCharacters > 0 && utf8.RuneCountInString(content) > *input.MaxCharacters {
-		// Truncate at rune boundary
-		runeCount := 0
-		byteIdx := 0
-		for byteIdx < len(content) && runeCount < *input.MaxCharacters {
-			_, size := utf8.DecodeRuneInString(content[byteIdx:])
-			byteIdx += size
-			runeCount++
-		}
-		content = content[:byteIdx]
+	content := collector.builder.String()
+	if collector.truncated {
 		content += fmt.Sprintf("\n\n[TRUNCATED at %d characters. File has %d lines, %d bytes. Use offset/limit for specific ranges.]",
-			*input.MaxCharacters, totalLines, document.FileSizeBytes)
-		truncated = true
+			maxCharacters, totalLines, stream.FileSizeBytes)
 	}
-
 	output := ReadTextFileOutput{
 		Content:       content,
 		TotalLines:    totalLines,
-		FileSizeBytes: document.FileSizeBytes,
+		FileSizeBytes: stream.FileSizeBytes,
 		StartLine:     startLine,
 		EndLine:       endLine,
-		Truncated:     truncated,
-		HasBOM:        document.BOM.HasBOM,
-		BOMType:       document.BOM.Type,
+		Truncated:     collector.truncated,
+		HasBOM:        stream.BOM.HasBOM,
+		BOMType:       stream.BOM.Type,
 	}
-	if document.AutoDetected {
-		output.DetectedEncoding = document.DetectedEncoding
-		output.EncodingConfidence = document.EncodingConfidence
+	if stream.AutoDetected {
+		output.DetectedEncoding = stream.DetectedEncoding
+		output.EncodingConfidence = stream.EncodingConfidence
 	}
-
-	return &mcp.CallToolResult{}, output, nil
+	return output, nil
 }
 
 // resolveWriteEncoding returns encoding for writes: explicit > existing file > config default.
@@ -121,35 +214,4 @@ func decodeContent(data []byte, encResult encodingResult) (string, error) {
 		return "", err
 	}
 	return string(utf8Content), nil
-}
-
-// applyOffsetLimit applies offset and limit to select a range of lines.
-// Offset is 1-indexed (like line numbers). Returns content, startLine, endLine.
-// Negative values are treated as not provided.
-func applyOffsetLimit(lines []string, offset, limit *int) (string, int, int) {
-	totalLines := len(lines)
-
-	// Default offset is 1 (first line)
-	startIdx := 0
-	if offset != nil && *offset > 1 {
-		startIdx = *offset - 1 // Convert 1-indexed to 0-indexed
-		if startIdx >= totalLines {
-			return "", totalLines + 1, totalLines // Empty result, past end
-		}
-	}
-
-	// Default limit is all remaining lines
-	endIdx := totalLines
-	if limit != nil && *limit > 0 {
-		endIdx = startIdx + *limit
-		if endIdx > totalLines {
-			endIdx = totalLines
-		}
-	}
-
-	selectedLines := make([]string, endIdx-startIdx)
-	for i, line := range lines[startIdx:endIdx] {
-		selectedLines[i] = strings.TrimSuffix(line, "\r")
-	}
-	return strings.Join(selectedLines, "\n"), startIdx + 1, endIdx
 }

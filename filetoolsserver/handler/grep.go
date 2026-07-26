@@ -1,9 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,11 +19,15 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zoster81/mcp-file-tools/internal/concurrency"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/mcp-file-tools/internal/textstream"
 )
 
 const (
 	defaultMaxMatches = 1000
 	binaryCheckSize   = 8192 // 8KB to catch files with text header but binary payload
+	grepMatchOverhead = 256
+	grepLineOverhead  = 32
 )
 
 // HandleGrep searches for a pattern in files with encoding support.
@@ -42,7 +50,10 @@ func (h *Handler) HandleGrep(ctx context.Context, req *mcp.CallToolRequest, inpu
 	if len(files) == 0 {
 		return &mcp.CallToolResult{}, GrepOutput{Matches: []GrepMatch{}, FilesSearched: 0}, nil
 	}
-	matches, filesMatched, truncated := h.searchFiles(ctx, files, re, input, maxMatches)
+	matches, filesMatched, truncated, err := h.searchFiles(ctx, files, re, input, maxMatches)
+	if err != nil {
+		return errorResultFromError(err), GrepOutput{}, nil
+	}
 	return &mcp.CallToolResult{}, GrepOutput{
 		Matches:       matches,
 		TotalMatches:  len(matches),
@@ -139,29 +150,61 @@ type grepFileResult struct {
 	err       error
 }
 
-// searchFiles searches files concurrently while committing results in file order.
-// Only a bounded window is in flight, so per-file results cannot grow without limit.
-func (h *Handler) searchFiles(ctx context.Context, files []string, re *regexp.Regexp, input GrepInput, maxMatches int) ([]GrepMatch, int, bool) {
+type grepPlan struct {
+	path               string
+	worstRetainedBytes int64
+}
+
+// searchFiles keeps deterministic file order while bounding both match count
+// and retained output/context memory. Parallelism is used only when the
+// aggregate decoded worst case fits the configured budget.
+func (h *Handler) searchFiles(ctx context.Context, files []string, re *regexp.Regexp, input GrepInput, maxMatches int) ([]GrepMatch, int, bool, error) {
+	budget := h.memoryBudget()
+	plans, worstTotal := h.planGrep(files, input, maxMatches)
+	maxWorkers := 0
+	if worstTotal > budget {
+		maxWorkers = 1
+	}
+
 	remaining := maxMatches
-	var remainingBudget atomic.Int64
-	remainingBudget.Store(int64(maxMatches))
+	var remainingMatches atomic.Int64
+	remainingMatches.Store(int64(maxMatches))
+	var remainingOutput atomic.Int64
+	remainingOutput.Store(budget)
 	allMatches := make([]GrepMatch, 0, min(maxMatches, 64))
 	matchedFiles := make(map[string]struct{})
 	truncated := false
+	var terminalErr error
 
-	concurrency.ProcessOrdered(ctx, files, concurrency.Options{}, func(ctx context.Context, _ int, path string) grepFileResult {
-		limit := int(remainingBudget.Load())
+	concurrency.ProcessOrdered(ctx, plans, concurrency.Options{MaxWorkers: maxWorkers}, func(ctx context.Context, _ int, plan grepPlan) grepFileResult {
+		limit := int(remainingMatches.Load())
 		if limit <= 0 {
 			limit = 1
 		}
-		return h.searchSingleFile(ctx, path, re, input, limit)
+		fileBudget := plan.worstRetainedBytes
+		if maxWorkers == 1 || fileBudget <= 0 {
+			fileBudget = remainingOutput.Load()
+		}
+		if fileBudget <= 0 {
+			return grepFileResult{err: grepBudgetError(plan.path, 0)}
+		}
+		return h.searchSingleFileWithBudget(ctx, plan.path, re, input, limit, fileBudget)
 	}, func(_ int, current grepFileResult) bool {
-		if current.err == nil && len(current.matches) > 0 {
+		if current.err != nil {
+			if operation.KindOf(current.err) == operation.KindLimit {
+				terminalErr = current.err
+				return false
+			}
+			return ctx.Err() == nil
+		}
+		if len(current.matches) > 0 {
 			take := min(remaining, len(current.matches))
-			allMatches = append(allMatches, current.matches[:take]...)
+			selected := current.matches[:take]
+			allMatches = append(allMatches, selected...)
 			remaining -= take
-			remainingBudget.Store(int64(remaining))
-			for _, match := range current.matches[:take] {
+			remainingMatches.Store(int64(remaining))
+			remainingOutput.Add(-grepMatchesRetainedBytes(selected))
+			for _, match := range selected {
 				matchedFiles[match.Path] = struct{}{}
 			}
 			if current.truncated || take < len(current.matches) {
@@ -175,11 +218,87 @@ func (h *Handler) searchFiles(ctx context.Context, files []string, re *regexp.Re
 		return ctx.Err() == nil
 	})
 
-	return allMatches, len(matchedFiles), truncated
+	return allMatches, len(matchedFiles), truncated, terminalErr
 }
 
-// searchSingleFile decodes and searches one file, returning at most maxMatches results.
+func (h *Handler) planGrep(files []string, input GrepInput, maxMatches int) ([]grepPlan, int64) {
+	plans := make([]grepPlan, len(files))
+	var total int64
+	contextFactor := saturatingAdd(2, int64(max(0, input.ContextBefore)))
+	contextFactor = saturatingAdd(contextFactor, int64(max(0, input.ContextAfter)))
+	for index, path := range files {
+		plans[index].path = path
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			plans[index].worstRetainedBytes = math.MaxInt64
+			total = math.MaxInt64
+			continue
+		}
+		decoded := worstDecodedBytes(info.Size())
+		contentWorst := saturatingMultiply(decoded, contextFactor)
+		metadataPerMatch := int64(grepMatchOverhead + len(path) + 64)
+		metadataWorst := saturatingMultiply(int64(maxMatches), metadataPerMatch)
+		plans[index].worstRetainedBytes = saturatingAdd(contentWorst, metadataWorst)
+		total = saturatingAdd(total, plans[index].worstRetainedBytes)
+	}
+	return plans, total
+}
+
+func saturatingMultiply(first, second int64) int64 {
+	if first <= 0 || second <= 0 {
+		return 0
+	}
+	if first > math.MaxInt64/second {
+		return math.MaxInt64
+	}
+	return first * second
+}
+
+func saturatingAdd(first, second int64) int64 {
+	if second > 0 && first > math.MaxInt64-second {
+		return math.MaxInt64
+	}
+	return first + second
+}
+
+var errStopGrepScan = errors.New("grep scan complete")
+
+type pendingGrepMatch struct {
+	match          GrepMatch
+	remainingAfter int
+}
+
+// searchSingleFile retains the compatibility helper used by focused tests.
 func (h *Handler) searchSingleFile(ctx context.Context, path string, re *regexp.Regexp, input GrepInput, maxMatches int) grepFileResult {
+	return h.searchSingleFileWithBudget(ctx, path, re, input, maxMatches, h.memoryBudget())
+}
+
+func grepBudgetError(path string, budget int64) error {
+	return operation.Wrap(
+		operation.KindLimit,
+		"grep_text_files",
+		path,
+		fmt.Errorf("retained grep state exceeds the %d-byte grep output budget", budget),
+	)
+}
+
+func grepMatchesRetainedBytes(matches []GrepMatch) int64 {
+	var total int64
+	for _, match := range matches {
+		total = saturatingAdd(total, int64(grepMatchOverhead+len(match.Path)+len(match.Encoding)+len(match.Text)))
+		for _, line := range match.Before {
+			total = saturatingAdd(total, int64(grepLineOverhead+len(line)))
+		}
+		for _, line := range match.After {
+			total = saturatingAdd(total, int64(grepLineOverhead+len(line)))
+		}
+	}
+	return total
+}
+
+// searchSingleFileWithBudget decodes and searches one file incrementally while
+// bounding line, context, match, and binary-probe state.
+func (h *Handler) searchSingleFileWithBudget(ctx context.Context, path string, re *regexp.Regexp, input GrepInput, maxMatches int, maxOutputBytes int64) grepFileResult {
 	result := grepFileResult{}
 	if maxMatches <= 0 {
 		return result
@@ -191,57 +310,162 @@ func (h *Handler) searchSingleFile(ctx context.Context, path string, re *regexp.
 		return result
 	}
 
-	document, err := h.readTextDocument(ctx, validated.Path, input.Encoding)
+	stream, err := h.openDecodedTextStream(ctx, validated.Path, input.Encoding)
 	if err != nil {
 		result.err = err
 		return result
 	}
-	if document.Text == "" || isLikelyBinaryText(document.Text) {
+	defer stream.Close()
+
+	prefix := make([]byte, binaryCheckSize)
+	read, prefixErr := io.ReadFull(stream.Reader, prefix)
+	if prefixErr != nil && !errors.Is(prefixErr, io.EOF) && !errors.Is(prefixErr, io.ErrUnexpectedEOF) {
+		result.err = prefixErr
+		return result
+	}
+	prefix = prefix[:read]
+	if len(prefix) == 0 || isLikelyBinaryText(string(trimIncompleteUTF8Suffix(prefix))) {
+		return result
+	}
+	reader := io.MultiReader(bytes.NewReader(prefix), stream.Reader)
+
+	result.matches = make([]GrepMatch, 0, min(maxMatches, 16))
+	beforeCapacity := min(max(0, input.ContextBefore), 64)
+	before := make([]string, 0, beforeCapacity)
+	pending := make([]pendingGrepMatch, 0, min(maxMatches, 16))
+	logicalLine := 0
+	var retainedBytes int64
+
+	reserve := func(amount int64) error {
+		if amount < 0 || amount > maxOutputBytes-retainedBytes {
+			return grepBudgetError(validated.Path, maxOutputBytes)
+		}
+		retainedBytes += amount
+		return nil
+	}
+	release := func(amount int64) {
+		retainedBytes -= amount
+		if retainedBytes < 0 {
+			retainedBytes = 0
+		}
+	}
+
+	processLine := func(line []byte) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		logicalLine++
+
+		if len(pending) > 0 {
+			remainingPending := pending[:0]
+			for _, current := range pending {
+				if current.remainingAfter > 0 {
+					if err := reserve(int64(grepLineOverhead + len(line))); err != nil {
+						return err
+					}
+					current.match.After = append(current.match.After, string(line))
+					current.remainingAfter--
+				}
+				if current.remainingAfter == 0 {
+					result.matches = append(result.matches, current.match)
+				} else {
+					remainingPending = append(remainingPending, current)
+				}
+			}
+			pending = remainingPending
+		}
+
+		if loc := re.FindIndex(line); loc != nil {
+			selected := len(result.matches) + len(pending)
+			if selected < maxMatches {
+				required := int64(grepMatchOverhead + len(validated.Path) + len(stream.Charset) + len(line))
+				for _, contextLine := range before {
+					required = saturatingAdd(required, int64(grepLineOverhead+len(contextLine)))
+				}
+				if err := reserve(required); err != nil {
+					return err
+				}
+				match := GrepMatch{
+					Path:     validated.Path,
+					Line:     logicalLine,
+					Column:   loc[0] + 1,
+					Text:     string(line),
+					Encoding: stream.Charset,
+				}
+				if len(before) > 0 {
+					match.Before = make([]string, len(before))
+					for index, contextLine := range before {
+						match.Before[index] = strings.Clone(contextLine)
+					}
+				}
+				if input.ContextAfter > 0 {
+					match.After = make([]string, 0, min(input.ContextAfter, 64))
+					pending = append(pending, pendingGrepMatch{match: match, remainingAfter: input.ContextAfter})
+				} else {
+					result.matches = append(result.matches, match)
+				}
+			} else {
+				result.truncated = true
+			}
+		}
+
+		if input.ContextBefore > 0 {
+			if len(before) == input.ContextBefore {
+				release(int64(grepLineOverhead + len(before[0])))
+				copy(before, before[1:])
+				before = before[:len(before)-1]
+			}
+			if err := reserve(int64(grepLineOverhead + len(line))); err != nil {
+				return err
+			}
+			before = append(before, string(line))
+		}
+		if result.truncated && len(pending) == 0 {
+			return errStopGrepScan
+		}
+		return nil
+	}
+
+	_, scanErr := textstream.ScanLines(ctx, reader, textstream.DefaultMaxLineBytes, func(line textstream.Line) error {
+		for _, segment := range bytes.Split(line.Data, []byte{'\r'}) {
+			if err := processLine(segment); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if scanErr != nil && !errors.Is(scanErr, errStopGrepScan) {
+		result.matches = nil
+		result.err = scanErr
 		return result
 	}
 
-	lines := splitGrepLines(document.Text)
-	result.matches = make([]GrepMatch, 0, min(maxMatches, 16))
-	for lineNum, line := range lines {
-		select {
-		case <-ctx.Done():
+	for _, current := range pending {
+		result.matches = append(result.matches, current.match)
+	}
+	if scanErr == nil {
+		if _, err := stream.Finish(); err != nil {
 			result.matches = nil
-			result.err = ctx.Err()
-			return result
-		default:
+			result.err = err
 		}
-
-		loc := re.FindStringIndex(line)
-		if loc == nil {
-			continue
-		}
-		if len(result.matches) >= maxMatches {
-			result.truncated = true
-			return result
-		}
-
-		match := GrepMatch{
-			Path:     validated.Path,
-			Line:     lineNum + 1,
-			Column:   loc[0] + 1,
-			Text:     line,
-			Encoding: document.Charset,
-		}
-		if input.ContextBefore > 0 {
-			match.Before = getContextBefore(lines, lineNum, input.ContextBefore)
-		}
-		if input.ContextAfter > 0 {
-			match.After = getContextAfter(lines, lineNum, input.ContextAfter)
-		}
-		result.matches = append(result.matches, match)
 	}
 	return result
 }
 
-func splitGrepLines(content string) []string {
-	content = strings.ReplaceAll(content, "\r\n", "\n")
-	content = strings.ReplaceAll(content, "\r", "\n")
-	return strings.Split(content, "\n")
+// trimIncompleteUTF8Suffix removes only a trailing partial UTF-8 sequence from
+// a bounded probe. Invalid bytes inside the probe remain visible to binary
+// classification.
+func trimIncompleteUTF8Suffix(data []byte) []byte {
+	if utf8.Valid(data) {
+		return data
+	}
+	for trim := 1; trim < utf8.UTFMax && trim < len(data); trim++ {
+		candidate := data[:len(data)-trim]
+		if utf8.Valid(candidate) {
+			return candidate
+		}
+	}
+	return data
 }
 
 // isLikelyBinaryText classifies decoded content instead of raw encoded bytes.
@@ -265,28 +489,4 @@ func isLikelyBinaryText(content string) bool {
 		}
 	}
 	return runeCount > 0 && controlCount*10 >= runeCount
-}
-
-// getContextBefore returns N lines before the given line index.
-func getContextBefore(lines []string, lineIdx, count int) []string {
-	start := lineIdx - count
-	if start < 0 {
-		start = 0
-	}
-	if start >= lineIdx {
-		return nil
-	}
-	return lines[start:lineIdx]
-}
-
-// getContextAfter returns N lines after the given line index.
-func getContextAfter(lines []string, lineIdx, count int) []string {
-	end := lineIdx + count + 1
-	if end > len(lines) {
-		end = len(lines)
-	}
-	if lineIdx+1 >= end {
-		return nil
-	}
-	return lines[lineIdx+1 : end]
 }

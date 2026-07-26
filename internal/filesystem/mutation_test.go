@@ -3,10 +3,12 @@ package filesystem
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -43,6 +45,148 @@ func TestCaptureSnapshotWithDigestRejectsDirectory(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Fatalf("CaptureSnapshotWithDigest() error = %v, want regular-file rejection", err)
 	}
+}
+
+func TestStageReplacementStreamsAndCommits(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.txt")
+	original := []byte("original")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := CaptureSnapshotWithData(path, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	staged, err := StageReplacement(path, &singleByteMutationReader{data: []byte("replacement")}, 0o600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer staged.Cleanup()
+	changed, err := staged.Commit(ReplaceOptions{Expected: &expected})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("changed = false, want true")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(actual) != "replacement" {
+		t.Fatalf("content = %q, want replacement", actual)
+	}
+	assertNoMutationTemps(t, dir)
+}
+
+func TestStageReplacementIdenticalBytesSkipCommitAndBackup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.txt")
+	backupPath := path + ".bak"
+	original := []byte("unchanged")
+	fixedTime := time.Unix(1_700_000_000, 0)
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, fixedTime, fixedTime); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := CaptureSnapshotWithData(path, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	staged, err := StageReplacement(path, bytes.NewReader(original), 0o600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := staged.Commit(ReplaceOptions{Expected: &expected, BackupPath: backupPath, SkipIdentical: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("changed = true, want false")
+	}
+	if _, err := os.Stat(backupPath); !os.IsNotExist(err) {
+		t.Fatalf("backup should not exist, stat error = %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(fixedTime) {
+		t.Fatalf("mtime = %v, want %v", info.ModTime(), fixedTime)
+	}
+	assertNoMutationTemps(t, dir)
+}
+
+func TestStageReplacementReaderFailureCleansTemp(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.txt")
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := StageReplacement(path, &failingMutationReader{}, 0o600, nil)
+	if err == nil || !strings.Contains(err.Error(), "injected read failure") {
+		t.Fatalf("error = %v, want injected read failure", err)
+	}
+	if actual, readErr := os.ReadFile(path); readErr != nil || string(actual) != "original" {
+		t.Fatalf("target = %q, err=%v; want original", actual, readErr)
+	}
+	assertNoMutationTemps(t, dir)
+}
+
+func TestStageReplacementDiskFullCleansTempAndPreservesTarget(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.txt")
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := defaultMutationOps
+	ops.copyStream = func(destination io.Writer, _ io.Reader) (int64, error) {
+		written, err := io.WriteString(destination, "partial")
+		if err != nil {
+			return int64(written), err
+		}
+		return int64(written), syscall.ENOSPC
+	}
+	if _, err := stageReplacement(path, strings.NewReader("replacement"), 0o600, nil, ops); !errors.Is(err, syscall.ENOSPC) {
+		t.Fatalf("error = %v, want ENOSPC", err)
+	}
+	if actual, readErr := os.ReadFile(path); readErr != nil || string(actual) != "original" {
+		t.Fatalf("target = %q, err=%v; want original", actual, readErr)
+	}
+	assertNoMutationTemps(t, dir)
+}
+
+type singleByteMutationReader struct {
+	data []byte
+}
+
+func (reader *singleByteMutationReader) Read(buffer []byte) (int, error) {
+	if len(reader.data) == 0 {
+		return 0, io.EOF
+	}
+	buffer[0] = reader.data[0]
+	reader.data = reader.data[1:]
+	return 1, nil
+}
+
+type failingMutationReader struct {
+	delivered bool
+}
+
+func (reader *failingMutationReader) Read(buffer []byte) (int, error) {
+	if !reader.delivered {
+		reader.delivered = true
+		copy(buffer, "partial")
+		return len("partial"), nil
+	}
+	return 0, errors.New("injected read failure")
 }
 
 func TestReplaceFile_CommitsAndPreservesMode(t *testing.T) {

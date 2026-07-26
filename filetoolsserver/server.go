@@ -18,17 +18,17 @@ const serverInstructions = `MCP filesystem server with non-UTF-8 encoding suppor
 Encoding detection is content-based and never uses filenames or extensions. Unicode BOMs are authoritative. BOMless UTF-16 LE/BE is auto-detected only when byte structure, surrogate validation, decoded-text quality, NUL parity, and round-trip evidence agree; use an explicit encoding for short, malformed, or endian-ambiguous input.
 
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
-- read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
+- read_text_file: incremental decoding to UTF-8 with a 16 MiB decoded-line limit and MCP_MEMORY_THRESHOLD output budget; use offset/limit or maxCharacters for bounded ranges
 - write_file: encodes UTF-8 content through the shared document encoder; supports bom=auto|always|never|preserve (default: auto)
-- edit_file: in-place edits through the shared encoding/BOM-aware document pipeline; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff. Use dryRun=true to preview changes before applying.
-- grep_text_files: deterministic regex search through the shared decoder, secure walker, and bounded ordered worker coordinator; skips symlink/junction/reparse escapes, auto-detects BOM-bearing or structurally clear BOMless UTF-16 LE/BE, and accepts explicit encoding for ambiguous files
+- edit_file: full-document editing with a hard MCP_MEMORY_THRESHOLD input limit; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff
+- grep_text_files: deterministic incremental regex search with bounded context and retained output; skips symlink/junction/reparse escapes, auto-detects structurally clear UTF-16 LE/BE, and accepts explicit encoding for ambiguous files
 - tree/search_files/directory_tree: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
 - mutating file tools: synced same-directory staging, atomic/no-replace commits, path revalidation, practical conflict detection, and transactional conversion backups
-- ordered batch work: read_multiple_files and grep_text_files share bounded parallel execution with deterministic commits, cancellation-aware dispatch, and bounded pending results
+- ordered batch work: read_multiple_files and grep_text_files preserve deterministic commits and enforce aggregate decoded-output or retained-state budgets before using parallel workers
 - operation errors: transport-independent typed categories with centralized MCP and batch mapping; public messages and schemas remain compatible, and read_multiple_files exposes stable per-file errorCode values
 - detect_encoding: diagnose encoding issues (garbled text, � characters)
-- detect_line_endings: decode the selected encoding before detecting CRLF/LF/mixed, including UTF-16 LE/BE
-- change_line_endings: preserve encoding, BOM state, and non-line-ending bytes while converting LF/CRLF
+- detect_line_endings: incremental one-pass detection for uniform files and digest-verified two-pass minority-line collection for mixed files
+- change_line_endings: stream LF/CRLF transformation to disk staging while preserving encoding, BOM, standalone CR, and unrelated bytes
 
 Workflow for non-UTF-8 files:
 1. detect_encoding - identify file encoding

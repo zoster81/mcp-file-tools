@@ -4,12 +4,32 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
+
+type encodingOutputReader struct {
+	reader io.Reader
+	target string
+}
+
+func (reader *encodingOutputReader) Read(buffer []byte) (int, error) {
+	read, err := reader.reader.Read(buffer)
+	if err != nil && err != io.EOF {
+		err = operation.Wrap(
+			operation.KindEncodingOutput,
+			"encode_stream",
+			"",
+			fmt.Errorf("%w: failed to encode content to %s: %v", ErrEncodingEncode, reader.target, err),
+		)
+	}
+	return read, err
+}
 
 // HandleConvertEncoding converts a file from one encoding to another.
 func (h *Handler) HandleConvertEncoding(ctx context.Context, req *mcp.CallToolRequest, input ConvertEncodingInput) (*mcp.CallToolResult, ConvertEncodingOutput, error) {
@@ -32,36 +52,44 @@ func (h *Handler) HandleConvertEncoding(ctx context.Context, req *mcp.CallToolRe
 		return errorResultFromError(err), ConvertEncodingOutput{}, nil
 	}
 
-	document, originalData, err := h.readTextDocumentWithData(ctx, v.Path, input.From)
+	stream, err := h.openDecodedTextStream(ctx, v.Path, input.From)
 	if err != nil {
 		return errorResultFromError(err), ConvertEncodingOutput{}, nil
 	}
-	sourceEncodingName := document.Charset
+	defer stream.Close()
+	sourceEncodingName := stream.Charset
 
-	targetDocument := document
-	targetDocument.Charset = targetEncodingName
-	targetData, err := encodeTextDocument(targetDocument, document.Text, policy)
+	targetDocument := textDocument{Charset: targetEncodingName, BOM: stream.BOM}
+	targetBOM, err := documentBOMBytes(targetDocument, policy)
 	if err != nil {
 		return errorResult(fmt.Sprintf("failed to encode to %s: %v", targetEncodingName, err)), ConvertEncodingOutput{}, nil
 	}
+	encoded, err := fileEncoding.NewEncoderReader(stream.Reader, targetEncodingName)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to encode to %s: %v", targetEncodingName, err)), ConvertEncodingOutput{}, nil
+	}
+	outputReader := io.MultiReader(bytes.NewReader(targetBOM), &encodingOutputReader{reader: encoded, target: targetEncodingName})
+	staged, err := filesystem.StageReplacement(v.Path, outputReader, stream.Mode.Perm(), nil)
+	if err != nil {
+		if operation.KindOf(err) == operation.KindEncodingOutput {
+			return errorResult(fmt.Sprintf("failed to encode to %s: %v", targetEncodingName, err)), ConvertEncodingOutput{}, nil
+		}
+		return errorResult(fmt.Sprintf("failed to prepare converted file: %v", err)), ConvertEncodingOutput{}, nil
+	}
+	defer staged.Cleanup()
 
-	select {
-	case <-ctx.Done():
-		return errorResult(ctx.Err().Error()), ConvertEncodingOutput{}, nil
-	default:
+	snapshot, err := stream.Finish()
+	if err != nil {
+		return errorResultFromError(err), ConvertEncodingOutput{}, nil
+	}
+	if err := stream.Close(); err != nil {
+		return errorResult(fmt.Sprintf("failed to close source file before commit: %v", err)), ConvertEncodingOutput{}, nil
 	}
 
-	hasBOM, bomType := outputBOMMetadata(targetData)
-	if bytes.Equal(originalData, targetData) {
-		return &mcp.CallToolResult{}, ConvertEncodingOutput{
-			Message:        fmt.Sprintf("No conversion needed for %s: target bytes are unchanged", input.Path),
-			SourceEncoding: sourceEncodingName,
-			TargetEncoding: targetEncodingName,
-			BOMPolicy:      string(policy),
-			HasBOM:         hasBOM,
-			BOMType:        bomType,
-			Changed:        false,
-		}, nil
+	hasBOM := len(targetBOM) > 0
+	bomType := ""
+	if hasBOM {
+		bomType = canonicalBOMEncoding(targetEncodingName)
 	}
 
 	var backupPath string
@@ -96,12 +124,24 @@ func (h *Handler) HandleConvertEncoding(ctx context.Context, req *mcp.CallToolRe
 		}
 	}
 
-	if err := filesystem.ReplaceFile(commit.Path, targetData, filesystem.ReplaceOptions{
-		Mode:       document.Mode,
-		Expected:   &document.Snapshot,
-		BackupPath: backupPath,
-	}); err != nil {
+	changed, err := staged.Commit(filesystem.ReplaceOptions{
+		Expected:      &snapshot,
+		BackupPath:    backupPath,
+		SkipIdentical: true,
+	})
+	if err != nil {
 		return errorResult(fmt.Sprintf("failed to write converted file: %v", err)), ConvertEncodingOutput{}, nil
+	}
+	if !changed {
+		return &mcp.CallToolResult{}, ConvertEncodingOutput{
+			Message:        fmt.Sprintf("No conversion needed for %s: target bytes are unchanged", input.Path),
+			SourceEncoding: sourceEncodingName,
+			TargetEncoding: targetEncodingName,
+			BOMPolicy:      string(policy),
+			HasBOM:         hasBOM,
+			BOMType:        bomType,
+			Changed:        false,
+		}, nil
 	}
 
 	message := fmt.Sprintf("Successfully converted %s from %s to %s (BOM: %s)", input.Path, sourceEncodingName, targetEncodingName, policy)

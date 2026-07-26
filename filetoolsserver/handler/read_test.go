@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/config"
 	"github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
@@ -600,6 +602,62 @@ func TestHandleReadTextFile_MaxCharactersWithOffsetLimit(t *testing.T) {
 
 	if !strings.Contains(output.Content, "[TRUNCATED") {
 		t.Errorf("expected truncation notice")
+	}
+}
+
+func TestHandleReadTextFileBoundsDefaultOutput(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
+		DefaultEncoding: "utf-8",
+		MemoryThreshold: 8,
+	}))
+	path := filepath.Join(tempDir, "output-limit.txt")
+	if err := os.WriteFile(path, []byte("123456789"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleReadTextFile(context.Background(), nil, ReadTextFileInput{Path: path, Encoding: "utf-8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected read output limit error")
+	}
+	if message := extractTextFromResultRead(result.Content); !strings.Contains(message, "8-byte read output limit") {
+		t.Fatalf("unexpected error: %q", message)
+	}
+
+	maxCharacters := 4
+	result, output, err := h.HandleReadTextFile(context.Background(), nil, ReadTextFileInput{
+		Path:          path,
+		Encoding:      "utf-8",
+		MaxCharacters: &maxCharacters,
+	})
+	if err != nil || result.IsError {
+		t.Fatalf("bounded read failed: result=%v err=%v", result, err)
+	}
+	if !output.Truncated || !strings.HasPrefix(output.Content, "1234") {
+		t.Fatalf("unexpected bounded output: %+v", output)
+	}
+}
+
+func TestHandleReadTextFile_RejectsOversizedLine(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "oversized-line.txt")
+	if err := os.WriteFile(path, bytes.Repeat([]byte{'x'}, 16*1024*1024+1), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := h.HandleReadTextFile(context.Background(), nil, ReadTextFileInput{Path: path, Encoding: "utf-8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected explicit line-length limit error")
+	}
+	if message := extractTextFromResultRead(result.Content); !strings.Contains(message, "line 1 exceeds") {
+		t.Fatalf("unexpected error: %q", message)
 	}
 }
 

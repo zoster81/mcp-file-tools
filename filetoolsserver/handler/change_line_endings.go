@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/mcp-file-tools/internal/textstream"
 )
 
 func isUTF16Encoding(name string) bool {
@@ -18,120 +21,12 @@ func isUTF16Encoding(name string) bool {
 	}
 }
 
-func detectUTF16LineEndings(data []byte, littleEndian bool) (LineEndingInfo, error) {
-	if len(data)%2 != 0 {
-		return LineEndingInfo{}, fmt.Errorf("invalid UTF-16 byte length: %d", len(data))
-	}
-
-	info := LineEndingInfo{}
-	readUnit := func(i int) uint16 {
-		if littleEndian {
-			return uint16(data[i]) | uint16(data[i+1])<<8
-		}
-		return uint16(data[i])<<8 | uint16(data[i+1])
-	}
-
-	for i := 0; i < len(data); i += 2 {
-		unit := readUnit(i)
-		if unit == '\r' && i+3 < len(data) && readUnit(i+2) == '\n' {
-			info.CRLFCount++
-			i += 2
-		} else if unit == '\n' {
-			info.LFCount++
-		}
-	}
-	info.Style = determineStyle(info.CRLFCount, info.LFCount)
-	return info, nil
-}
-
-func convertASCIICompatibleLineEndings(data []byte, targetStyle string) ([]byte, LineEndingInfo) {
-	info := DetectLineEndings(data)
-	if info.Style == targetStyle || info.Style == LineEndingNone {
-		return data, info
-	}
-
-	capacity := len(data)
-	if targetStyle == LineEndingCRLF {
-		capacity += info.LFCount
-	} else {
-		capacity -= info.CRLFCount
-	}
-	converted := make([]byte, 0, capacity)
-	for i := 0; i < len(data); i++ {
-		if data[i] == '\r' && i+1 < len(data) && data[i+1] == '\n' {
-			if targetStyle == LineEndingCRLF {
-				converted = append(converted, '\r', '\n')
-			} else {
-				converted = append(converted, '\n')
-			}
-			i++
-			continue
-		}
-		if data[i] == '\n' {
-			if targetStyle == LineEndingCRLF {
-				converted = append(converted, '\r', '\n')
-			} else {
-				converted = append(converted, '\n')
-			}
-			continue
-		}
-		converted = append(converted, data[i])
-	}
-	return converted, info
-}
-
-func convertUTF16LineEndings(data []byte, targetStyle string, littleEndian bool) ([]byte, LineEndingInfo, error) {
-	info, err := detectUTF16LineEndings(data, littleEndian)
-	if err != nil {
-		return nil, LineEndingInfo{}, err
-	}
-	if info.Style == targetStyle || info.Style == LineEndingNone {
-		return data, info, nil
-	}
-
-	cr := []byte{0x00, 0x0D}
-	lf := []byte{0x00, 0x0A}
-	if littleEndian {
-		cr = []byte{0x0D, 0x00}
-		lf = []byte{0x0A, 0x00}
-	}
-
-	capacity := len(data)
-	if targetStyle == LineEndingCRLF {
-		capacity += info.LFCount * 2
-	} else {
-		capacity -= info.CRLFCount * 2
-	}
-	converted := make([]byte, 0, capacity)
-	for i := 0; i < len(data); i += 2 {
-		unit := data[i : i+2]
-		isCR := unit[0] == cr[0] && unit[1] == cr[1]
-		isLF := unit[0] == lf[0] && unit[1] == lf[1]
-		if isCR && i+3 < len(data) && data[i+2] == lf[0] && data[i+3] == lf[1] {
-			if targetStyle == LineEndingCRLF {
-				converted = append(converted, cr...)
-			}
-			converted = append(converted, lf...)
-			i += 2
-			continue
-		}
-		if isLF {
-			if targetStyle == LineEndingCRLF {
-				converted = append(converted, cr...)
-			}
-			converted = append(converted, lf...)
-			continue
-		}
-		converted = append(converted, unit...)
-	}
-	return converted, info, nil
-}
-
-// HandleChangeLineEndings converts line endings while preserving encoding and BOM state.
+// HandleChangeLineEndings converts line endings through a bounded raw-byte
+// pipeline while preserving encoding, BOM state, and every unrelated byte.
 func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallToolRequest, input ChangeLineEndingsInput) (*mcp.CallToolResult, ChangeLineEndingsOutput, error) {
-	v := h.ValidatePath(input.Path)
-	if !v.Ok() {
-		return v.Result, ChangeLineEndingsOutput{}, nil
+	validated := h.ValidatePath(input.Path)
+	if !validated.Ok() {
+		return validated.Result, ChangeLineEndingsOutput{}, nil
 	}
 
 	style := strings.ToLower(input.Style)
@@ -139,24 +34,48 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 		return errorResult("style must be \"lf\" or \"crlf\""), ChangeLineEndingsOutput{}, nil
 	}
 
-	document, data, err := h.readTextDocumentWithData(ctx, v.Path, input.Encoding)
+	stream, err := h.openDecodedTextStream(ctx, validated.Path, input.Encoding)
 	if err != nil {
 		return errorResultFromError(err), ChangeLineEndingsOutput{}, nil
 	}
-	payload := data[len(document.BOM.Bytes):]
+	defer stream.Close()
 
-	var converted []byte
-	var info LineEndingInfo
-	if isUTF16Encoding(document.Charset) {
-		converted, info, err = convertUTF16LineEndings(payload, style, canonicalBOMEncoding(document.Charset) == "utf-16-le")
-		if err != nil {
-			return errorResult(fmt.Sprintf("failed to process %s file: %v", document.Charset, err)), ChangeLineEndingsOutput{}, nil
-		}
+	rawSource := textstream.WithContext(ctx, stream.session)
+	var transformed *textstream.LineEndingReader
+	if isUTF16Encoding(stream.Charset) {
+		transformed, err = textstream.NewUTF16LineEndingReader(
+			rawSource,
+			style,
+			canonicalBOMEncoding(stream.Charset) == "utf-16-le",
+		)
 	} else {
-		converted, info = convertASCIICompatibleLineEndings(payload, style)
+		transformed, err = textstream.NewByteLineEndingReader(rawSource, style)
+	}
+	if err != nil {
+		return errorResult(err.Error()), ChangeLineEndingsOutput{}, nil
 	}
 
-	originalStyle := info.Style
+	outputReader := io.MultiReader(bytes.NewReader(stream.BOM.Bytes), transformed)
+	staged, err := filesystem.StageReplacement(validated.Path, outputReader, stream.Mode.Perm(), nil)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to prepare line-ending conversion: %v", err)), ChangeLineEndingsOutput{}, nil
+	}
+	defer staged.Cleanup()
+
+	snapshot, err := stream.Finish()
+	if err != nil {
+		return errorResultFromError(err), ChangeLineEndingsOutput{}, nil
+	}
+	if err := stream.Close(); err != nil {
+		return errorResult(fmt.Sprintf("failed to close source file before commit: %v", err)), ChangeLineEndingsOutput{}, nil
+	}
+
+	stats := transformed.Stats()
+	originalStyle := determineStyle(stats.CRLFCount, stats.LFCount)
+	linesChanged := stats.LFCount
+	if style == LineEndingLF {
+		linesChanged = stats.CRLFCount
+	}
 	if originalStyle == style || originalStyle == LineEndingNone {
 		return &mcp.CallToolResult{}, ChangeLineEndingsOutput{
 			Message:       fmt.Sprintf("File already uses %s line endings, no changes needed", style),
@@ -166,34 +85,23 @@ func (h *Handler) HandleChangeLineEndings(ctx context.Context, req *mcp.CallTool
 		}, nil
 	}
 
-	linesChanged := info.LFCount
-	if style == LineEndingLF {
-		linesChanged = info.CRLFCount
-	}
-
-	outputData := make([]byte, 0, len(document.BOM.Bytes)+len(converted))
-	outputData = append(outputData, document.BOM.Bytes...)
-	outputData = append(outputData, converted...)
-
-	select {
-	case <-ctx.Done():
-		return errorResult(ctx.Err().Error()), ChangeLineEndingsOutput{}, nil
-	default:
-	}
-
 	commit := h.ValidatePath(input.Path)
 	if !commit.Ok() {
 		return commit.Result, ChangeLineEndingsOutput{}, nil
 	}
-	if commit.Path != v.Path {
+	if commit.Path != validated.Path {
 		return errorResult("path changed while preparing line-ending conversion"), ChangeLineEndingsOutput{}, nil
 	}
 
-	if err := filesystem.ReplaceFile(commit.Path, outputData, filesystem.ReplaceOptions{
-		Mode:     document.Mode,
-		Expected: &document.Snapshot,
-	}); err != nil {
+	changed, err := staged.Commit(filesystem.ReplaceOptions{
+		Expected:      &snapshot,
+		SkipIdentical: true,
+	})
+	if err != nil {
 		return errorResult(fmt.Sprintf("failed to write file: %v", err)), ChangeLineEndingsOutput{}, nil
+	}
+	if !changed {
+		linesChanged = 0
 	}
 
 	return &mcp.CallToolResult{}, ChangeLineEndingsOutput{

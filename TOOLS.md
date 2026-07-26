@@ -12,7 +12,7 @@ Mutating file tools share a durable filesystem layer. Replacement data is staged
 
 ### read_text_file
 
-Read file contents with automatic encoding detection and optional partial reading. UTF-8 files pass through unchanged; other encodings convert to UTF-8. A Unicode transport BOM is removed from returned content and reported separately through `hasBOM` and `bomType`.
+Read file contents through the shared incremental decoder with automatic encoding detection and optional partial reading. UTF-8 files pass through unchanged; other encodings convert to UTF-8. A Unicode transport BOM is removed from returned content and reported separately through `hasBOM` and `bomType`. Decoded lines above 16 MiB are rejected. Returned UTF-8 content is bounded by `MCP_MEMORY_THRESHOLD` unless `maxCharacters` or a smaller line range bounds it first.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -48,7 +48,7 @@ Read file contents with automatic encoding detection and optional partial readin
 
 ### read_multiple_files
 
-Read multiple files concurrently through the same encoding/BOM-aware document pipeline used by `read_text_file`. A shared bounded worker coordinator limits in-flight work and commits results in the original input order. Individual file failures don't stop the operation, and cancellation still produces one stable result for every requested path. Each failure is converted by the centralized operation-error mapping into a stable `errorCode` and a compatibility-preserving message.
+Read multiple files through the same incremental encoding/BOM-aware pipeline used by `read_text_file`. A shared ordered worker coordinator preserves input order and uses parallelism only when the aggregate worst-case decoded output fits `MCP_MEMORY_THRESHOLD`; larger batches run serially against the exact remaining budget. Individual file failures, including budget-limit failures, do not stop the operation, and cancellation still produces one stable result for every requested path. Each failure is converted by the centralized operation-error mapping into a stable `errorCode` and a compatibility-preserving message.
 
 **Parameters:**
 - `paths` (required): Array of file paths to read
@@ -132,7 +132,7 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 
 ### edit_file
 
-Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after it was decoded.
+Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Editing and unified diff generation inherently require full-document state, so the source file is rejected before reading when its byte size exceeds `MCP_MEMORY_THRESHOLD`. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after it was decoded.
 
 **Parameters:**
 - `path` (required): Path to the file to edit
@@ -336,7 +336,7 @@ Recursively search for files and directories matching a glob pattern in determin
 
 ### grep_text_files
 
-Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. UTF-16 LE/BE is auto-detected from a BOM or from conservative structural and decoded-text evidence; pass `encoding` explicitly for short, malformed, or otherwise ambiguous BOMless input. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. File scans run through the shared bounded ordered worker coordinator: results commit in deterministic traversal order, pending per-file results remain bounded, cancellation stops new dispatch, and `maxMatches` is enforced while scanning rather than after unbounded collection.
+Search decoded text incrementally using regex patterns. UTF-16 LE/BE is auto-detected from a BOM or from conservative structural and decoded-text evidence; pass `encoding` explicitly for short, malformed, or otherwise ambiguous BOMless input. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. File scans preserve deterministic traversal order, use a bounded previous-line ring and bounded following-context queues, reject decoded lines above 16 MiB, enforce `maxMatches` during scanning, and keep aggregate retained match/context state within `MCP_MEMORY_THRESHOLD`.
 
 **Parameters:**
 - `pattern` (required): Regular expression pattern to search for
@@ -414,7 +414,7 @@ Detect the encoding of a file with confidence percentage. Detection is based on 
 
 ### convert_encoding
 
-Convert a file through the shared encoding/BOM-aware document pipeline. The decoded text and its CRLF, LF, CR, or mixed line endings are preserved exactly; only the encoding and selected BOM policy change. A byte-identical result is reported as `changed: false` without rewriting the file or creating a requested backup. Changed output uses synced atomic replacement and rejects concurrent source changes.
+Convert a file by streaming the selected decoder into the target encoder and a synced same-directory staging file. The decoded text and its CRLF, LF, CR, or mixed line endings are preserved exactly; only the encoding and selected BOM policy change. A byte-identical staged result is reported as `changed: false` without rewriting the file or creating a requested backup. Changed output uses the durable atomic replacement path and rejects concurrent source changes.
 
 **Parameters:**
 - `path` (required): Path to the file to convert
@@ -455,7 +455,7 @@ Convert a file through the shared encoding/BOM-aware document pipeline. The deco
 
 ### detect_line_endings
 
-Detect line ending style (CRLF/LF/mixed) after decoding the file through the shared text-document pipeline, and find lines with inconsistent endings. This works across all 24 registered encodings, including UTF-16 LE/BE source files. An explicit encoding that conflicts with a Unicode BOM is rejected before analysis.
+Detect line ending style (CRLF/LF/mixed) through the shared incremental decoder, and find lines with inconsistent endings. This works across all 24 registered encodings, including UTF-16 LE/BE source files. Uniform files require one pass; mixed files use a second digest-verified pass that retains only minority line numbers. The returned inconsistent-line list is bounded by `MCP_MEMORY_THRESHOLD`. An explicit encoding that conflicts with a Unicode BOM is rejected before analysis.
 
 **Parameters:**
 - `path` (required): Path to the file to analyze
@@ -488,7 +488,7 @@ Detect line ending style (CRLF/LF/mixed) after decoding the file through the sha
 
 ### change_line_endings
 
-Convert line endings in a file to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. Shared path, encoding, BOM, and mode validation runs before the specialized conversion; an explicit encoding that conflicts with a Unicode BOM fails before mutation. The implementation handles UTF-16 LE/BE code units separately and applies byte-preserving CR/LF replacement to the other registered encodings. Changed output uses synced atomic replacement with concurrent-modification detection. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style and preserves the file modification time.
+Stream line-ending conversion to LF or CRLF while preserving the original encoding, BOM state, and every byte not belonging to a line-ending sequence. Shared path, encoding, BOM, and mode validation runs before the specialized conversion; an explicit encoding that conflicts with a Unicode BOM fails before mutation. The bounded transformer preserves CRLF pairs and standalone CR across chunk boundaries, handles UTF-16 LE/BE code units separately, and stages output directly on disk. Changed output uses synced atomic replacement with concurrent-modification detection. Use after `detect_line_endings` to fix mixed or wrong line endings. No-op if the file already uses the target style and preserves the file modification time.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -516,7 +516,7 @@ Convert line endings in a file to LF or CRLF while preserving the original encod
 
 ### manage_bom
 
-Detect, strip, or add Unicode BOM (Byte Order Mark). UTF-8 BOM breaks PHP/shell scripts. UTF-16 BOMs remain the authoritative and most interoperable encoding signal, although structurally clear BOMless UTF-16 may also be detected. Strip and add operations snapshot the original bytes, revalidate the path, and use synced atomic replacement; cancellation or concurrent changes leave the original file unchanged.
+Detect, strip, or add Unicode BOM (Byte Order Mark). Detection reads at most four prefix bytes. Strip and add stream the unchanged body into synced same-directory staging instead of loading the file. UTF-8 BOM breaks PHP/shell scripts. UTF-16 BOMs remain the authoritative and most interoperable encoding signal, although structurally clear BOMless UTF-16 may also be detected. Snapshot verification and path revalidation ensure cancellation or detected concurrent changes leave the original file unchanged.
 
 **Parameters:**
 - `path` (required): Path to the file
