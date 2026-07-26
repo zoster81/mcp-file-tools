@@ -17,7 +17,7 @@ func WithRecovery[In, Out any](handler mcp.ToolHandlerFor[In, Out]) mcp.ToolHand
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("panic recovered in tool handler", "panic", r, "stack", string(debug.Stack()))
-				result = errorResult(fmt.Sprintf("internal error: panic in tool handler: %v", r))
+				result = errorResultWithCode(ErrCodeInternal, fmt.Sprintf("internal error: panic in tool handler: %v", r))
 			}
 		}()
 		return handler(ctx, req, args)

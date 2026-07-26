@@ -167,7 +167,11 @@ func matchSuffix(path, suffixPattern string) bool {
 	return false
 }
 
-// shouldExcludePath checks if a path matches any of the exclude patterns
+func containsGlobChars(pattern string) bool {
+	return strings.ContainsAny(pattern, "*?[")
+}
+
+// shouldExcludePath checks if a path matches any of the exclude patterns.
 func shouldExcludePath(path string, patterns []string) bool {
 	for _, pattern := range patterns {
 		pattern = filepath.ToSlash(pattern)

@@ -70,7 +70,10 @@ type DetectEncodingInput struct {
 type DetectEncodingOutput struct {
 	Encoding   string `json:"encoding"`
 	Confidence int    `json:"confidence"`
-	HasBOM     bool   `json:"has_bom"`
+	HasBOM     bool   `json:"hasBOM"`
+	BOMType    string `json:"bomType,omitempty"`
+	Ambiguous  bool   `json:"ambiguous,omitempty"`
+	Assumed    bool   `json:"assumed,omitempty"`
 }
 
 type ListAllowedDirectoriesInput struct{}
@@ -92,22 +95,6 @@ type GetFileInfoOutput struct {
 	IsDirectory bool   `json:"isDirectory"`
 	IsFile      bool   `json:"isFile"`
 	Permissions string `json:"permissions"`
-}
-
-// DirectoryTreeInput - deprecated, use TreeInput instead
-type DirectoryTreeInput struct {
-	Path            string   `json:"path"`
-	ExcludePatterns []string `json:"excludePatterns,omitempty"`
-}
-
-type DirectoryTreeOutput struct {
-	Tree string `json:"tree"`
-}
-
-type TreeEntry struct {
-	Name     string       `json:"name"`
-	Type     string       `json:"type"`
-	Children *[]TreeEntry `json:"children,omitempty"`
 }
 
 type CreateDirectoryInput struct {
@@ -165,17 +152,26 @@ type ReadMultipleFilesInput struct {
 	Encoding string   `json:"encoding,omitempty"`
 }
 
-// Error codes for programmatic error handling
+// ErrorCodeMetaKey is the stable MCP _meta key used by single-tool errors.
+const ErrorCodeMetaKey = "errorCode"
+
+// Stable 2.0 error codes used by both single-tool metadata and batch items.
 const (
-	ErrCodeNone            = ""                 // No error
-	ErrCodeNotFound        = "NOT_FOUND"        // File does not exist
-	ErrCodePermission      = "PERMISSION"       // Permission denied
-	ErrCodeAccessDenied    = "ACCESS_DENIED"    // Path outside allowed directories
-	ErrCodeEncoding        = "ENCODING"         // Encoding detection/conversion failed
-	ErrCodeIO              = "IO_ERROR"         // General I/O error
-	ErrCodeInvalidPath     = "INVALID_PATH"     // Path validation failed
-	ErrCodeSymlinkEscape   = "SYMLINK_ESCAPE"   // Symlink target outside allowed dirs
-	ErrCodeOperationFailed = "OPERATION_FAILED" // Generic operation failure
+	ErrCodeNone              = ""
+	ErrCodeInvalidInput      = "INVALID_INPUT"
+	ErrCodeInvalidPath       = "INVALID_PATH"
+	ErrCodeAccessDenied      = "ACCESS_DENIED"
+	ErrCodeSymlinkEscape     = "SYMLINK_ESCAPE"
+	ErrCodeNotFound          = "NOT_FOUND"
+	ErrCodePermission        = "PERMISSION"
+	ErrCodeEncoding          = "ENCODING"
+	ErrCodeEncodingAmbiguous = "ENCODING_AMBIGUOUS"
+	ErrCodeConflict          = "CONFLICT"
+	ErrCodeCancelled         = "CANCELLED"
+	ErrCodeLimit             = "LIMIT"
+	ErrCodeIO                = "IO_ERROR"
+	ErrCodeInternal          = "INTERNAL_ERROR"
+	ErrCodeOperationFailed   = "OPERATION_FAILED"
 )
 
 type FileReadResult struct {
@@ -313,7 +309,7 @@ type ManageBomInput struct {
 
 type ManageBomOutput struct {
 	Message  string `json:"message"`
-	HasBOM   bool   `json:"hasBom"`
+	HasBOM   bool   `json:"hasBOM"`
 	BOMType  string `json:"bomType,omitempty"`  // e.g. "utf-8", "utf-16-le"
 	BOMBytes int    `json:"bomBytes,omitempty"` // size of BOM in bytes (2, 3, or 4)
 	Changed  bool   `json:"changed"`

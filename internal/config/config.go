@@ -10,38 +10,60 @@ import (
 )
 
 const (
-	// Environment variable names
-	EnvDefaultEncoding = "MCP_DEFAULT_ENCODING"
-	EnvMemoryThreshold = "MCP_MEMORY_THRESHOLD"
+	EnvDefaultEncoding      = "MCP_DEFAULT_ENCODING"
+	EnvMemoryThreshold      = "MCP_MEMORY_THRESHOLD" // Deprecated 1.x fallback for file/output limits.
+	EnvMaxFileBytes         = "MCP_MAX_FILE_BYTES"
+	EnvMaxDecodedCharacters = "MCP_MAX_DECODED_CHARACTERS"
+	EnvMaxLineBytes         = "MCP_MAX_LINE_BYTES"
+	EnvMaxBatchFiles        = "MCP_MAX_BATCH_FILES"
+	EnvMaxMatches           = "MCP_MAX_MATCHES"
+	EnvMaxOutputBytes       = "MCP_MAX_OUTPUT_BYTES"
+	EnvMaxSessions          = "MCP_MAX_SESSIONS"
 
-	// Default values
-	DefaultEncoding = "utf-8"
-	DefaultMaxSize  = int64(64 * 1024 * 1024) // 64MB full-document and aggregate-output budget
+	DefaultEncoding             = "utf-8"
+	DefaultMaxFileBytes         = int64(64 * 1024 * 1024)
+	DefaultMaxDecodedCharacters = 16 * 1024 * 1024
+	DefaultMaxLineBytes         = 16 * 1024 * 1024
+	DefaultMaxBatchFiles        = 256
+	DefaultMaxMatches           = 10_000
+	DefaultMaxOutputBytes       = int64(64 * 1024 * 1024)
+	DefaultMaxSessions          = 128
 )
+
+// Limits contains server-wide hard limits. Request-level limits may be lower
+// but must never exceed these values.
+type Limits struct {
+	MaxFileBytes         int64
+	MaxDecodedCharacters int
+	MaxLineBytes         int
+	MaxBatchFiles        int
+	MaxMatches           int
+	MaxOutputBytes       int64
+	MaxSessions          int
+}
 
 // Config holds server configuration loaded from environment variables.
 type Config struct {
-	// DefaultEncoding is the default encoding for new files when none is specified.
-	// Existing files keep a confidently detected encoding. Set via MCP_DEFAULT_ENCODING.
-	// Default: "utf-8"; legacy encodings remain available as explicit overrides.
+	// DefaultEncoding is used for newly created files when no encoding is supplied.
 	DefaultEncoding string
-
-	// MemoryThreshold limits full-document editing and aggregate decoded content
-	// returned by read_multiple_files. Streaming single-file operations are
-	// bounded by line/result state rather than total source size.
-	// Set via MCP_MEMORY_THRESHOLD environment variable.
-	// Default: 67108864 (64MB)
-	MemoryThreshold int64
+	Limits          Limits
 }
 
-// Load reads configuration from environment variables with sensible defaults.
+// Load reads configuration from environment variables with conservative defaults.
 func Load() *Config {
 	cfg := &Config{
 		DefaultEncoding: DefaultEncoding,
-		MemoryThreshold: DefaultMaxSize,
+		Limits: Limits{
+			MaxFileBytes:         DefaultMaxFileBytes,
+			MaxDecodedCharacters: DefaultMaxDecodedCharacters,
+			MaxLineBytes:         DefaultMaxLineBytes,
+			MaxBatchFiles:        DefaultMaxBatchFiles,
+			MaxMatches:           DefaultMaxMatches,
+			MaxOutputBytes:       DefaultMaxOutputBytes,
+			MaxSessions:          DefaultMaxSessions,
+		},
 	}
 
-	// Load default encoding from environment
 	if enc := os.Getenv(EnvDefaultEncoding); enc != "" {
 		if _, ok := encoding.Get(enc); ok {
 			cfg.DefaultEncoding = enc
@@ -50,12 +72,52 @@ func Load() *Config {
 		}
 	}
 
-	// Load memory threshold from environment
-	if sizeStr := os.Getenv(EnvMemoryThreshold); sizeStr != "" {
-		if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil && size > 0 {
-			cfg.MemoryThreshold = size
-		}
+	// Keep the 1.x threshold as a compatibility fallback. Specific 2.0 limits
+	// below take precedence when both are configured.
+	if legacy, ok := positiveInt64Environment(EnvMemoryThreshold); ok {
+		cfg.Limits.MaxFileBytes = legacy
+		cfg.Limits.MaxOutputBytes = legacy
 	}
 
+	cfg.Limits.MaxFileBytes = int64Environment(EnvMaxFileBytes, cfg.Limits.MaxFileBytes)
+	cfg.Limits.MaxOutputBytes = int64Environment(EnvMaxOutputBytes, cfg.Limits.MaxOutputBytes)
+	cfg.Limits.MaxDecodedCharacters = intEnvironment(EnvMaxDecodedCharacters, cfg.Limits.MaxDecodedCharacters)
+	cfg.Limits.MaxLineBytes = intEnvironment(EnvMaxLineBytes, cfg.Limits.MaxLineBytes)
+	cfg.Limits.MaxBatchFiles = intEnvironment(EnvMaxBatchFiles, cfg.Limits.MaxBatchFiles)
+	cfg.Limits.MaxMatches = intEnvironment(EnvMaxMatches, cfg.Limits.MaxMatches)
+	cfg.Limits.MaxSessions = intEnvironment(EnvMaxSessions, cfg.Limits.MaxSessions)
 	return cfg
+}
+
+func int64Environment(name string, fallback int64) int64 {
+	if value, ok := positiveInt64Environment(name); ok {
+		return value
+	}
+	return fallback
+}
+
+func intEnvironment(name string, fallback int) int {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 || int64(int(parsed)) != parsed {
+		slog.Warn("invalid positive integer environment value, using fallback", "name", name, "value", value, "fallback", fallback)
+		return fallback
+	}
+	return int(parsed)
+}
+
+func positiveInt64Environment(name string) (int64, bool) {
+	value := os.Getenv(name)
+	if value == "" {
+		return 0, false
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		slog.Warn("invalid positive integer environment value, using fallback", "name", name, "value", value)
+		return 0, false
+	}
+	return parsed, true
 }

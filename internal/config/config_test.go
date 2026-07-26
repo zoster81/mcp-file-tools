@@ -1,83 +1,45 @@
 package config
 
-import (
-	"os"
-	"testing"
-)
+import "testing"
 
-func TestLoad_Defaults(t *testing.T) {
-	// Clear any environment variables
-	os.Unsetenv(EnvDefaultEncoding)
-	os.Unsetenv(EnvMemoryThreshold)
-
+func TestLoad_DefaultEncoding(t *testing.T) {
+	t.Setenv(EnvDefaultEncoding, "")
 	cfg := Load()
-
-	if DefaultEncoding != "utf-8" {
-		t.Fatalf("DefaultEncoding = %q, want utf-8", DefaultEncoding)
-	}
-	if cfg.DefaultEncoding != "utf-8" {
-		t.Errorf("expected default encoding utf-8, got %q", cfg.DefaultEncoding)
-	}
-
-	if cfg.MemoryThreshold != DefaultMaxSize {
-		t.Errorf("expected default memory threshold %d, got %d", DefaultMaxSize, cfg.MemoryThreshold)
+	if DefaultEncoding != "utf-8" || cfg.DefaultEncoding != "utf-8" {
+		t.Fatalf("default encoding = %q, want utf-8", cfg.DefaultEncoding)
 	}
 }
 
 func TestLoad_CustomEncoding(t *testing.T) {
-	os.Setenv(EnvDefaultEncoding, "cp1251")
-	defer os.Unsetenv(EnvDefaultEncoding)
-
+	t.Setenv(EnvDefaultEncoding, "cp1251")
 	cfg := Load()
-
 	if cfg.DefaultEncoding != "cp1251" {
-		t.Errorf("expected encoding cp1251, got %q", cfg.DefaultEncoding)
+		t.Fatalf("encoding = %q, want cp1251", cfg.DefaultEncoding)
 	}
 }
 
-func TestLoad_InvalidEncoding(t *testing.T) {
-	os.Setenv(EnvDefaultEncoding, "invalid-encoding-xyz")
-	defer os.Unsetenv(EnvDefaultEncoding)
-
+func TestLoad_InvalidEncodingFallsBack(t *testing.T) {
+	t.Setenv(EnvDefaultEncoding, "invalid-encoding-xyz")
 	cfg := Load()
-
-	// Should fall back to default when invalid
 	if cfg.DefaultEncoding != DefaultEncoding {
-		t.Errorf("expected fallback to %q for invalid encoding, got %q", DefaultEncoding, cfg.DefaultEncoding)
+		t.Fatalf("encoding = %q, want fallback %q", cfg.DefaultEncoding, DefaultEncoding)
 	}
 }
 
-func TestLoad_CustomMemoryThreshold(t *testing.T) {
-	os.Setenv(EnvMemoryThreshold, "134217728") // 128MB
-	defer os.Unsetenv(EnvMemoryThreshold)
-
+func TestLoad_InvalidLegacyThresholdFallsBack(t *testing.T) {
+	clearLimitEnvironment(t)
+	t.Setenv(EnvMemoryThreshold, "not-a-number")
 	cfg := Load()
-
-	if cfg.MemoryThreshold != 134217728 {
-		t.Errorf("expected memory threshold 134217728, got %d", cfg.MemoryThreshold)
+	if cfg.Limits.MaxFileBytes != DefaultMaxFileBytes || cfg.Limits.MaxOutputBytes != DefaultMaxOutputBytes {
+		t.Fatalf("invalid legacy threshold changed defaults: %#v", cfg.Limits)
 	}
 }
 
-func TestLoad_InvalidMemoryThreshold(t *testing.T) {
-	os.Setenv(EnvMemoryThreshold, "not-a-number")
-	defer os.Unsetenv(EnvMemoryThreshold)
-
+func TestLoad_NegativeLegacyThresholdFallsBack(t *testing.T) {
+	clearLimitEnvironment(t)
+	t.Setenv(EnvMemoryThreshold, "-1000")
 	cfg := Load()
-
-	// Should fall back to default when invalid
-	if cfg.MemoryThreshold != DefaultMaxSize {
-		t.Errorf("expected fallback to %d for invalid threshold, got %d", DefaultMaxSize, cfg.MemoryThreshold)
-	}
-}
-
-func TestLoad_NegativeMemoryThreshold(t *testing.T) {
-	os.Setenv(EnvMemoryThreshold, "-1000")
-	defer os.Unsetenv(EnvMemoryThreshold)
-
-	cfg := Load()
-
-	// Should fall back to default when negative
-	if cfg.MemoryThreshold != DefaultMaxSize {
-		t.Errorf("expected fallback to %d for negative threshold, got %d", DefaultMaxSize, cfg.MemoryThreshold)
+	if cfg.Limits.MaxFileBytes != DefaultMaxFileBytes || cfg.Limits.MaxOutputBytes != DefaultMaxOutputBytes {
+		t.Fatalf("negative legacy threshold changed defaults: %#v", cfg.Limits)
 	}
 }

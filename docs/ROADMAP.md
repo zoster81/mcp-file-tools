@@ -25,8 +25,8 @@ Current milestone status and completion gates live in this document. Reusable en
 | R7 | COMPLETE | Replaced the historical roadmap with a clear operating plan and removed domain-specific MQL emphasis. |
 | R8 | COMPLETE | Generic, conservative, extension-independent encoding detection, including BOMless UTF-16. |
 | R9 | COMPLETE | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
-| R10 | ACTIVE | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
-| R11 | QUEUED | Separate transport bootstrap from the shared MCP server and tool policies. |
+| R10 | COMPLETE | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
+| R11 | ACTIVE | Separate transport bootstrap from the shared MCP server and tool policies. |
 | R12 | QUEUED | Approve the Streamable HTTP threat model and security design. |
 | R13 | QUEUED | Implement and verify native MCP Streamable HTTP while preserving stdio. |
 | R14 | QUEUED | Complete hardening, CI, packaging, migration documentation, and the 2.0.0 release. |
@@ -160,21 +160,25 @@ Use the major-version boundary to resolve inconsistent schemas, defaults, deprec
 
 ## Checklist
 
-- [ ] Decide whether to remove the deprecated `directory_tree` tool.
+- [x] Remove the deprecated `directory_tree` tool and retain `tree` as the single recursive tree API.
 - [x] Use UTF-8 as the international default for newly created files; retain `MCP_DEFAULT_ENCODING` and explicit legacy encodings such as `cp1251` as overrides.
-- [ ] Define behavior for empty and ambiguous files across every text tool.
-- [ ] Decide whether UTF-32 becomes a registered read/write encoding or remains BOM-management only.
-- [ ] Normalize JSON field naming such as `has_bom` versus `hasBom`.
-- [ ] Define stable public error codes for single-tool and batch operations.
-- [ ] Define configurable limits for file size, decoded characters, line length, batch size, matches, output, and sessions.
-- [ ] Review every tool input/output schema for redundant or misleading fields.
-- [ ] Remove obsolete helpers and compatibility shims that are not retained for 2.0.
-- [ ] Produce a draft 1.8-to-2.0 migration table before implementation is finalized.
-- [ ] Update catalog, docs, manual tests, and schema compatibility tests together.
+- [x] Define behavior for empty and ambiguous files across every text tool.
+- [x] Keep UTF-32 as BOM-management only rather than an incomplete registered text encoding.
+- [x] Normalize public output JSON to camelCase, including `hasBOM`.
+- [x] Define one stable public error-code vocabulary for single-tool `_meta` and batch items.
+- [x] Define configurable limits for file size, decoded characters, line length, batch size, matches, output, and sessions.
+- [x] Review every tool input/output schema and preserve fields not explicitly listed as breaking changes.
+- [x] Remove obsolete `directory_tree` code and full API types; retain the documented stringified-array repair for current MCP client interoperability.
+- [x] Produce a 1.8-to-2.0 migration table before implementation is finalized.
+- [x] Update catalog, docs, manual tests, and schema compatibility tests together.
 
 ## Completion gate
 
 All intentional breaking changes are explicit, tested, and listed in the migration guide. No deprecated or internally inconsistent public API remains accidentally carried into 2.x.
+
+## Completion record
+
+Completed on 2026-07-26. The public catalog now contains 23 tools after removing `directory_tree`; `tree` is the sole recursive tree API. Output fields use camelCase, single-tool errors expose `_meta.errorCode`, and batch errors share the same stable vocabulary. Empty files are explicitly assumed UTF-8, ambiguous non-empty content requires an encoding override, and UTF-32 remains BOM-management only. Separate `MCP_MAX_*` limits cover file input, decoded characters, line length, batch size, matches, output, and future HTTP sessions while `MCP_MEMORY_THRESHOLD` remains a deprecated file/output fallback. The complete change set and migration table are protected by schema, catalog, configuration, encoding-policy, manual MCP, and regression tests.
 
 ---
 
@@ -264,7 +268,7 @@ Implement the MCP Streamable HTTP transport according to R11 and R12 while prese
 
 ## Completion gate
 
-All 24 retained tools operate through native Streamable HTTP and stdio with equivalent schemas and policy boundaries, and the R12 security suite passes.
+All 23 retained tools operate through native Streamable HTTP and stdio with equivalent schemas and policy boundaries, and the R12 security suite passes.
 
 ---
 

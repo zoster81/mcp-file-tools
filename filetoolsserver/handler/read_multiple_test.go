@@ -15,7 +15,7 @@ func TestHandleReadMultipleFilesBoundsAggregateContent(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
 		DefaultEncoding: "utf-8",
-		MemoryThreshold: 10,
+		Limits:          config.Limits{MaxOutputBytes: 10},
 	}))
 	first := filepath.Join(tempDir, "first.txt")
 	second := filepath.Join(tempDir, "second.txt")
@@ -198,8 +198,8 @@ func TestHandleReadMultipleFiles_CancellationUsesCentralMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := output.Results[0].ErrorCode; got != ErrCodeOperationFailed {
-		t.Fatalf("error code = %q, want %q", got, ErrCodeOperationFailed)
+	if got := output.Results[0].ErrorCode; got != ErrCodeCancelled {
+		t.Fatalf("error code = %q, want %q", got, ErrCodeCancelled)
 	}
 	if got := output.Results[0].Error; got != "operation cancelled" {
 		t.Fatalf("error = %q, want operation cancelled", got)

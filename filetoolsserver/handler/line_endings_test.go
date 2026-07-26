@@ -133,7 +133,7 @@ func TestHandleDetectLineEndingsBoundsInconsistentLineOutput(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
 		DefaultEncoding: "utf-8",
-		MemoryThreshold: 8,
+		Limits:          config.Limits{MaxOutputBytes: 8},
 	}))
 	path := filepath.Join(tempDir, "mixed.txt")
 	content := "a\r\nb\r\nc\r\nd\ne\n"

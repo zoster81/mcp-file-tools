@@ -8,6 +8,7 @@ This guide applies to files under `docs/`. Follow the root [`AGENTS.md`](../AGEN
 - `DEVELOPMENT_CHECKLIST.md`: reusable, portable engineering and verification checks.
 - `ROADMAP_HISTORY.md`: concise public engineering history, not an operator session log.
 - `PUBLISHING.md`: maintainer release and distribution procedure.
+- `MIGRATION_2.0.md`: authoritative intentional breaking changes and migration actions for 1.8 to 2.0.
 
 Keep operational details in their proper source instead of duplicating them across documents.
 

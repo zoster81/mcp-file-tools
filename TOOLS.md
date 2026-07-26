@@ -2,9 +2,9 @@
 
 ## Error Handling
 
-Reusable domain failures carry transport-independent typed categories for invalid input or paths, access denial, symlink escapes, missing files, permissions, encoding, decoding, output encoding, conflicts, cancellation, limits, and filesystem failures. MCP tool errors preserve their existing human-readable messages and public schemas.
+Reusable domain failures carry transport-independent typed categories for invalid input or paths, access denial, symlink escapes, missing files, permissions, encoding, conflicts, cancellation, limits, and filesystem failures. Every failed MCP tool call preserves human-readable text and adds a stable machine-readable code at `_meta.errorCode`. `read_multiple_files.results[].errorCode` uses the same vocabulary.
 
-`read_multiple_files` uses the same centralized mapping for each failed item and exposes one of these stable `errorCode` values: `NOT_FOUND`, `PERMISSION`, `ACCESS_DENIED`, `ENCODING`, `IO_ERROR`, `INVALID_PATH`, `SYMLINK_ESCAPE`, or `OPERATION_FAILED`. Successful items omit `errorCode`. No new error metadata is added to single-tool output schemas.
+Stable codes are `INVALID_INPUT`, `INVALID_PATH`, `ACCESS_DENIED`, `SYMLINK_ESCAPE`, `NOT_FOUND`, `PERMISSION`, `ENCODING`, `ENCODING_AMBIGUOUS`, `CONFLICT`, `CANCELLED`, `LIMIT`, `IO_ERROR`, `INTERNAL_ERROR`, and the fallback `OPERATION_FAILED`. Successful results omit error codes. See [docs/MIGRATION_2.0.md](docs/MIGRATION_2.0.md).
 
 ## File Operations
 
@@ -12,7 +12,7 @@ Mutating file tools share a durable filesystem layer. Replacement data is staged
 
 ### read_text_file
 
-Read file contents through the shared incremental decoder with automatic encoding detection and optional partial reading. UTF-8 files pass through unchanged; other encodings convert to UTF-8. A Unicode transport BOM is removed from returned content and reported separately through `hasBOM` and `bomType`. Decoded lines above 16 MiB are rejected. Returned UTF-8 content is bounded by `MCP_MEMORY_THRESHOLD` unless `maxCharacters` or a smaller line range bounds it first.
+Read file contents through the shared incremental decoder with automatic encoding detection and optional partial reading. UTF-8 files pass through unchanged; other registered encodings convert to UTF-8. Empty files are treated as assumed UTF-8; non-empty ambiguous input fails with `ENCODING_AMBIGUOUS` until `encoding` is supplied. A Unicode transport BOM is removed from returned content and reported separately through `hasBOM` and `bomType`. `MCP_MAX_LINE_BYTES`, `MCP_MAX_DECODED_CHARACTERS`, and `MCP_MAX_OUTPUT_BYTES` bound the result.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -48,7 +48,7 @@ Read file contents through the shared incremental decoder with automatic encodin
 
 ### read_multiple_files
 
-Read multiple files through the same incremental encoding/BOM-aware pipeline used by `read_text_file`. A shared ordered worker coordinator preserves input order and uses parallelism only when the aggregate worst-case decoded output fits `MCP_MEMORY_THRESHOLD`; larger batches run serially against the exact remaining budget. Individual file failures, including budget-limit failures, do not stop the operation, and cancellation still produces one stable result for every requested path. Each failure is converted by the centralized operation-error mapping into a stable `errorCode` and a compatibility-preserving message.
+Read multiple files through the same incremental encoding/BOM-aware pipeline used by `read_text_file`. `MCP_MAX_BATCH_FILES` limits input count and `MCP_MAX_OUTPUT_BYTES` bounds aggregate decoded output. The ordered coordinator preserves input order, using parallelism only when the aggregate worst-case output fits the budget. Individual file failures do not stop the operation, and cancellation still produces one stable result for every requested path.
 
 **Parameters:**
 - `paths` (required): Array of file paths to read
@@ -132,7 +132,7 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 
 ### edit_file
 
-Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Editing and unified diff generation inherently require full-document state, so the source file is rejected before reading when its byte size exceeds `MCP_MEMORY_THRESHOLD`. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after it was decoded.
+Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Editing and unified diff generation inherently require full-document state, so the source file is rejected before reading when its byte size exceeds `MCP_MAX_FILE_BYTES`. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after it was decoded.
 
 **Parameters:**
 - `path` (required): Path to the file to edit
@@ -178,7 +178,7 @@ The `readOnlyCleared` field indicates if the read-only flag was removed (only pr
 
 ## Directory Operations
 
-The recursive tools `tree`, `directory_tree`, `search_files`, and `grep_text_files` use one deterministic, cancellation-aware secure walker. Every traversed entry is resolved before it is exposed to the tool; symlinks, Windows junctions, and other reparse points that resolve outside the allowed directories are skipped. Directory links encountered below the requested root are not followed.
+The recursive tools `tree`, `search_files`, and `grep_text_files` use one deterministic, cancellation-aware secure walker. Every traversed entry is resolved before it is exposed to the tool; symlinks, Windows junctions, and other reparse points that resolve outside the allowed directories are skipped. Directory links encountered below the requested root are not followed.
 
 ### list_directory
 
@@ -205,7 +205,7 @@ List files and directories with optional pattern filtering.
 
 ### tree
 
-Compact indented tree view optimized for AI/LLM consumption. Uses ~85% fewer tokens than `directory_tree`, returns entries in deterministic lexical traversal order, and skips links or reparse points that resolve outside the allowed directories.
+Compact indented tree view optimized for AI/LLM consumption. It returns entries in deterministic lexical traversal order and skips links or reparse points that resolve outside the allowed directories.
 
 **Parameters:**
 - `path` (required): Root directory
@@ -250,21 +250,6 @@ Compact indented tree view optimized for AI/LLM consumption. Uses ~85% fewer tok
   "fileCount": 4,
   "dirCount": 2,
   "truncated": false
-}
-```
-
-### directory_tree (deprecated)
-
-Get a recursive tree view as JSON in deterministic lexical traversal order. **Use `tree` instead for 85% fewer tokens.** Links or reparse points resolving outside the allowed directories are omitted.
-
-**Parameters:**
-- `path` (required): Root directory
-- `excludePatterns` (optional): Array of glob patterns to exclude
-
-**Response:**
-```json
-{
-  "tree": "{\"name\":\"project\",\"type\":\"directory\",\"children\":[...]}"
 }
 ```
 
@@ -336,7 +321,7 @@ Recursively search for files and directories matching a glob pattern in determin
 
 ### grep_text_files
 
-Search decoded text incrementally using regex patterns. UTF-16 LE/BE is auto-detected from a BOM or from conservative structural and decoded-text evidence; pass `encoding` explicitly for short, malformed, or otherwise ambiguous BOMless input. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. File scans preserve deterministic traversal order, use a bounded previous-line ring and bounded following-context queues, reject decoded lines above 16 MiB, enforce `maxMatches` during scanning, and keep aggregate retained match/context state within `MCP_MEMORY_THRESHOLD`.
+Search decoded text incrementally using regex patterns. UTF-8 and structurally clear UTF-16 LE/BE are auto-detected; ambiguous non-empty input requires an explicit `encoding`. Directory inputs use the shared secure walker. File scans preserve deterministic traversal order, use bounded context queues, enforce `MCP_MAX_LINE_BYTES`, reject request `maxMatches` above `MCP_MAX_MATCHES`, and keep aggregate retained state within `MCP_MAX_OUTPUT_BYTES`.
 
 **Parameters:**
 - `pattern` (required): Regular expression pattern to search for
@@ -386,7 +371,7 @@ Search decoded text incrementally using regex patterns. UTF-16 LE/BE is auto-det
 
 ### detect_encoding
 
-Detect the encoding of a file with confidence percentage. Detection is based on BOMs and file content, never on the filename or extension. Unicode BOMs return authoritative 100% results. BOMless UTF-16 LE/BE is reported only when byte structure, valid surrogate pairs, decoded-text quality, NUL-byte parity, and exact round-trip evidence agree; short, malformed, binary-like, or endian-ambiguous input is not forced and may require an explicit encoding. Useful for diagnosing encoding issues (garbled text, � characters).
+Detect the encoding of a file with confidence percentage. Detection is based on BOMs and content, never on filename or extension. Unicode BOMs and valid UTF-8 are authoritative. Empty files return assumed UTF-8 with confidence 0 and `assumed: true`. Non-empty input without sufficient text evidence returns `ambiguous: true` instead of a forced encoding. UTF-32 BOM signatures may be reported, but UTF-32 remains BOM-management only.
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -408,7 +393,7 @@ Detect the encoding of a file with confidence percentage. Detection is based on 
 {
   "encoding": "windows-1251",
   "confidence": 95,
-  "has_bom": false
+  "hasBOM": false
 }
 ```
 
@@ -455,7 +440,7 @@ Convert a file by streaming the selected decoder into the target encoder and a s
 
 ### detect_line_endings
 
-Detect line ending style (CRLF/LF/mixed) through the shared incremental decoder, and find lines with inconsistent endings. This works across all 24 registered encodings, including UTF-16 LE/BE source files. Uniform files require one pass; mixed files use a second digest-verified pass that retains only minority line numbers. The returned inconsistent-line list is bounded by `MCP_MEMORY_THRESHOLD`. An explicit encoding that conflicts with a Unicode BOM is rejected before analysis.
+Detect line ending style (CRLF/LF/mixed) through the shared incremental decoder, and find lines with inconsistent endings. This works across all 24 registered encodings. Uniform files require one pass; mixed files use a second digest-verified pass that retains only minority line numbers. `MCP_MAX_LINE_BYTES` bounds each decoded line and `MCP_MAX_OUTPUT_BYTES` bounds the returned list. Ambiguous non-empty input requires an explicit encoding.
 
 **Parameters:**
 - `path` (required): Path to the file to analyze
@@ -535,7 +520,7 @@ Detect, strip, or add Unicode BOM (Byte Order Mark). Detection reads at most fou
 ```json
 {
   "message": "BOM detected: utf-8 (3 bytes)",
-  "hasBom": true,
+  "hasBOM": true,
   "bomType": "utf-8",
   "bomBytes": 3,
   "changed": false
@@ -554,7 +539,7 @@ Detect, strip, or add Unicode BOM (Byte Order Mark). Detection reads at most fou
 ```json
 {
   "message": "Stripped utf-8 BOM (3 bytes) from /path/to/file.php",
-  "hasBom": false,
+  "hasBOM": false,
   "bomType": "utf-8",
   "bomBytes": 3,
   "changed": true
@@ -574,7 +559,7 @@ Detect, strip, or add Unicode BOM (Byte Order Mark). Detection reads at most fou
 ```json
 {
   "message": "Added utf-16-le BOM (2 bytes) to /path/to/file.txt",
-  "hasBom": true,
+  "hasBOM": true,
   "bomType": "utf-16-le",
   "bomBytes": 2,
   "changed": true

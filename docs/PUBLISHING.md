@@ -12,9 +12,9 @@ Git remote.
 - Implemented MCP transport: stdio
 - Native HTTP/JSON or Streamable HTTP transport: not implemented
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
-- Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection including BOMless UTF-16 (R8), and bounded-memory streaming plus disk-staged large-file mutations (R9)
-- Active milestone: R10 public API and compatibility cleanup
-- Authoritative plan: [ROADMAP.md](ROADMAP.md), with reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
+- Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), and public API compatibility cleanup with a 23-tool catalog (R10)
+- Active milestone: R11 transport-independent server architecture
+- Authoritative plan: [ROADMAP.md](ROADMAP.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
 - Development policy: internal commit builds only until the next public release, `2.0.0`
 - Release source: the final fork-owned semantic tag whose plugin, marketplace, binary, and Registry versions must match
 - Go module path: `github.com/zoster81/mcp-file-tools`

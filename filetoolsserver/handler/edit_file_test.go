@@ -16,7 +16,7 @@ func TestHandleEditFileRejectsFileAboveFullDocumentLimit(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
 		DefaultEncoding: "utf-8",
-		MemoryThreshold: 8,
+		Limits:          config.Limits{MaxFileBytes: 8},
 	}))
 	path := filepath.Join(tempDir, "too-large.txt")
 	original := []byte("123456789")

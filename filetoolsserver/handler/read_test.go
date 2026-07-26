@@ -609,7 +609,7 @@ func TestHandleReadTextFileBoundsDefaultOutput(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
 		DefaultEncoding: "utf-8",
-		MemoryThreshold: 8,
+		Limits:          config.Limits{MaxOutputBytes: 8},
 	}))
 	path := filepath.Join(tempDir, "output-limit.txt")
 	if err := os.WriteFile(path, []byte("123456789"), 0644); err != nil {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zoster81/mcp-file-tools/internal/encoding"
@@ -19,18 +20,30 @@ func (h *Handler) HandleDetectEncoding(ctx context.Context, req *mcp.CallToolReq
 		mode = "sample"
 	}
 
+	info, err := os.Stat(v.Path)
+	if err != nil {
+		return errorResultFromError(err), DetectEncodingOutput{}, nil
+	}
+	if info.Size() == 0 {
+		return &mcp.CallToolResult{}, DetectEncodingOutput{
+			Encoding: "utf-8",
+			Assumed:  true,
+		}, nil
+	}
+
 	result, err := encoding.DetectFromFile(v.Path, mode)
 	if err != nil {
 		return errorResultFromError(err), DetectEncodingOutput{}, nil
 	}
 
-	if result.Charset == "" {
-		return errorResult("could not detect encoding"), DetectEncodingOutput{}, nil
-	}
-
-	return &mcp.CallToolResult{}, DetectEncodingOutput{
+	output := DetectEncodingOutput{
 		Encoding:   result.Charset,
 		Confidence: result.Confidence,
 		HasBOM:     result.HasBOM,
-	}, nil
+		Ambiguous:  result.Charset == "" || result.Confidence < encoding.MinConfidenceThreshold,
+	}
+	if result.HasBOM {
+		output.BOMType = result.Charset
+	}
+	return &mcp.CallToolResult{}, output, nil
 }

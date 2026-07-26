@@ -39,17 +39,17 @@ The custom tunnel-oriented changes include authoritative CLI roots, Windows driv
 
 ## Current Development Status
 
-R1-R6 are complete. R7 completed the roadmap, contributor-documentation, and scoped agent-guidance reset. R8 completed conservative extension-independent encoding detection, including structurally validated BOMless UTF-16. R9 completed bounded-memory streaming and disk-staged large-file mutations. R10 is now active; R11-R14 cover transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
+R1-R6 are complete. R7 completed the roadmap and contributor-guidance reset; R8 completed conservative extension-independent encoding detection; R9 completed bounded-memory streaming; and R10 completed the 2.0 public API cleanup. R11 is now active; R12-R14 cover Streamable HTTP security, implementation, and final 2.0 hardening.
 
 Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
 
-Encoding detection is content-based. File extensions are not used to select or bias an encoding. Unicode BOMs remain authoritative. BOMless UTF-16 LE/BE is auto-detected only when byte structure, valid surrogate pairs, decoded-text quality, NUL-byte parity, and round-trip evidence agree; short, malformed, or endian-ambiguous inputs still require an explicit `encoding`.
+Encoding detection is content-based. File extensions are not used to select or bias an encoding. Unicode BOMs and valid UTF-8 are authoritative. BOMless UTF-16 LE/BE is auto-detected only when structural and decoded-text evidence agree. Empty files are treated as assumed UTF-8; non-empty ambiguous input is reported explicitly and requires an `encoding` override in text operations.
 
 The existing semantic-tag release workflow remains available for the final 2.0 release. The optional Claude Code plugin is not part of the active OpenAI tunnel deployment and will be reviewed only during the final release gate.
 
 ## What It Does
 
-Provides 24 tools for file operations, encoding conversion, update checks, and optional local execution:
+Provides 23 tools for file operations, encoding conversion, update checks, and optional local execution:
 - [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line and output memory
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
@@ -58,7 +58,6 @@ Provides 24 tools for file operations, encoding conversion, update checks, and o
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with pattern filtering
 - [`tree`](TOOLS.md#tree) - Compact deterministic tree through the shared secure walker (85% fewer tokens than JSON)
-- [`directory_tree`](TOOLS.md#directory_tree-deprecated) - Get a deterministic secure recursive tree as JSON (deprecated, use `tree`)
 - [`search_files`](TOOLS.md#search_files) - Deterministic glob search that skips symlink, junction, and reparse-point escapes
 - [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic streaming regex search with bounded context and aggregate retained state
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
@@ -103,7 +102,7 @@ This repository has evolved from its original upstream codebase. Compared with t
 - real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests;
 - conservative, extension-independent BOMless UTF-16 LE/BE detection with malformed-Unicode rejection, binary false-positive protection, deterministic mode semantics, and surrogate-pair handling across chunk boundaries;
 - a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression;
-- a deterministic, cancellation-aware secure walker shared by `tree`, `directory_tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
+- a deterministic, cancellation-aware secure walker shared by `tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
@@ -281,7 +280,14 @@ The server can be configured via environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MCP_DEFAULT_ENCODING` | Default encoding for newly created files when `write_file` is called without `encoding`. Existing files keep a confidently detected encoding. Legacy encodings such as `cp1251` remain available as explicit overrides. | `utf-8` |
-| `MCP_MEMORY_THRESHOLD` | Hard byte budget for `read_text_file` output, aggregate `read_multiple_files` output, retained grep state, inconsistent-line results, and full-document `edit_file` input. Streaming conversion, line-ending, and BOM mutations stage on disk and are not limited by total source size. | `67108864` (64 MiB) |
+| `MCP_MAX_FILE_BYTES` | Hard source-size limit for full-document operations such as `edit_file`. | `67108864` |
+| `MCP_MAX_DECODED_CHARACTERS` | Maximum decoded characters returned by `read_text_file`. | `16777216` |
+| `MCP_MAX_LINE_BYTES` | Maximum bytes in one decoded UTF-8 line. | `16777216` |
+| `MCP_MAX_BATCH_FILES` | Maximum paths accepted by `read_multiple_files`. | `256` |
+| `MCP_MAX_MATCHES` | Server maximum for `grep_text_files.maxMatches`. | `10000` |
+| `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, and inconsistent-line output budget. | `67108864` |
+| `MCP_MAX_SESSIONS` | Reserved limit for native Streamable HTTP sessions. | `128` |
+| `MCP_MEMORY_THRESHOLD` | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`; specific variables take precedence. | unset |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_SHELL` | Enables only the unrestricted `shell` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_EXECUTION` | Enables both `run_script` and `shell`; use only in a trusted environment. | disabled |
@@ -323,7 +329,7 @@ The original encoding can be preserved while the public `bom` policy controls BO
 
 ## Contributing
 
-Contributor workflow is documented in [`CONTRIBUTING.md`](CONTRIBUTING.md). Coding agents should read the root [`AGENTS.md`](AGENTS.md) and the nearest scoped `AGENTS.md` before editing a subtree. Public planning and verification gates remain in [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/DEVELOPMENT_CHECKLIST.md`](docs/DEVELOPMENT_CHECKLIST.md).
+Contributor workflow is documented in [`CONTRIBUTING.md`](CONTRIBUTING.md). The intentional 1.8-to-2.0 API changes are listed in [`docs/MIGRATION_2.0.md`](docs/MIGRATION_2.0.md). Coding agents should read the root [`AGENTS.md`](AGENTS.md) and the nearest scoped `AGENTS.md` before editing a subtree. Public planning and verification gates remain in [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/DEVELOPMENT_CHECKLIST.md`](docs/DEVELOPMENT_CHECKLIST.md).
 
 ## Development
 

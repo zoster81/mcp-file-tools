@@ -135,6 +135,16 @@ func mayContainUTF16(data []byte) bool {
 }
 
 func detectLegacy(data []byte) DetectionResult {
+	if len(data) == 0 {
+		return DetectionResult{Charset: "utf-8", Confidence: 100}
+	}
+	if utf8.Valid(data) && bytes.IndexByte(data, 0) < 0 {
+		return DetectionResult{Charset: "utf-8", Confidence: 100}
+	}
+	if isLikelyBinaryBytes(data) {
+		return DetectionResult{}
+	}
+
 	detected := chardet.Detect(data)
 	if detected.Encoding == "" {
 		if utf8.Valid(data) {
@@ -162,6 +172,19 @@ func detectLegacy(data []byte) DetectionResult {
 	}
 
 	return DetectionResult{Charset: charset, Confidence: confidence}
+}
+
+func isLikelyBinaryBytes(data []byte) bool {
+	if bytes.IndexByte(data, 0) >= 0 {
+		return true
+	}
+	controls := 0
+	for _, current := range data {
+		if current < 0x20 && current != '\n' && current != '\r' && current != '\t' {
+			controls++
+		}
+	}
+	return len(data) >= 8 && controls*10 >= len(data)
 }
 
 func canonicalDetectedCharset(charset string) string {

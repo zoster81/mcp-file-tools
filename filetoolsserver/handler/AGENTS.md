@@ -23,7 +23,7 @@ Preserve the flow:
 - Preserve encoding, BOM, and line-ending semantics promised by each tool.
 - Do not add filename- or extension-based encoding behavior.
 - Keep `run_script` and `shell` authorization separate even when they share process mechanics.
-- Bound decoded lines, batches, matches, context, output, worker coordination, and full-document memory according to the current operation contract and `MCP_MEMORY_THRESHOLD`.
+- Bound decoded lines, batches, matches, context, output, worker coordination, and full-document memory through the specific `MCP_MAX_*` limits; retain `MCP_MEMORY_THRESHOLD` only as the documented migration fallback.
 
 ## Tool metadata
 

@@ -22,10 +22,16 @@ type batchReadPlan struct {
 // one at a time with the exact remaining output budget.
 func (h *Handler) HandleReadMultipleFiles(ctx context.Context, req *mcp.CallToolRequest, input ReadMultipleFilesInput) (*mcp.CallToolResult, ReadMultipleFilesOutput, error) {
 	if len(input.Paths) == 0 {
-		return errorResult("paths array is required and must contain at least one path"), ReadMultipleFilesOutput{}, nil
+		return errorResultWithCode(ErrCodeInvalidInput, "paths array is required and must contain at least one path"), ReadMultipleFilesOutput{}, nil
+	}
+	if len(input.Paths) > h.maxBatchFiles() {
+		return errorResultWithCode(
+			ErrCodeLimit,
+			fmt.Sprintf("paths contains %d entries, exceeding the configured batch limit %d", len(input.Paths), h.maxBatchFiles()),
+		), ReadMultipleFilesOutput{}, nil
 	}
 
-	budget := h.memoryBudget()
+	budget := h.maxOutputBytes()
 	plans, worstTotal := h.planBatchReads(input.Paths)
 	maxWorkers := 0
 	if worstTotal > budget {

@@ -187,7 +187,7 @@ func TestHandleWriteFile_ConfiguredLegacyDefault_NewFile(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
 		DefaultEncoding: "cp1251",
-		MemoryThreshold: config.DefaultMaxSize,
+		Limits:          config.Limits{MaxFileBytes: config.DefaultMaxFileBytes, MaxOutputBytes: config.DefaultMaxOutputBytes},
 	}))
 	testFile := filepath.Join(tempDir, "legacy-new-file.txt")
 	content := "Тест"

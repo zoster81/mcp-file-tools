@@ -26,6 +26,10 @@ var (
 	// Wrap this error to include the encoding name: fmt.Errorf("%w: %s", ErrEncodingUnsupported, name)
 	ErrEncodingUnsupported = operation.New(operation.KindEncoding, "unsupported encoding")
 
+	// ErrEncodingAmbiguous is returned when non-empty content lacks enough
+	// evidence for safe automatic decoding.
+	ErrEncodingAmbiguous = operation.New(operation.KindEncoding, "encoding is ambiguous; specify encoding explicitly")
+
 	// ErrBOMEncodingConflict is returned when an explicit or resolved encoding conflicts with the file BOM.
 	ErrBOMEncodingConflict = operation.New(operation.KindEncoding, "BOM encoding conflict")
 

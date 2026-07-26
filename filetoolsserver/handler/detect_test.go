@@ -194,6 +194,47 @@ func TestHandleDetectEncoding_ModeChunked(t *testing.T) {
 	}
 }
 
+func TestHandleDetectEncoding_EmptyFileAssumesUTF8(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "empty")
+	if err := os.WriteFile(path, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleDetectEncoding(context.Background(), nil, DetectEncodingInput{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %v", result.Content)
+	}
+	if output.Encoding != "utf-8" || output.Confidence != 0 || !output.Assumed || output.Ambiguous || output.HasBOM {
+		t.Fatalf("unexpected empty-file result: %+v", output)
+	}
+}
+
+func TestHandleDetectEncoding_BinaryInputIsAmbiguous(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir})
+	path := filepath.Join(tempDir, "binary.data")
+	data := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R'}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, output, err := h.HandleDetectEncoding(context.Background(), nil, DetectEncodingInput{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("detect_encoding must report ambiguity as structured output: %v", result.Content)
+	}
+	if !output.Ambiguous || output.Assumed {
+		t.Fatalf("unexpected binary detection result: %+v", output)
+	}
+}
+
 func TestHandleDetectEncoding_InvalidMode(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})

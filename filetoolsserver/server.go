@@ -15,18 +15,18 @@ var Version = "dev"
 // Server instructions for AI assistants
 const serverInstructions = `MCP filesystem server with non-UTF-8 encoding support (24 encodings, including CP1251, KOI8-R/U, ISO-8859-x, UTF-16 LE/BE, GBK, and GB18030).
 
-Encoding detection is content-based and never uses filenames or extensions. Unicode BOMs are authoritative. BOMless UTF-16 LE/BE is auto-detected only when byte structure, surrogate validation, decoded-text quality, NUL parity, and round-trip evidence agree; use an explicit encoding for short, malformed, or endian-ambiguous input.
+Encoding detection is content-based and never uses filenames or extensions. Unicode BOMs and valid UTF-8 are authoritative. Empty files are assumed UTF-8. Ambiguous non-empty input requires an explicit encoding; UTF-32 remains BOM-management only.
 
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
-- read_text_file: incremental decoding to UTF-8 with a 16 MiB decoded-line limit and MCP_MEMORY_THRESHOLD output budget; use offset/limit or maxCharacters for bounded ranges
+- read_text_file: incremental decoding to UTF-8 under MCP_MAX_LINE_BYTES, MCP_MAX_DECODED_CHARACTERS, and MCP_MAX_OUTPUT_BYTES; ambiguous non-empty input requires explicit encoding
 - write_file: encodes UTF-8 content through the shared document encoder; supports bom=auto|always|never|preserve (default: auto)
-- edit_file: full-document editing with a hard MCP_MEMORY_THRESHOLD input limit; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff
+- edit_file: full-document editing with a hard MCP_MAX_FILE_BYTES input limit; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff
 - grep_text_files: deterministic incremental regex search with bounded context and retained output; skips symlink/junction/reparse escapes, auto-detects structurally clear UTF-16 LE/BE, and accepts explicit encoding for ambiguous files
-- tree/search_files/directory_tree: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
+- tree/search_files: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
 - mutating file tools: synced same-directory staging, atomic/no-replace commits, path revalidation, practical conflict detection, and transactional conversion backups
-- ordered batch work: read_multiple_files and grep_text_files preserve deterministic commits and enforce aggregate decoded-output or retained-state budgets before using parallel workers
-- operation errors: transport-independent typed categories with centralized MCP and batch mapping; public messages and schemas remain compatible, and read_multiple_files exposes stable per-file errorCode values
-- detect_encoding: diagnose encoding issues (garbled text, � characters)
+- ordered batch work: MCP_MAX_BATCH_FILES, MCP_MAX_MATCHES, and MCP_MAX_OUTPUT_BYTES bound aggregate work while preserving deterministic commits
+- operation errors: failed calls expose stable _meta.errorCode values; read_multiple_files uses the same vocabulary per item
+- detect_encoding: empty files return assumed UTF-8; ambiguous non-empty input is reported explicitly; UTF-32 remains BOM-management only
 - detect_line_endings: incremental one-pass detection for uniform files and digest-verified two-pass minority-line collection for mixed files
 - change_line_endings: stream LF/CRLF transformation to disk staging while preserving encoding, BOM, standalone CR, and unrelated bytes
 
@@ -100,8 +100,6 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	mcp.AddTool(server, catalogTool("list_allowed_directories"), handler.Wrap(logger, "list_allowed_directories", h.HandleListAllowedDirectories))
 
 	mcp.AddTool(server, catalogTool("get_file_info"), handler.Wrap(logger, "get_file_info", h.HandleGetFileInfo))
-
-	mcp.AddTool(server, catalogTool("directory_tree"), handler.Wrap(logger, "directory_tree", h.HandleDirectoryTree))
 
 	mcp.AddTool(server, catalogTool("tree"), handler.Wrap(logger, "tree", h.HandleTree))
 

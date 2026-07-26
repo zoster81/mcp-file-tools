@@ -19,7 +19,7 @@ func TestHandleGrepBoundsAggregateOutput(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
 		DefaultEncoding: "utf-8",
-		MemoryThreshold: 10,
+		Limits:          config.Limits{MaxOutputBytes: 10},
 	}))
 	path := filepath.Join(tempDir, "large-match.txt")
 	if err := os.WriteFile(path, []byte("12345678901\n"), 0644); err != nil {

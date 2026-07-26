@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -40,11 +41,18 @@ func mapOperationError(err error, path string) operationErrorMapping {
 		}
 	case operation.KindEncoding, operation.KindDecoding, operation.KindEncodingOutput:
 		mapping.BatchCode = ErrCodeEncoding
-	case operation.KindInvalidInput, operation.KindConflict, operation.KindCancelled, operation.KindLimit:
-		mapping.BatchCode = ErrCodeOperationFailed
-		if kind == operation.KindCancelled {
-			mapping.Message = "operation cancelled"
+		if errors.Is(err, ErrEncodingAmbiguous) {
+			mapping.BatchCode = ErrCodeEncodingAmbiguous
 		}
+	case operation.KindInvalidInput:
+		mapping.BatchCode = ErrCodeInvalidInput
+	case operation.KindConflict:
+		mapping.BatchCode = ErrCodeConflict
+	case operation.KindCancelled:
+		mapping.BatchCode = ErrCodeCancelled
+		mapping.Message = "operation cancelled"
+	case operation.KindLimit:
+		mapping.BatchCode = ErrCodeLimit
 	case operation.KindFilesystem, operation.KindUnknown:
 		mapping.BatchCode = ErrCodeIO
 	}
@@ -54,5 +62,6 @@ func mapOperationError(err error, path string) operationErrorMapping {
 // errorResultFromError converts an operation error to the standard MCP error
 // envelope while preserving its public message.
 func errorResultFromError(err error) *mcp.CallToolResult {
-	return errorResult(err.Error())
+	mapping := mapOperationError(err, "")
+	return errorResultWithCode(mapping.BatchCode, mapping.Message)
 }

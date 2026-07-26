@@ -104,30 +104,27 @@ func (h *Handler) resolveEncodingFromDataDetailed(inputEncoding string, data []b
 	}
 
 	result.autoDetected = true
+	if len(data) == 0 {
+		result.name = "utf-8"
+		result.detectedEncoding = "utf-8"
+		enc, _ := fileEncoding.Get(result.name)
+		result.encoder = enc
+		return result, nil
+	}
+
 	detection := fileEncoding.Detect(data)
 	result.detectedEncoding = detection.Charset
 	result.encodingConfidence = detection.Confidence
-
-	if detection.Confidence >= fileEncoding.MinConfidenceThreshold && detection.Charset != "" {
-		result.name = detection.Charset
-	} else {
-		result.name = "utf-8"
-		if detection.Charset != "" {
-			result.detectedEncoding = detection.Charset + " (low confidence, using utf-8)"
-		}
+	if detection.Charset == "" || detection.Confidence < fileEncoding.MinConfidenceThreshold {
+		return result, fmt.Errorf("%w (detected %q with confidence %d)", ErrEncodingAmbiguous, detection.Charset, detection.Confidence)
 	}
+	result.name = detection.Charset
 
 	enc, ok := fileEncoding.Get(result.name)
 	if !ok {
-		result.encoder = nil
-		result.name = "utf-8"
-		if result.detectedEncoding == "" {
-			result.detectedEncoding = detection.Charset
-		}
-		result.detectedEncoding += " (unsupported, using utf-8)"
-	} else {
-		result.encoder = enc
+		return result, fmt.Errorf("%w: detected %s is not a registered read/write encoding", ErrEncodingUnsupported, result.name)
 	}
+	result.encoder = enc
 
 	slog.Debug("resolved encoding from loaded data",
 		"path", filePath,
@@ -247,7 +244,7 @@ func (h *Handler) readTextDocumentWithData(ctx context.Context, path, requestedE
 	if err != nil {
 		return textDocument{}, nil, fmt.Errorf("failed to stat file: %w", err)
 	}
-	budget := h.memoryBudget()
+	budget := h.maxFileBytes()
 	if info.Size() > budget {
 		return textDocument{}, nil, operation.Wrap(
 			operation.KindLimit,

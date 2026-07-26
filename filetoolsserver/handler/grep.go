@@ -44,7 +44,13 @@ func (h *Handler) HandleGrep(ctx context.Context, req *mcp.CallToolRequest, inpu
 	}
 	maxMatches := input.MaxMatches
 	if maxMatches <= 0 {
-		maxMatches = defaultMaxMatches
+		maxMatches = min(defaultMaxMatches, h.maxMatches())
+	}
+	if maxMatches > h.maxMatches() {
+		return errorResultWithCode(
+			ErrCodeLimit,
+			fmt.Sprintf("maxMatches %d exceeds the configured limit %d", maxMatches, h.maxMatches()),
+		), GrepOutput{}, nil
 	}
 	files := h.collectFiles(ctx, input.Paths, input.Include, input.Exclude)
 	if len(files) == 0 {
@@ -159,7 +165,7 @@ type grepPlan struct {
 // and retained output/context memory. Parallelism is used only when the
 // aggregate decoded worst case fits the configured budget.
 func (h *Handler) searchFiles(ctx context.Context, files []string, re *regexp.Regexp, input GrepInput, maxMatches int) ([]GrepMatch, int, bool, error) {
-	budget := h.memoryBudget()
+	budget := h.maxOutputBytes()
 	plans, worstTotal := h.planGrep(files, input, maxMatches)
 	maxWorkers := 0
 	if worstTotal > budget {
@@ -270,7 +276,7 @@ type pendingGrepMatch struct {
 
 // searchSingleFile retains the compatibility helper used by focused tests.
 func (h *Handler) searchSingleFile(ctx context.Context, path string, re *regexp.Regexp, input GrepInput, maxMatches int) grepFileResult {
-	return h.searchSingleFileWithBudget(ctx, path, re, input, maxMatches, h.memoryBudget())
+	return h.searchSingleFileWithBudget(ctx, path, re, input, maxMatches, h.maxOutputBytes())
 }
 
 func grepBudgetError(path string, budget int64) error {
@@ -426,7 +432,7 @@ func (h *Handler) searchSingleFileWithBudget(ctx context.Context, path string, r
 		return nil
 	}
 
-	_, scanErr := textstream.ScanLines(ctx, reader, textstream.DefaultMaxLineBytes, func(line textstream.Line) error {
+	_, scanErr := textstream.ScanLines(ctx, reader, h.maxLineBytes(), func(line textstream.Line) error {
 		for _, segment := range bytes.Split(line.Data, []byte{'\r'}) {
 			if err := processLine(segment); err != nil {
 				return err

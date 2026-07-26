@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,20 +74,8 @@ func main() {
 	os.Mkdir(filepath.Join(tempDir, "subdir"), 0755)
 	os.WriteFile(filepath.Join(tempDir, "subdir", "nested.txt"), []byte("x"), 0644)
 
-	r10, o10, _ := h.HandleDirectoryTree(ctx, nil, handler.DirectoryTreeInput{Path: tempDir})
-	var tree []handler.TreeEntry
-	json.Unmarshal([]byte(o10.Tree), &tree)
-	check("directory_tree", !r10.IsError && len(tree) >= 2)
-
-	r11, o11, _ := h.HandleDirectoryTree(ctx, nil, handler.DirectoryTreeInput{Path: tempDir, ExcludePatterns: []string{"*.txt"}})
-	json.Unmarshal([]byte(o11.Tree), &tree)
-	hasFile := false
-	for _, e := range tree {
-		if e.Type == "file" {
-			hasFile = true
-		}
-	}
-	check("directory_tree (exclude)", !r11.IsError && !hasFile)
+	r10, o10, _ := h.HandleTree(ctx, nil, handler.TreeInput{Path: tempDir})
+	check("tree", !r10.IsError && o10.FileCount >= 2 && o10.DirCount >= 1)
 
 	// Offset/Limit pagination
 	multiFile := filepath.Join(tempDir, "multi.txt")

@@ -27,10 +27,11 @@ func TestMapOperationErrorToBatch(t *testing.T) {
 		{name: "encoding", err: ErrEncodingUnsupported, wantMessage: ErrEncodingUnsupported.Error(), wantCode: ErrCodeEncoding},
 		{name: "decoding", err: ErrEncodingDecode, wantMessage: ErrEncodingDecode.Error(), wantCode: ErrCodeEncoding},
 		{name: "encoding output", err: ErrEncodingEncode, wantMessage: ErrEncodingEncode.Error(), wantCode: ErrCodeEncoding},
-		{name: "cancelled", err: context.Canceled, wantMessage: "operation cancelled", wantCode: ErrCodeOperationFailed},
-		{name: "deadline", err: context.DeadlineExceeded, wantMessage: "operation cancelled", wantCode: ErrCodeOperationFailed},
-		{name: "conflict", err: operation.New(operation.KindConflict, "target changed"), wantMessage: "target changed", wantCode: ErrCodeOperationFailed},
-		{name: "limit", err: operation.New(operation.KindLimit, "result limit exceeded"), wantMessage: "result limit exceeded", wantCode: ErrCodeOperationFailed},
+		{name: "ambiguous encoding", err: ErrEncodingAmbiguous, wantMessage: ErrEncodingAmbiguous.Error(), wantCode: ErrCodeEncodingAmbiguous},
+		{name: "cancelled", err: context.Canceled, wantMessage: "operation cancelled", wantCode: ErrCodeCancelled},
+		{name: "deadline", err: context.DeadlineExceeded, wantMessage: "operation cancelled", wantCode: ErrCodeCancelled},
+		{name: "conflict", err: operation.New(operation.KindConflict, "target changed"), wantMessage: "target changed", wantCode: ErrCodeConflict},
+		{name: "limit", err: operation.New(operation.KindLimit, "result limit exceeded"), wantMessage: "result limit exceeded", wantCode: ErrCodeLimit},
 		{name: "filesystem", err: operation.New(operation.KindFilesystem, "disk failure"), wantMessage: "disk failure", wantCode: ErrCodeIO},
 		{name: "unknown", err: errors.New("boom"), wantMessage: "boom", wantCode: ErrCodeIO},
 	}
@@ -61,5 +62,8 @@ func TestErrorResultFromErrorPreservesPublicMessage(t *testing.T) {
 	}
 	if got, want := text.Text, "failed to read file: disk failure"; got != want {
 		t.Fatalf("message = %q, want %q", got, want)
+	}
+	if got, want := result.Meta[ErrorCodeMetaKey], ErrCodeIO; got != want {
+		t.Fatalf("error code = %#v, want %q", got, want)
 	}
 }

@@ -18,6 +18,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added shared incremental decoder/encoder readers for all 24 registered encodings, bounded decoded-line framing, and context-aware streaming transforms.
 - Added digesting read sessions and reader-based same-directory mutation staging with byte-identical no-op detection.
 - Added focused chunk-boundary, cancellation, output-budget, oversized-line, disk-full, cleanup, concurrent-change, and 1/16/64 MiB benchmark coverage.
+- Added stable single-tool `_meta.errorCode` metadata, matching batch error codes, configurable `MCP_MAX_*` limits, 2.0 schema-contract tests, and a 1.8-to-2.0 migration guide.
 
 ### Changed
 
@@ -34,6 +35,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Migrated `read_text_file`, `read_multiple_files`, `grep_text_files`, encoding conversion, line-ending detection/conversion, and BOM add/strip to bounded streams or disk staging while preserving deterministic ordering, encoding, BOM, line endings, backups, cancellation, and concurrent-modification checks.
 - Enforced `MCP_MEMORY_THRESHOLD` as the default hard budget for single-read output, aggregate batch output, retained grep state, inconsistent-line lists, and full-document editing; decoded lines above 16 MiB are rejected.
 - Made the legacy byte-slice sample detector private and removed obsolete full-buffer read/grep helpers.
+- Standardized public BOM fields on `hasBOM`, made empty-file and ambiguous-input behavior explicit, kept UTF-32 as BOM-management only, and split the legacy memory threshold into specific hard limits.
 
 ### Fixed
 
@@ -113,6 +115,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Removed
 
+- Removed the deprecated `directory_tree` MCP tool, its JSON-in-a-string output schema, handler, and tests; use `tree` instead.
 - Removed the duplicated handler-local `atomicWriteFile`, `atomicWriteWithBackup`, and temporary-path implementation after all consumers migrated to the shared filesystem mutation layer.
 - Removed source backup files that were not part of the runtime implementation.
 

@@ -31,7 +31,7 @@ func (h *Handler) HandleReadTextFile(ctx context.Context, req *mcp.CallToolReque
 	}
 
 	if input.maxOutputBytes <= 0 {
-		input.maxOutputBytes = clampBudgetToInt(h.memoryBudget())
+		input.maxOutputBytes = clampBudgetToInt(h.maxOutputBytes())
 		input.outputLimitName = "read output limit"
 	}
 	output, err := h.readTextFileStream(ctx, v.Path, input)
@@ -94,8 +94,16 @@ func (h *Handler) readTextFileStream(ctx context.Context, path string, input Rea
 	if input.Limit != nil && *input.Limit > 0 {
 		lineLimit = *input.Limit
 	}
-	maxCharacters := 0
+	maxCharacters := h.maxDecodedCharacters()
 	if input.MaxCharacters != nil && *input.MaxCharacters > 0 {
+		if *input.MaxCharacters > maxCharacters {
+			return ReadTextFileOutput{}, operation.Wrap(
+				operation.KindLimit,
+				"read_text_file",
+				path,
+				fmt.Errorf("maxCharacters %d exceeds the configured limit %d", *input.MaxCharacters, maxCharacters),
+			)
+		}
 		maxCharacters = *input.MaxCharacters
 	}
 
@@ -103,7 +111,7 @@ func (h *Handler) readTextFileStream(ctx context.Context, path string, input Rea
 	selectedCount := 0
 	firstSelectedLine := 0
 	lastSelectedLine := 0
-	totalLines, err := textstream.ScanLines(ctx, stream.Reader, textstream.DefaultMaxLineBytes, func(line textstream.Line) error {
+	totalLines, err := textstream.ScanLines(ctx, stream.Reader, h.maxLineBytes(), func(line textstream.Line) error {
 		if line.Number < startWanted || lineLimit > 0 && selectedCount >= lineLimit {
 			return nil
 		}
@@ -153,8 +161,11 @@ func (h *Handler) readTextFileStream(ctx context.Context, path string, input Rea
 
 	content := collector.builder.String()
 	if collector.truncated {
-		content += fmt.Sprintf("\n\n[TRUNCATED at %d characters. File has %d lines, %d bytes. Use offset/limit for specific ranges.]",
+		notice := fmt.Sprintf("\n\n[TRUNCATED at %d characters. File has %d lines, %d bytes. Use offset/limit for specific ranges.]",
 			maxCharacters, totalLines, stream.FileSizeBytes)
+		if len(content)+len(notice) <= input.maxOutputBytes {
+			content += notice
+		}
 	}
 	output := ReadTextFileOutput{
 		Content:       content,

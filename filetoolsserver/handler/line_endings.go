@@ -87,9 +87,9 @@ type lineEndingScan struct {
 	Collected  []int
 }
 
-func scanLineEndings(ctx context.Context, reader io.Reader, collectEnding string, maxCollectedBytes int64) (lineEndingScan, error) {
+func scanLineEndings(ctx context.Context, reader io.Reader, maxLineBytes int, collectEnding string, maxCollectedBytes int64) (lineEndingScan, error) {
 	scan := lineEndingScan{}
-	totalLines, err := textstream.ScanLines(ctx, reader, textstream.DefaultMaxLineBytes, func(line textstream.Line) error {
+	totalLines, err := textstream.ScanLines(ctx, reader, maxLineBytes, func(line textstream.Line) error {
 		ending := string(line.Ending)
 		switch ending {
 		case "\r\n":
@@ -127,7 +127,7 @@ func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallTool
 	}
 	defer stream.Close()
 
-	first, err := scanLineEndings(ctx, stream.Reader, "", 0)
+	first, err := scanLineEndings(ctx, stream.Reader, h.maxLineBytes(), "", 0)
 	if err != nil {
 		return errorResultFromError(err), DetectLineEndingsOutput{}, nil
 	}
@@ -152,7 +152,7 @@ func (h *Handler) HandleDetectLineEndings(ctx context.Context, req *mcp.CallTool
 			return errorResultFromError(err), DetectLineEndingsOutput{}, nil
 		}
 		defer secondStream.Close()
-		second, err := scanLineEndings(ctx, secondStream.Reader, minorityEnding, h.memoryBudget())
+		second, err := scanLineEndings(ctx, secondStream.Reader, h.maxLineBytes(), minorityEnding, h.maxOutputBytes())
 		if err != nil {
 			return errorResultFromError(err), DetectLineEndingsOutput{}, nil
 		}
