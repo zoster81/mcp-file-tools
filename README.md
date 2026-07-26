@@ -39,7 +39,7 @@ The custom tunnel-oriented changes include authoritative CLI roots, Windows driv
 
 ## Current Development Status
 
-R1-R6 are complete and deployed in the internal development runtime. R7 completed the roadmap and documentation reset. R8 is now active; R9-R14 cover bounded-memory streaming, API cleanup, transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
+R1-R6 are complete. R7 completed the roadmap, contributor-documentation, and scoped agent-guidance reset. R8 is now active; R9-R14 cover bounded-memory streaming, API cleanup, transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
 
 Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
 
@@ -318,6 +318,10 @@ Assistant: [read_text_file with cp1251] → [modify UTF-8] → [write_file with 
 ```
 
 The original encoding can be preserved while the public `bom` policy controls BOM output explicitly. The default `auto` policy writes UTF-8 and legacy encodings without BOM and UTF-16 LE/BE with their canonical BOM; use `preserve` when BOM presence must match an existing file.
+
+## Contributing
+
+Contributor workflow is documented in [`CONTRIBUTING.md`](CONTRIBUTING.md). Coding agents should read the root [`AGENTS.md`](AGENTS.md) and the nearest scoped `AGENTS.md` before editing a subtree. Public planning and verification gates remain in [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/DEVELOPMENT_CHECKLIST.md`](docs/DEVELOPMENT_CHECKLIST.md).
 
 ## Development
 

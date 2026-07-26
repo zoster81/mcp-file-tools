@@ -176,14 +176,14 @@ func TestIsPathWithinAllowedDirectories_WindowsPaths(t *testing.T) {
 		},
 		{
 			name:        "Windows drive root descendant",
-			path:        "D:\\OpenAI-Tunnel\\start-tunnel.ps1",
+			path:        "D:\\AllowedWorkspace\\launcher.ps1",
 			allowedDirs: []string{"D:\\"},
 			expected:    true,
 			description: "a drive root should allow every descendant on that drive",
 		},
 		{
 			name:        "Windows different drive",
-			path:        "E:\\OpenAI-Tunnel\\start-tunnel.ps1",
+			path:        "E:\\AllowedWorkspace\\launcher.ps1",
 			allowedDirs: []string{"D:\\"},
 			expected:    false,
 			description: "a drive root must not allow another drive",

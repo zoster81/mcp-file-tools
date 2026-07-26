@@ -8,12 +8,16 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Added
 
+- Added a root `AGENTS.md` plus scoped guides for documentation, handlers, encoding, filesystem, security, and release scripts, with a portable `CONTRIBUTING.md` for human contributors.
+- Added a project-identity regression test that rejects private operator workspace and connector markers in tracked text files.
 - Added `internal/execution`, a shared process-preparation primitive for absolute working-directory validation, bounded timeout/output handling, cancellation, process-tree termination, and caller-supplied pre-launch revalidation.
 - Added an embedded authoritative tool catalog consumed by MCP runtime registration and Registry manifest generation, with tests enforcing runtime metadata and README/TOOLS coverage.
 - Added streaming SHA-256 filesystem snapshots for optimistic pre-execution verification without loading complete scripts into memory.
 
 ### Changed
 
+- Made the public development checklist and roadmap portable to normal repository clones, and replaced the private session-style history with a concise R1-R6 engineering history.
+- Generalized the Windows drive-root security fixture so tests do not embed a private workstation path.
 - Changed the default encoding for newly created files from legacy `cp1251` to standard UTF-8; existing files still preserve a confidently detected encoding, and `MCP_DEFAULT_ENCODING` or an explicit `encoding` can select legacy formats.
 - Replaced the historical active handoff with an authoritative R7-R14 roadmap, a reusable development checklist, and a separate R1-R6 history document; internal commit builds continue without intermediate public releases until `2.0.0`.
 - Generalized encoding documentation, runtime instructions, tool metadata, and acceptance fixtures so detection is explicitly content-based and independent of file extensions; MQL remains only an ordinary possible input domain.

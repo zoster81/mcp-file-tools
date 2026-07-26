@@ -4,12 +4,12 @@ This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
 The project is in internal development. Development commits may be built and deployed locally, but no intermediate public release is planned. The next public release target is `2.0.0`, after the native MCP Streamable HTTP server and all completion gates in this document are finished.
 
-Operational handoff state belongs in `D:\OpenAI-Tunnel\todo.md`. Reusable engineering gates belong in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md). Completed R1-R6 evidence is archived in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
+Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
 ## Operating rules
 
 - Only one milestone may be `ACTIVE` at a time.
-- Complete milestones in order unless the user explicitly reprioritizes them.
+- Complete milestones in order unless maintainers explicitly reprioritize them.
 - Keep changes atomic and limited to the active milestone.
 - Use content bytes and structural evidence for encoding detection. File extensions must not select or bias an encoding.
 - Treat domain-specific files, including MQL sources, as ordinary test fixtures rather than special encoding profiles.
@@ -41,10 +41,10 @@ Create one pragmatic development sequence, make the current limitations explicit
 
 ## Checklist
 
-- [x] Preserve the previous R1-R6 handoff as historical documentation.
+- [x] Publish a concise, contributor-facing R1-R6 engineering history.
 - [x] Create this authoritative R7-R14 roadmap.
 - [x] Create one reusable development and verification checklist.
-- [x] Replace `D:\OpenAI-Tunnel\todo.md` with a short operational handoff.
+- [x] Separate public roadmap, contributor guidance, and engineering history from private operator state.
 - [x] State consistently that internal builds continue until the next public release, `2.0.0`.
 - [x] Move Claude Code plugin verification out of active development and into the final 2.0 release gate.
 - [x] Remove MQL-specific product claims from README, tool documentation, plugin documentation, runtime instructions, and tool catalog descriptions.
@@ -54,11 +54,13 @@ Create one pragmatic development sequence, make the current limitations explicit
 - [x] Document that current BOMless UTF-16 auto-detection is incomplete and explicit encoding may still be required.
 - [x] Correct documentation that currently implies large files are streamed when the shared document path still uses `os.ReadFile`.
 - [x] Link README and publishing notes to this roadmap and the development checklist.
+- [x] Add a root `AGENTS.md`, scoped subsystem guides, and a portable `CONTRIBUTING.md`.
+- [x] Add a regression test that rejects private operator paths and connector identifiers in tracked text.
 - [x] Run catalog, documentation, Go, Node, formatting, link, and diff verification.
 
 ## Completion record
 
-Completed on 2026-07-26. The previous 699-line handoff is archived, active planning is separated from reusable engineering gates, public descriptions are extension-independent, generic UTF-16/UTF-8 acceptance fixtures pass under `.data`, extensionless, and `.random` filenames, and documentation/catalog drift checks are green.
+Completed on 2026-07-26. Public planning, contributor checks, scoped agent guidance, and engineering history are separated by responsibility; private operator state is excluded from tracked text; public descriptions are extension-independent; generic UTF-16/UTF-8 acceptance fixtures pass under `.data`, extensionless, and `.random` filenames; and documentation/catalog drift checks are green.
 
 ---
 

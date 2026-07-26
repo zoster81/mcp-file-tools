@@ -92,6 +92,49 @@ func TestUpstreamReferencesAreDocumentationOnly(t *testing.T) {
 	}
 }
 
+func TestTrackedTextExcludesPrivateOperatorState(t *testing.T) {
+	root := repositoryRoot(t)
+	privateMarkers := []string{
+		"D:" + `\OpenAI-Tunnel`,
+		"D:" + `\\OpenAI-Tunnel`,
+		"@" + "Ryzen9_0",
+	}
+
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" || entry.Name() == "dist" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !isIdentityTextFile(entry.Name()) {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		content := string(data)
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		for _, marker := range privateMarkers {
+			if strings.Contains(content, marker) {
+				t.Errorf("tracked text file %s contains private operator marker %q", relative, marker)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOperationalMetadataTargetsFork(t *testing.T) {
 	root := repositoryRoot(t)
 	assertFileContains(t, root, ".goreleaser.yml", "-X "+forkModule+"/filetoolsserver.Version={{.Version}}")
