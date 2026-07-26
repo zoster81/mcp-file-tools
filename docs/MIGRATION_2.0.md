@@ -50,6 +50,21 @@ All values must be positive decimal integers.
 | `MCP_MAX_SESSIONS` | 128 | Reserved hard limit for native Streamable HTTP sessions when that transport is implemented. |
 | `MCP_MEMORY_THRESHOLD` | — | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`. Specific variables take precedence. |
 
+## Transport selection and directory policy
+
+R11 separates process configuration, CLI parsing, shared server construction, and transport startup. Stdio remains the only implemented transport and is selected by default. It may also be selected explicitly with either:
+
+```text
+--transport=stdio
+MCP_TRANSPORT=stdio
+```
+
+The CLI option takes precedence over the environment default. Other transport values are rejected until native Streamable HTTP is implemented.
+
+Allowed directories are process-wide policy. Every connection or future HTTP session attached to one server process shares the same configured roots, 23-tool catalog, limits, execution flags, and error behavior. Sessions separate protocol lifecycle, cancellation, and concurrent requests; they do not create per-agent filesystem ACLs. Prompt instructions may narrow an agent's intended write scope, but technical isolation requires separate processes and, for concurrent Git changes, separate checkouts or worktrees.
+
+Startup directories remain authoritative and immutable for the process. A roots-capable stdio client may provide dynamic MCP roots only when the process starts without directory arguments. Future HTTP sessions will use startup roots and will not mutate them.
+
 ## Schema review
 
 Apart from the changes listed above, existing 1.8 input and output field names remain unchanged in R10. Optional fields continue to be omitted when they do not apply. The 2.0 schema tests reject snake_case output tags and verify that runtime registration matches the authoritative tool catalog.

@@ -19,6 +19,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added digesting read sessions and reader-based same-directory mutation staging with byte-identical no-op detection.
 - Added focused chunk-boundary, cancellation, output-budget, oversized-line, disk-full, cleanup, concurrent-change, and 1/16/64 MiB benchmark coverage.
 - Added stable single-tool `_meta.errorCode` metadata, matching batch error codes, configurable `MCP_MAX_*` limits, 2.0 schema-contract tests, and a 1.8-to-2.0 migration guide.
+- Added `BuildServer` with explicit process-wide options, a lifecycle-aware stdio runner, signal cancellation, and explicit `--transport=stdio` or `MCP_TRANSPORT=stdio` selection without adding an HTTP listener.
+- Added architecture tests proving that multiple connections to one server expose the same 23-tool catalog, configured roots, and explicitly supplied handler configuration.
 
 ### Changed
 
@@ -36,12 +38,17 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Enforced `MCP_MEMORY_THRESHOLD` as the default hard budget for single-read output, aggregate batch output, retained grep state, inconsistent-line lists, and full-document editing; decoded lines above 16 MiB are rejected.
 - Made the legacy byte-slice sample detector private and removed obsolete full-buffer read/grep helpers.
 - Standardized public BOM fields on `hasBOM`, made empty-file and ambiguous-input behavior explicit, kept UTF-32 as BOM-management only, and split the legacy memory threshold into specific hard limits.
+- Separated environment defaults, CLI parsing, shared server construction, and transport startup while preserving stdio protocol output and the existing `NewServer` embedding API.
+- Defined allowed directories as process-wide policy shared by every connection or future HTTP session; sessions remain lifecycle and concurrency units rather than per-agent ACLs, and prompt-level write restrictions are not server-enforced.
+- Limited dynamic MCP roots to roots-capable stdio clients started without configured directories; startup roots remain immutable for the process and future HTTP sessions cannot change them.
 
 ### Fixed
 
 - Prevented the legacy detector from accepting non-canonical BOMless UTF-16 aliases without structural validation, while retaining GBK, CP1251, UTF-8, and ASCII detection.
 - Rejected malformed, short, endian-ambiguous, NUL-heavy, executable, image, archive, sparse-NUL, and random inputs instead of forcing a UTF-16 classification.
 - Rejected script replacement or in-place content changes between `run_script` preparation and launch, including same-size and restored-timestamp changes that metadata-only checks can miss.
+- Fixed dynamic roots updates so an empty client roots list removes stale dynamic access instead of leaving previously authorized roots active.
+- Bound asynchronous update checks to the server lifecycle so shutdown cancellation cannot leave a detached update-check context running.
 
 ## 1.8.0 - 2026-07-25
 

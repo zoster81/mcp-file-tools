@@ -35,11 +35,19 @@ Another browser-hosted LLM could use the current server only if its MCP connecto
 
 The planned `2.0.0` release will add native MCP Streamable HTTP while preserving stdio support. Security design, transport separation, implementation, hardening, and release gates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
+### Process-wide directory and session model
+
+Allowed directories are a **process-wide authorization boundary**. Every MCP connection or future HTTP session attached to one server process sees the same configured directory set and the same 23 tools, limits, execution flags, and error behavior. A session represents an independent protocol connection with its own requests, cancellation, and lifecycle; it is not a per-agent filesystem role or sandbox.
+
+This deliberately supports deployments where several agents work on different projects under one allowed drive or workspace, read shared documentation or libraries, and follow prompt-level rules about where each agent may write. The server does not enforce those per-agent read/write conventions. When technical isolation is required, run separate server processes with narrower allowed directories and, for concurrent Git work, separate checkouts or worktrees.
+
+Directories supplied when the process starts remain authoritative and cannot be changed by a session. For stdio compatibility only, a roots-capable client may provide dynamic MCP roots when the process starts with no directory arguments. Native HTTP is not implemented yet; its later implementation will reuse the same process-wide configured roots rather than introduce session-specific filesystem permissions.
+
+The custom tunnel-oriented changes include authoritative process roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, a transport-independent server builder, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## Current Development Status
 
-R1-R6 are complete. R7 completed the roadmap and contributor-guidance reset; R8 completed conservative extension-independent encoding detection; R9 completed bounded-memory streaming; and R10 completed the 2.0 public API cleanup. R11 is now active; R12-R14 cover Streamable HTTP security, implementation, and final 2.0 hardening.
+R1-R6 are complete. R7 completed the roadmap and contributor-guidance reset; R8 completed conservative extension-independent encoding detection; R9 completed bounded-memory streaming; R10 completed the 2.0 public API cleanup; and R11 completed the transport-independent server architecture. R12 is now active; R13-R14 cover Streamable HTTP implementation and final 2.0 hardening.
 
 Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
 
@@ -106,7 +114,8 @@ This repository has evolved from its original upstream codebase. Compared with t
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
-- a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing.
+- a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing;
+- an explicit process configuration and shared server builder separated from transport startup, with a lifecycle-aware stdio runner, signal cancellation, explicit `stdio` transport selection, and equivalence tests across multiple connections to the same process-wide tool and root policy.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 
@@ -232,7 +241,7 @@ The same binary can be used directly by clients that launch local stdio MCP serv
 }
 ```
 
-A roots-capable client may also provide workspace directories dynamically. CLI-provided directories remain the authoritative baseline in this fork.
+The transport can be selected explicitly with `--transport=stdio` or `MCP_TRANSPORT=stdio`; stdio remains the only implemented value. A roots-capable stdio client may provide workspace directories dynamically only when the process starts without directory arguments. Once directories are configured at startup, they remain the authoritative process-wide set.
 
 ### Updating the fork
 
@@ -269,8 +278,9 @@ Once the connector is active, ask ChatGPT Web or the connected MCP client:
 - "Convert multilingual.data from UTF-8 to UTF-16 LE with `bom: auto` and create a backup"
 
 **Security:** File tools access only explicitly allowed directories:
-- **OpenAI Tunnel:** the directory arguments embedded in `MCP_COMMAND` are the authoritative baseline;
-- **roots-capable stdio clients:** client-provided roots may augment that baseline;
+- **OpenAI Tunnel:** the directory arguments embedded in `MCP_COMMAND` are the authoritative process-wide set;
+- **roots-capable stdio clients:** client-provided roots are accepted only when the process starts without configured directories;
+- **multiple sessions:** every connection to one process shares the same allowed directories; prompt instructions may narrow an agent's intended write scope but are not server-enforced ACLs;
 - **execution tools:** `run_script` validates its script and working-directory paths, while `shell` validates only its working directory and is otherwise unrestricted.
 
 ## Configuration
@@ -279,6 +289,7 @@ The server can be configured via environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `MCP_TRANSPORT` | Process transport selection. R11 accepts only `stdio`; native Streamable HTTP is added in a later milestone. The CLI `--transport` option takes precedence. | `stdio` |
 | `MCP_DEFAULT_ENCODING` | Default encoding for newly created files when `write_file` is called without `encoding`. Existing files keep a confidently detected encoding. Legacy encodings such as `cp1251` remain available as explicit overrides. | `utf-8` |
 | `MCP_MAX_FILE_BYTES` | Hard source-size limit for full-document operations such as `edit_file`. | `67108864` |
 | `MCP_MAX_DECODED_CHARACTERS` | Maximum decoded characters returned by `read_text_file`. | `16777216` |
@@ -364,8 +375,8 @@ Opens a browser where you can view tools, call them with custom arguments, and i
 Run the server with an allowed directory and send JSON-RPC commands via stdin:
 
 ```bash
-# Specify allowed directory
-go run ./cmd/mcp-file-tools /path/to/project
+# Specify transport and allowed directory
+go run ./cmd/mcp-file-tools --transport=stdio /path/to/project
 ```
 
 Example commands (paste into terminal):

@@ -16,10 +16,10 @@ const (
 
 // Handler handles all file tool operations
 type Handler struct {
-	config      *config.Config
-	cliDirs     []string // immutable baseline from CLI args; always allowed
-	allowedDirs []string
-	mu          sync.RWMutex
+	config         *config.Config
+	configuredDirs []string // immutable process-wide baseline; always allowed
+	allowedDirs    []string
+	mu             sync.RWMutex
 }
 
 // Option is a functional option for configuring Handler
@@ -37,19 +37,21 @@ func WithConfig(cfg *config.Config) Option {
 // NewHandler creates a new Handler with allowed directories and optional configuration.
 // If no config is provided via WithConfig, default configuration is used.
 func NewHandler(allowedDirs []string, opts ...Option) *Handler {
-	// Keep both the immutable CLI baseline and active roots in one canonical
+	// Keep both the immutable process baseline and active roots in one canonical
 	// representation. This prevents Windows 8.3 aliases from diverging from the
 	// long paths returned by final-path resolution during later validations.
-	cliDirs := normalizeAllowedDirectories(allowedDirs)
+	configuredDirs := normalizeAllowedDirectories(allowedDirs)
 
 	h := &Handler{
-		config:      config.Load(), // Load defaults from environment
-		cliDirs:     cliDirs,
-		allowedDirs: append([]string(nil), cliDirs...),
+		configuredDirs: configuredDirs,
+		allowedDirs:    append([]string(nil), configuredDirs...),
 	}
 
 	for _, opt := range opts {
 		opt(h)
+	}
+	if h.config == nil {
+		h.config = config.Load()
 	}
 
 	return h
@@ -76,16 +78,24 @@ func (h *Handler) UpdateAllowedDirectories(newDirs []string) {
 	h.allowedDirs = normalizeAllowedDirectories(newDirs)
 }
 
-// MergeAllowedDirectories sets the allowed directories to the deduped union of the
-// CLI baseline and newDirs, so MCP roots augment rather than replace CLI args.
+// HasConfiguredDirectories reports whether this process started with an
+// authoritative directory baseline.
+func (h *Handler) HasConfiguredDirectories() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.configuredDirs) > 0
+}
+
+// MergeAllowedDirectories sets the allowed directories to the deduped union of
+// the process baseline and newDirs, so MCP roots never replace configured access.
 func (h *Handler) MergeAllowedDirectories(newDirs []string) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	normalizedNewDirs := normalizeAllowedDirectories(newDirs)
-	seen := make(map[string]struct{}, len(h.cliDirs)+len(normalizedNewDirs))
-	merged := make([]string, 0, len(h.cliDirs)+len(normalizedNewDirs))
-	for _, dirs := range [][]string{h.cliDirs, normalizedNewDirs} {
+	seen := make(map[string]struct{}, len(h.configuredDirs)+len(normalizedNewDirs))
+	merged := make([]string, 0, len(h.configuredDirs)+len(normalizedNewDirs))
+	for _, dirs := range [][]string{h.configuredDirs, normalizedNewDirs} {
 		for _, dir := range dirs {
 			if _, ok := seen[dir]; ok {
 				continue

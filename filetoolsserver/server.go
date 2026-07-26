@@ -1,6 +1,7 @@
 package filetoolsserver
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -55,26 +56,44 @@ func catalogTool(name string) *mcp.Tool {
 	}
 }
 
-// NewServer creates a new MCP server with all file tools registered.
-// If logger is nil, logging middleware is disabled but recovery is still active.
-// If cfg is nil, configuration is loaded from environment variables.
-func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *mcp.Server {
-	var handlerOpts []handler.Option
-	if cfg != nil {
-		handlerOpts = append(handlerOpts, handler.WithConfig(cfg))
-	}
-	h := handler.NewHandler(allowedDirs, handlerOpts...)
+// ServerOptions contains process-wide MCP server policy. Every connection to
+// the returned server shares the same configured directories and tool policy.
+type ServerOptions struct {
+	Version            string
+	AllowedDirectories []string
+	Logger             *slog.Logger
+	Config             *config.Config
+	EnableClientRoots  bool
+	LifecycleContext   context.Context
+}
 
+// BuildServer creates the shared MCP server without starting a transport.
+func BuildServer(options ServerOptions) *mcp.Server {
+	version := options.Version
+	if version == "" {
+		version = Version
+	}
+	cfg := options.Config
+	if cfg == nil {
+		cfg = config.Load()
+	}
+	lifecycleCtx := options.LifecycleContext
+	if lifecycleCtx == nil {
+		lifecycleCtx = context.Background()
+	}
+
+	h := handler.NewHandler(options.AllowedDirectories, handler.WithConfig(cfg))
+	logger := options.Logger
 	impl := &mcp.Implementation{
 		Name:    "mcp-file-tools",
-		Version: Version,
+		Version: version,
 	}
 
 	serverOpts := &mcp.ServerOptions{
 		Instructions:            serverInstructions,
 		Logger:                  logger,
-		InitializedHandler:      createInitializedHandler(h),
-		RootsListChangedHandler: createRootsListChangedHandler(h),
+		InitializedHandler:      createInitializedHandler(lifecycleCtx, h, version, options.EnableClientRoots),
+		RootsListChangedHandler: createRootsListChangedHandler(h, options.EnableClientRoots),
 	}
 	server := mcp.NewServer(impl, serverOpts)
 
@@ -132,7 +151,20 @@ func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *m
 	mcp.AddTool(server, catalogTool("run_script"), handler.Wrap(logger, "run_script", h.HandleRunScript))
 
 	mcp.AddTool(server, catalogTool("shell"), handler.Wrap(logger, "shell", h.HandleShell))
-	mcp.AddTool(server, catalogTool("check_for_updates"), handler.Wrap(logger, "check_for_updates", handler.NewCheckUpdateHandler(Version)))
+	mcp.AddTool(server, catalogTool("check_for_updates"), handler.Wrap(logger, "check_for_updates", handler.NewCheckUpdateHandler(version)))
 
 	return server
+}
+
+// NewServer preserves the existing embedding API while delegating to the
+// transport-independent builder.
+func NewServer(allowedDirs []string, logger *slog.Logger, cfg *config.Config) *mcp.Server {
+	return BuildServer(ServerOptions{
+		Version:            Version,
+		AllowedDirectories: allowedDirs,
+		Logger:             logger,
+		Config:             cfg,
+		EnableClientRoots:  true,
+		LifecycleContext:   context.Background(),
+	})
 }

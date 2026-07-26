@@ -14,20 +14,22 @@ import (
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
-func createInitializedHandler(h *handler.Handler) func(context.Context, *mcp.InitializedRequest) {
+func createInitializedHandler(lifecycleCtx context.Context, h *handler.Handler, version string, enableClientRoots bool) func(context.Context, *mcp.InitializedRequest) {
 	return func(ctx context.Context, req *mcp.InitializedRequest) {
-		// Async update check — runs regardless of roots support.
-		go handler.CheckForUpdatesAsync(req.Session, Version)
+		// The update check belongs to the process lifecycle, not an independent
+		// background context that can outlive server shutdown.
+		go handler.CheckForUpdatesAsync(lifecycleCtx, req.Session, version)
 
-		// If directories were already supplied through CLI arguments, use them
-		// directly. Some MCP clients (including the tunnel transport in this
-		// setup) do not support server-initiated roots/list requests.
-		currentDirs := h.GetAllowedDirectories()
-		if len(currentDirs) > 0 {
-			slog.Debug(
-				"skipping MCP roots request because CLI directories are configured",
-				"dirs", currentDirs,
-			)
+		if !enableClientRoots {
+			return
+		}
+		if h.HasConfiguredDirectories() {
+			slog.Debug("skipping MCP roots request because process directories are configured",
+				"dirs", h.GetAllowedDirectories())
+			return
+		}
+		if !clientSupportsRoots(req.Session) {
+			warnNoAllowedDirectories()
 			return
 		}
 
@@ -36,26 +38,16 @@ func createInitializedHandler(h *handler.Handler) func(context.Context, *mcp.Ini
 			fmt.Fprintf(os.Stderr, "Failed to request roots from client: %v\n", err)
 			return
 		}
-
-		if len(result.Roots) > 0 {
-			updateAllowedDirectoriesFromRoots(h, result.Roots)
-		} else {
-			fmt.Fprintf(os.Stderr, "Warning: No allowed directories configured. File operations will fail.\n")
-			fmt.Fprintf(os.Stderr, "Provide directories via CLI arguments or ensure MCP client supports roots protocol.\n")
+		updateAllowedDirectoriesFromRoots(h, result.Roots)
+		if len(h.GetAllowedDirectories()) == 0 {
+			warnNoAllowedDirectories()
 		}
 	}
 }
 
-func createRootsListChangedHandler(h *handler.Handler) func(context.Context, *mcp.RootsListChangedRequest) {
+func createRootsListChangedHandler(h *handler.Handler, enableClientRoots bool) func(context.Context, *mcp.RootsListChangedRequest) {
 	return func(ctx context.Context, req *mcp.RootsListChangedRequest) {
-		// Keep CLI-provided directories authoritative and avoid roots/list on
-		// clients that do not implement the roots capability.
-		currentDirs := h.GetAllowedDirectories()
-		if len(currentDirs) > 0 {
-			slog.Debug(
-				"ignoring roots/list_changed because CLI directories are configured",
-				"dirs", currentDirs,
-			)
+		if !enableClientRoots || h.HasConfiguredDirectories() || !clientSupportsRoots(req.Session) {
 			return
 		}
 
@@ -64,9 +56,18 @@ func createRootsListChangedHandler(h *handler.Handler) func(context.Context, *mc
 			fmt.Fprintf(os.Stderr, "Failed to request updated roots from client: %v\n", err)
 			return
 		}
-
 		updateAllowedDirectoriesFromRoots(h, result.Roots)
 	}
+}
+
+func clientSupportsRoots(session *mcp.ServerSession) bool {
+	params := session.InitializeParams()
+	return params != nil && params.Capabilities != nil && params.Capabilities.RootsV2 != nil
+}
+
+func warnNoAllowedDirectories() {
+	fmt.Fprintln(os.Stderr, "Warning: No allowed directories configured. File operations will fail.")
+	fmt.Fprintln(os.Stderr, "Provide directories via CLI arguments or ensure MCP client supports roots protocol.")
 }
 
 // fileURIToPath converts a file:// URI to a local filesystem path.
@@ -106,11 +107,11 @@ func updateAllowedDirectoriesFromRoots(h *handler.Handler, roots []*mcp.Root) {
 		}
 	}
 
+	merged := h.MergeAllowedDirectories(validatedDirs)
 	if len(validatedDirs) > 0 {
-		merged := h.MergeAllowedDirectories(validatedDirs)
 		slog.Debug("merged allowed directories from MCP roots",
 			"roots", validatedDirs, "merged", merged)
-	} else {
-		slog.Debug("no valid root directories provided by client")
+		return
 	}
+	slog.Debug("cleared dynamic MCP roots", "configured", merged)
 }

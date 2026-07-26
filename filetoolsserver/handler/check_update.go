@@ -40,9 +40,12 @@ func NewCheckUpdateHandler(version string) mcp.ToolHandlerFor[CheckUpdateInput, 
 }
 
 // CheckForUpdatesAsync checks for updates in the background and notifies via MCP logging.
-// Called once on server initialization, before any tool calls.
-func CheckForUpdatesAsync(session *mcp.ServerSession, version string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// Called once on server initialization and cancelled with the server lifecycle.
+func CheckForUpdatesAsync(parent context.Context, session *mcp.ServerSession, version string) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 
 	if msg := updater.Check(ctx, version, false); msg != "" {

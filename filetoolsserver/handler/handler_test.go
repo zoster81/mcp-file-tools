@@ -83,3 +83,19 @@ func TestUpdateAllowedDirectories_Empty(t *testing.T) {
 		t.Errorf("expected 0 dirs, got %d", len(got))
 	}
 }
+
+func TestHasConfiguredDirectoriesIgnoresDynamicRoots(t *testing.T) {
+	dynamic := NewHandler(nil)
+	if dynamic.HasConfiguredDirectories() {
+		t.Fatal("empty process unexpectedly reported configured directories")
+	}
+	dynamic.MergeAllowedDirectories([]string{t.TempDir()})
+	if dynamic.HasConfiguredDirectories() {
+		t.Fatal("dynamic roots became an authoritative process baseline")
+	}
+
+	configured := NewHandler([]string{t.TempDir()})
+	if !configured.HasConfiguredDirectories() {
+		t.Fatal("configured process did not report its authoritative baseline")
+	}
+}

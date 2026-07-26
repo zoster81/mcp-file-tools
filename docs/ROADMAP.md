@@ -26,8 +26,8 @@ Current milestone status and completion gates live in this document. Reusable en
 | R8 | COMPLETE | Generic, conservative, extension-independent encoding detection, including BOMless UTF-16. |
 | R9 | COMPLETE | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
 | R10 | COMPLETE | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
-| R11 | ACTIVE | Separate transport bootstrap from the shared MCP server and tool policies. |
-| R12 | QUEUED | Approve the Streamable HTTP threat model and security design. |
+| R11 | COMPLETE | Separate transport bootstrap from the shared MCP server and tool policies. |
+| R12 | ACTIVE | Approve the Streamable HTTP threat model and security design. |
 | R13 | QUEUED | Implement and verify native MCP Streamable HTTP while preserving stdio. |
 | R14 | QUEUED | Complete hardening, CI, packaging, migration documentation, and the 2.0.0 release. |
 
@@ -188,22 +188,35 @@ Completed on 2026-07-26. The public catalog now contains 23 tools after removing
 
 Run one shared MCP server implementation through stdio and Streamable HTTP without duplicating tool registration, policies, roots, or error behavior.
 
+## Architecture decision
+
+- Allowed directories are process-wide policy. Every connection or future HTTP session attached to one server process shares the same configured roots, tool catalog, limits, execution flags, and error behavior.
+- Sessions isolate protocol lifecycle, requests, cancellation, and concurrency; they are not per-agent filesystem identities, ACLs, or sandboxes.
+- Prompt instructions may restrict an agent to writing in one project while reading shared projects, documentation, or libraries, but the server does not enforce those per-agent conventions.
+- Technical isolation requires separate server processes with narrower roots and, where concurrent Git writes are possible, separate checkouts or worktrees.
+- Startup directories are authoritative and immutable for the process. Dynamic MCP client roots remain a stdio-only compatibility path when no startup directories are configured. Future HTTP sessions will not mutate process roots.
+- R11 does not add an HTTP listener, authentication, session manager, or network policy; those remain ordered work for R12 and R13.
+
 ## Checklist
 
-- [ ] Separate configuration loading from CLI parsing.
-- [ ] Separate server construction from transport startup.
-- [ ] Keep one authoritative tool catalog and registration path.
-- [ ] Define a transport-neutral server lifecycle abstraction.
-- [ ] Define explicit CLI/config transport selection.
-- [ ] Preserve stdio as a supported transport.
-- [ ] Keep allowed-directory policy authoritative and transport-independent.
-- [ ] Keep execution feature flags and authorization identical across transports.
-- [ ] Make logging, cancellation, graceful shutdown, and update checks lifecycle-aware.
-- [ ] Add equivalence tests for tools/list metadata and representative tool calls across transport adapters.
+- [x] Separate configuration loading from CLI parsing.
+- [x] Separate server construction from transport startup.
+- [x] Keep one authoritative tool catalog and registration path.
+- [x] Define a transport-neutral server lifecycle abstraction.
+- [x] Define explicit CLI/config transport selection.
+- [x] Preserve stdio as a supported transport.
+- [x] Keep allowed-directory policy authoritative and transport-independent.
+- [x] Keep execution feature flags and authorization identical across transports.
+- [x] Make logging, cancellation, graceful shutdown, and update checks lifecycle-aware.
+- [x] Add equivalence tests for tools/list metadata and representative tool calls across transport adapters.
 
 ## Completion gate
 
 The stdio executable uses the new architecture without behavior regression, and a second transport can be attached without duplicating handlers or weakening policy boundaries.
+
+## Completion record
+
+Completed on 2026-07-27. Configuration loading, CLI parsing, server construction, and transport startup are separate. `BuildServer` owns one shared 23-tool registration and process-wide policy; the stdio runner is lifecycle-aware and responds to process cancellation; explicit `--transport=stdio` and `MCP_TRANSPORT=stdio` selection preserve stdio as the sole implemented transport. Multiple connections to one server are verified to expose equivalent tool catalogs and the same configured roots, while provided configuration controls handler behavior. Dynamic client roots are limited to roots-capable stdio clients started without configured directories, and empty updates remove stale dynamic access. The complete race-detector suite and Gitleaks scans of Git history plus the working tree passed. HTTP listeners, authentication, and session policy remain unimplemented pending R12 and R13.
 
 ---
 
@@ -216,6 +229,7 @@ Approve a concrete threat model and secure defaults before exposing filesystem a
 ## Checklist
 
 - [ ] Document assets, trust boundaries, actors, and supported deployment models.
+- [ ] Preserve the R11 process-wide root model: all HTTP sessions share startup roots, client roots cannot mutate them, and per-agent isolation uses separate processes when required.
 - [ ] Bind to loopback by default.
 - [ ] Require explicit configuration for non-loopback binding.
 - [ ] Define token authentication and reverse-proxy integration.
@@ -263,7 +277,7 @@ Implement the MCP Streamable HTTP transport according to R11 and R12 while prese
 - [ ] Test disconnect, reconnect, timeout, cancellation, and shutdown races.
 - [ ] Test oversized payloads, slow clients, saturation, and resource cleanup.
 - [ ] Compare tool catalogs and representative tool results across stdio and HTTP.
-- [ ] Verify allowed-directory and execution policies on both transports.
+- [ ] Verify allowed-directory and execution policies on both transports, including shared process roots across simultaneous HTTP sessions.
 - [ ] Run direct HTTP end-to-end tests and OpenAI tunnel compatibility tests where applicable.
 
 ## Completion gate

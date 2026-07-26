@@ -41,6 +41,21 @@ func TestUpdateAllowedDirectoriesFromRoots_EmptyRoots(t *testing.T) {
 	}
 }
 
+func TestUpdateAllowedDirectoriesFromRoots_EmptyRootsDropPreviousDynamicRoots(t *testing.T) {
+	h := handler.NewHandler(nil)
+	root := t.TempDir()
+
+	updateAllowedDirectoriesFromRoots(h, []*mcp.Root{{URI: "file:///" + filepath.ToSlash(root)}})
+	if got := h.GetAllowedDirectories(); len(got) != 1 {
+		t.Fatalf("expected one dynamic root, got %v", got)
+	}
+
+	updateAllowedDirectoriesFromRoots(h, nil)
+	if got := h.GetAllowedDirectories(); len(got) != 0 {
+		t.Fatalf("empty roots retained stale dynamic access: %v", got)
+	}
+}
+
 func TestUpdateAllowedDirectoriesFromRoots_WindowsPath(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Skipping Windows-specific test on non-Windows platform")

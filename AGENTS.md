@@ -56,6 +56,8 @@ Use focused TDD when practical: reproduce, confirm the expected failure, impleme
 - Mutations must preserve the durable staging, snapshot, no-replace, rollback, cleanup, and platform-sync guarantees in `internal/filesystem`.
 - Public error schemas and tool metadata remain stable unless a roadmap milestone explicitly changes them.
 - `run_script` and `shell` remain disabled by default. Do not weaken their distinct authorization boundaries.
+- Allowed directories are process-wide policy shared by every connection; do not introduce per-session filesystem ACLs or let future HTTP sessions mutate startup roots without an explicit roadmap decision.
+- Dynamic MCP client roots are a stdio-only compatibility path when no startup directories are configured.
 - Preserve stdio behavior while transport work is in progress.
 
 ## Verification commands
