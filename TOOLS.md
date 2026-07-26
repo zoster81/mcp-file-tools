@@ -336,7 +336,7 @@ Recursively search for files and directories matching a glob pattern in determin
 
 ### grep_text_files
 
-Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. BOM-bearing UTF-16 LE/BE files are auto-detected; pass `encoding` explicitly for BOMless or otherwise ambiguous files. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. File scans run through the shared bounded ordered worker coordinator: results commit in deterministic traversal order, pending per-file results remain bounded, cancellation stops new dispatch, and `maxMatches` is enforced while scanning rather than after unbounded collection.
+Search decoded text using regex patterns through the same encoding/BOM-aware document pipeline used by read and edit operations. UTF-16 LE/BE is auto-detected from a BOM or from conservative structural and decoded-text evidence; pass `encoding` explicitly for short, malformed, or otherwise ambiguous BOMless input. Directory inputs use the shared secure walker, which skips symlinks, Windows junctions, and other reparse points resolving outside the allowed directories. File scans run through the shared bounded ordered worker coordinator: results commit in deterministic traversal order, pending per-file results remain bounded, cancellation stops new dispatch, and `maxMatches` is enforced while scanning rather than after unbounded collection.
 
 **Parameters:**
 - `pattern` (required): Regular expression pattern to search for
@@ -386,13 +386,13 @@ Search decoded text using regex patterns through the same encoding/BOM-aware doc
 
 ### detect_encoding
 
-Detect the encoding of a file with confidence percentage. Detection is based on BOMs and file content, never on the filename or extension. BOMless UTF-16 and other structurally ambiguous inputs are not yet guaranteed and may require an explicit encoding. Useful for diagnosing encoding issues (garbled text, � characters).
+Detect the encoding of a file with confidence percentage. Detection is based on BOMs and file content, never on the filename or extension. Unicode BOMs return authoritative 100% results. BOMless UTF-16 LE/BE is reported only when byte structure, valid surrogate pairs, decoded-text quality, NUL-byte parity, and exact round-trip evidence agree; short, malformed, binary-like, or endian-ambiguous input is not forced and may require an explicit encoding. Useful for diagnosing encoding issues (garbled text, � characters).
 
 **Parameters:**
 - `path` (required): Path to the file
 - `mode` (optional): Detection mode
   - `sample` (default): Read begin/middle/end samples - fast, good for most files
-  - `chunked`: Read all chunks with weighted averaging - thorough but slower
+  - `chunked`: Stream all chunks, preserving UTF-16 code-unit state and aggregating legacy evidence - thorough but slower
   - `full`: Read entire file - most accurate but uses more memory
 
 **Example:**
@@ -484,7 +484,7 @@ Detect line ending style (CRLF/LF/mixed) after decoding the file through the sha
 - `mixed`: File has both CRLF and LF endings - `inconsistentLines` lists lines with minority style
 - `none`: File has no line endings (single line or empty)
 
-**Detection note:** encoding is inferred from bytes and decoded-content evidence, not from file extensions. Auto-detection handles BOM-bearing UTF-16 files deterministically; use an explicit encoding for BOMless or otherwise ambiguous input.
+**Detection note:** encoding is inferred from bytes and decoded-content evidence, not from file extensions. UTF-16 LE/BE is auto-detected from a BOM or from conservative structural validation; use an explicit encoding when BOMless evidence is short, malformed, or endian-ambiguous.
 
 ### change_line_endings
 
@@ -516,7 +516,7 @@ Convert line endings in a file to LF or CRLF while preserving the original encod
 
 ### manage_bom
 
-Detect, strip, or add Unicode BOM (Byte Order Mark). UTF-8 BOM breaks PHP/shell scripts. UTF-16 files need BOMs for proper detection. Strip and add operations snapshot the original bytes, revalidate the path, and use synced atomic replacement; cancellation or concurrent changes leave the original file unchanged.
+Detect, strip, or add Unicode BOM (Byte Order Mark). UTF-8 BOM breaks PHP/shell scripts. UTF-16 BOMs remain the authoritative and most interoperable encoding signal, although structurally clear BOMless UTF-16 may also be detected. Strip and add operations snapshot the original bytes, revalidate the path, and use synced atomic replacement; cancellation or concurrent changes leave the original file unchanged.
 
 **Parameters:**
 - `path` (required): Path to the file

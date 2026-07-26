@@ -39,7 +39,7 @@
     {
       "name": "detect_encoding",
       "title": "Detect Encoding",
-      "description": "Auto-detect file encoding from BOMs and file content with confidence score (0-100); filenames and extensions are never used as encoding hints. BOMless UTF-16 and other ambiguous inputs may require an explicit encoding until structural detection is expanded. Use this first when encountering garbled text or � characters. Parameters: path (required), mode (sample=fast default, chunked=thorough, full=entire file).",
+      "description": "Auto-detect file encoding from BOMs and file content with confidence score (0-100); filenames and extensions are never used as encoding hints. Unicode BOMs are authoritative. BOMless UTF-16 LE/BE is accepted only when byte structure, surrogate validation, decoded-text quality, NUL parity, and round-trip evidence agree; short, malformed, binary-like, or endian-ambiguous input may require an explicit encoding. Use this first when encountering garbled text or � characters. Parameters: path (required), mode (sample=fast default, chunked=thorough, full=entire file).",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -48,7 +48,7 @@
     {
       "name": "grep_text_files",
       "title": "Grep Text Files",
-      "description": "Regex search through the shared encoding/BOM-aware document decoder, deterministic secure walker, and bounded ordered worker coordinator. Directory traversal skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. File results commit in lexical order, pending results stay bounded, and cancellation stops new dispatch. Auto-detects BOM-bearing UTF-16 LE/BE; pass encoding explicitly for BOMless or ambiguous files. Binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
+      "description": "Regex search through the shared encoding/BOM-aware document decoder, deterministic secure walker, and bounded ordered worker coordinator. Directory traversal skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. File results commit in lexical order, pending results stay bounded, and cancellation stops new dispatch. Auto-detects UTF-16 LE/BE from a BOM or conservative structural and decoded-text evidence; pass encoding explicitly for short, malformed, or otherwise ambiguous BOMless input. Binary classification occurs after decoding, and maxMatches is enforced during scanning. Parameters: pattern (required regex), paths (required array of files/dirs), caseSensitive (default: true), contextBefore/After (lines), maxMatches (default 1000), include/exclude (globs), encoding.",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -111,7 +111,7 @@
     {
       "name": "manage_bom",
       "title": "Manage BOM",
-      "description": "Detect, strip, or add Unicode BOM (Byte Order Mark). Strip/add snapshot the original bytes, revalidate the path, and use synced atomic replacement so cancellation or detected concurrent changes leave the original unchanged. UTF-8 BOM breaks PHP/shell scripts; UTF-16 files need BOMs. Parameters: path (required), action (required: \"detect\"|\"strip\"|\"add\"), encoding (required for \"add\": utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be).",
+      "description": "Detect, strip, or add Unicode BOM (Byte Order Mark). Strip/add snapshot the original bytes, revalidate the path, and use synced atomic replacement so cancellation or detected concurrent changes leave the original unchanged. UTF-8 BOM breaks PHP/shell scripts; UTF-16 BOMs remain the authoritative and most interoperable signal even though structurally clear BOMless UTF-16 may also be detected. Parameters: path (required), action (required: \"detect\"|\"strip\"|\"add\"), encoding (required for \"add\": utf-8, utf-16-le, utf-16-be, utf-32-le, utf-32-be).",
       "annotations": {
         "readOnlyHint": false,
         "idempotentHint": true,

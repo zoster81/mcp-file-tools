@@ -23,8 +23,8 @@ Current milestone status and completion gates live in this document. Reusable en
 | Milestone | Status | Outcome |
 |---|---|---|
 | R7 | COMPLETE | Replaced the historical roadmap with a clear operating plan and removed domain-specific MQL emphasis. |
-| R8 | ACTIVE | Generic, conservative, extension-independent encoding detection, including BOMless UTF-16. |
-| R9 | QUEUED | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
+| R8 | COMPLETE | Generic, conservative, extension-independent encoding detection, including BOMless UTF-16. |
+| R9 | ACTIVE | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
 | R10 | QUEUED | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
 | R11 | QUEUED | Separate transport bootstrap from the shared MCP server and tool policies. |
 | R12 | QUEUED | Approve the Streamable HTTP threat model and security design. |
@@ -81,27 +81,31 @@ Infer encodings from byte structure and decoded-content evidence, independently 
 
 ## Checklist
 
-- [ ] Add structural BOMless UTF-16 LE and BE candidate detection.
-- [ ] Measure NUL distribution on even and odd byte positions.
-- [ ] Require even byte length for UTF-16 candidates.
-- [ ] Validate UTF-16 code units and surrogate pairs.
-- [ ] Reject isolated high/low surrogates and truncated pairs.
-- [ ] Measure printable, whitespace, replacement, control, and NUL rune ratios after decoding.
-- [ ] Verify decode/encode round-trip consistency for candidates.
-- [ ] Define conservative confidence thresholds and a minimum evidence size.
-- [ ] Avoid forcing a candidate when evidence is insufficient.
-- [ ] Integrate the same decision logic into sample, chunked, and full modes.
-- [ ] Verify candidate decisions across chunk boundaries.
-- [ ] Add fixtures with `.txt`, `.dat`, no extension, random extensions, and identical content under different names.
-- [ ] Add Latin, Cyrillic, Greek, Hebrew, Arabic, CJK, emoji, and mixed-script fixtures.
-- [ ] Add empty, BOM-only, very short, odd-length, truncated, and malformed UTF-16 cases.
-- [ ] Add executable, image, archive, random-byte, sparse-NUL, and binary-structure false-positive tests.
-- [ ] Fuzz detection and Unicode validation.
-- [ ] Document confidence semantics and ambiguous results.
+- [x] Add structural BOMless UTF-16 LE and BE candidate detection.
+- [x] Measure NUL distribution on even and odd byte positions.
+- [x] Require even byte length for UTF-16 candidates.
+- [x] Validate UTF-16 code units and surrogate pairs.
+- [x] Reject isolated high/low surrogates and truncated pairs.
+- [x] Measure printable, whitespace, replacement, control, and NUL rune ratios after decoding.
+- [x] Verify decode/encode round-trip consistency for candidates.
+- [x] Define conservative confidence thresholds and a minimum evidence size.
+- [x] Avoid forcing a candidate when evidence is insufficient.
+- [x] Integrate the same decision logic into sample, chunked, and full modes.
+- [x] Verify candidate decisions across chunk boundaries.
+- [x] Add fixtures with `.txt`, `.dat`, no extension, random extensions, and identical content under different names.
+- [x] Add Latin, Cyrillic, Greek, Hebrew, Arabic, CJK, emoji, and mixed-script fixtures.
+- [x] Add empty, BOM-only, very short, odd-length, truncated, and malformed UTF-16 cases.
+- [x] Add executable, image, archive, random-byte, sparse-NUL, and binary-structure false-positive tests.
+- [x] Fuzz detection and Unicode validation.
+- [x] Document confidence semantics and ambiguous results.
 
 ## Completion gate
 
 The same byte sequence must produce the same result under any filename. BOMless UTF-16 must be recognized only when structural and decoded-text evidence agree, and binary false-positive tests must pass.
+
+## Completion record
+
+Completed on 2026-07-26. Detection now uses one conservative UTF-16 LE/BE classifier with code-unit and surrogate validation, decoded-text metrics, NUL-byte parity, round-trip checks, deterministic confidence, and explicit ambiguity. Sample, chunked, and full modes share the same decision semantics; chunked analysis preserves surrogate state across 128 KiB boundaries. Tests cover identical bytes under unrelated filenames, multilingual scripts and emoji, malformed and short input, BOM-only files, legacy encodings, executable/image/archive/random data, and public read/grep integration. A bounded fuzz smoke test and the applicable verification ladder passed; the race detector was unavailable and no standalone deployment build was performed.
 
 ---
 

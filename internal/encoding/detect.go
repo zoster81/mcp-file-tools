@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -121,7 +122,19 @@ func Detect(data []byte) DetectionResult {
 	if result, ok := DetectBOM(data); ok {
 		return result
 	}
+	if mayContainUTF16(data) {
+		if result, handled := detectUTF16(data); handled {
+			return result
+		}
+	}
+	return detectLegacy(data)
+}
 
+func mayContainUTF16(data []byte) bool {
+	return len(data) >= 4 && (!utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0)
+}
+
+func detectLegacy(data []byte) DetectionResult {
 	detected := chardet.Detect(data)
 	if detected.Encoding == "" {
 		if utf8.Valid(data) {
@@ -130,8 +143,13 @@ func Detect(data []byte) DetectionResult {
 		return DetectionResult{}
 	}
 
-	charset := strings.ToLower(detected.Encoding)
+	charset := canonicalDetectedCharset(detected.Encoding)
 	confidence := int(detected.Confidence * 100)
+
+	// BOMless UTF-16 is accepted only by the structural classifier above.
+	if charset == "utf-16-le" || charset == "utf-16-be" {
+		return DetectionResult{}
+	}
 
 	switch charset {
 	case "gb2312", "hz-gb-2312":
@@ -144,6 +162,17 @@ func Detect(data []byte) DetectionResult {
 	}
 
 	return DetectionResult{Charset: charset, Confidence: confidence}
+}
+
+func canonicalDetectedCharset(charset string) string {
+	switch strings.ToLower(charset) {
+	case "utf-16le", "utf16le":
+		return "utf-16-le"
+	case "utf-16be", "utf16be":
+		return "utf-16-be"
+	default:
+		return strings.ToLower(charset)
+	}
 }
 
 // looksLikeGBK reports whether data holds enough valid GBK two-byte sequences,
@@ -175,40 +204,54 @@ func looksLikeGBK(data []byte) bool {
 // TODO: Make private or remove when grep.go and convert_encoding.go use streaming I/O.
 func DetectSample(data []byte) (DetectionResult, bool) {
 	size := len(data)
-
 	if size <= SmallFileThreshold {
 		result := Detect(data)
 		return result, result.Confidence >= MinConfidenceThreshold
 	}
-
-	// Sample chunks from beginning, middle, and end
-	var samples []byte
-
-	// Beginning chunk
-	endOfFirst := min(ChunkSize, size)
-	samples = append(samples, data[:endOfFirst]...)
-
-	// Check beginning first - if high confidence, return early
-	result := Detect(samples)
-	if result.Confidence >= HighConfidenceThreshold {
+	if result, ok := DetectBOM(data); ok {
 		return result, true
 	}
 
-	// Middle chunk
-	if size > ChunkSize*2 {
-		midStart := (size - ChunkSize) / 2
-		midEnd := min(midStart+ChunkSize, size)
-		samples = append(samples, data[midStart:midEnd]...)
+	samples := detectionSamplesFromData(data)
+	if result, handled := detectUTF16Samples(samples, int64(size)); handled {
+		return result, result.Confidence >= MinConfidenceThreshold
 	}
 
-	// End chunk
-	if size > ChunkSize {
-		endStart := max(0, size-ChunkSize)
-		samples = append(samples, data[endStart:]...)
+	result := detectLegacy(samples[0].data)
+	if result.Confidence >= HighConfidenceThreshold {
+		return result, true
 	}
-
-	result = Detect(samples)
+	result = detectLegacy(joinDetectionSamples(samples))
 	return result, result.Confidence >= MinConfidenceThreshold
+}
+
+func detectionSamplesFromData(data []byte) []byteSample {
+	size := len(data)
+	samples := []byteSample{{data: data[:min(ChunkSize, size)], offset: 0}}
+
+	if size > ChunkSize*2 {
+		middle := (size - ChunkSize) / 2
+		middle -= middle % 2
+		samples = append(samples, byteSample{data: data[middle : middle+ChunkSize], offset: int64(middle)})
+	}
+	if size > ChunkSize {
+		end := size - ChunkSize
+		end -= end % 2
+		samples = append(samples, byteSample{data: data[end:], offset: int64(end)})
+	}
+	return samples
+}
+
+func joinDetectionSamples(samples []byteSample) []byte {
+	total := 0
+	for _, sample := range samples {
+		total += len(sample.data)
+	}
+	joined := make([]byte, 0, total)
+	for _, sample := range samples {
+		joined = append(joined, sample.data...)
+	}
+	return joined
 }
 
 // --- Internal streaming implementation ---
@@ -240,51 +283,51 @@ func detectSampleFromReader(r io.ReaderAt, size int64) (DetectionResult, error) 
 		return Detect(data), nil
 	}
 
-	// Read beginning chunk
-	beginChunk := make([]byte, ChunkSize)
-	n, err := r.ReadAt(beginChunk, 0)
-	if err != nil && err != io.EOF {
-		return DetectionResult{}, fmt.Errorf("failed to read beginning: %w", err)
+	samples, err := readDetectionSamples(r, size)
+	if err != nil {
+		return DetectionResult{}, err
 	}
-	beginChunk = beginChunk[:n]
-
-	if result, ok := DetectBOM(beginChunk); ok {
+	if result, ok := DetectBOM(samples[0].data); ok {
+		return result, nil
+	}
+	if result, handled := detectUTF16Samples(samples, size); handled {
 		return result, nil
 	}
 
-	// Check beginning chunk - if high confidence, return early
-	result := Detect(beginChunk)
+	result := detectLegacy(samples[0].data)
 	if result.Confidence >= HighConfidenceThreshold {
 		return result, nil
 	}
+	return detectLegacy(joinDetectionSamples(samples)), nil
+}
 
-	// Collect samples for combined detection
-	samples := make([]byte, 0, ChunkSize*3)
-	samples = append(samples, beginChunk...)
-
-	// Middle chunk
+func readDetectionSamples(r io.ReaderAt, size int64) ([]byteSample, error) {
+	offsets := []int64{0}
 	if size > int64(ChunkSize*2) {
-		midStart := (size - int64(ChunkSize)) / 2
-		midChunk := make([]byte, ChunkSize)
-		n, err := r.ReadAt(midChunk, midStart)
-		if err != nil && err != io.EOF {
-			return DetectionResult{}, fmt.Errorf("failed to read middle: %w", err)
-		}
-		samples = append(samples, midChunk[:n]...)
+		middle := (size - int64(ChunkSize)) / 2
+		middle -= middle % 2
+		offsets = append(offsets, middle)
 	}
-
-	// End chunk
 	if size > int64(ChunkSize) {
-		endStart := size - int64(ChunkSize)
-		endChunk := make([]byte, ChunkSize)
-		n, err := r.ReadAt(endChunk, endStart)
-		if err != nil && err != io.EOF {
-			return DetectionResult{}, fmt.Errorf("failed to read end: %w", err)
-		}
-		samples = append(samples, endChunk[:n]...)
+		end := size - int64(ChunkSize)
+		end -= end % 2
+		offsets = append(offsets, end)
 	}
 
-	return Detect(samples), nil
+	samples := make([]byteSample, 0, len(offsets))
+	for _, offset := range offsets {
+		length := min(int64(ChunkSize), size-offset)
+		if offset == offsets[len(offsets)-1] {
+			length = size - offset
+		}
+		data := make([]byte, int(length))
+		n, err := r.ReadAt(data, offset)
+		if err != nil && err != io.EOF {
+			return nil, fmt.Errorf("failed to read sample at %d: %w", offset, err)
+		}
+		samples = append(samples, byteSample{data: data[:n], offset: offset})
+	}
+	return samples, nil
 }
 
 func detectChunkedFromReader(r io.ReaderAt, size int64) (DetectionResult, error) {
@@ -296,7 +339,6 @@ func detectChunkedFromReader(r io.ReaderAt, size int64) (DetectionResult, error)
 		return Detect(data), nil
 	}
 
-	// Check for BOM (need 4 bytes for UTF-32)
 	bomCheck := make([]byte, 4)
 	if n, _ := r.ReadAt(bomCheck, 0); n >= 2 {
 		if result, ok := DetectBOM(bomCheck[:n]); ok {
@@ -304,13 +346,14 @@ func detectChunkedFromReader(r io.ReaderAt, size int64) (DetectionResult, error)
 		}
 	}
 
-	// Process file in chunks
 	type chunkResult struct {
 		encoding   string
 		confidence int
 		weight     int
 	}
 
+	leAnalyzer := newUTF16Analyzer(utf16LESpec)
+	beAnalyzer := newUTF16Analyzer(utf16BESpec)
 	var results []chunkResult
 	chunk := make([]byte, ChunkSize)
 
@@ -323,7 +366,10 @@ func detectChunkedFromReader(r io.ReaderAt, size int64) (DetectionResult, error)
 			break
 		}
 
-		detected := Detect(chunk[:n])
+		data := chunk[:n]
+		leAnalyzer.Write(data)
+		beAnalyzer.Write(data)
+		detected := detectLegacy(data)
 		if detected.Charset != "" {
 			results = append(results, chunkResult{
 				encoding:   detected.Charset,
@@ -334,25 +380,26 @@ func detectChunkedFromReader(r io.ReaderAt, size int64) (DetectionResult, error)
 		offset += int64(n)
 	}
 
+	if result, handled := decideUTF16(leAnalyzer.Finish(), beAnalyzer.Finish()); handled {
+		return result, nil
+	}
 	if len(results) == 0 {
 		return DetectionResult{}, nil
 	}
 
-	// Aggregate results with weighted confidence
 	encodingWeights := make(map[string]int)
 	encodingConfidenceSum := make(map[string]int)
-
-	for _, r := range results {
-		encodingWeights[r.encoding] += r.weight
-		encodingConfidenceSum[r.encoding] += r.confidence * r.weight
+	for _, result := range results {
+		encodingWeights[result.encoding] += result.weight
+		encodingConfidenceSum[result.encoding] += result.confidence * result.weight
 	}
 
 	var bestEncoding string
 	var bestWeight int
-	for enc, weight := range encodingWeights {
-		if weight > bestWeight {
+	for encoding, weight := range encodingWeights {
+		if weight > bestWeight || weight == bestWeight && (bestEncoding == "" || encoding < bestEncoding) {
 			bestWeight = weight
-			bestEncoding = enc
+			bestEncoding = encoding
 		}
 	}
 

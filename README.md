@@ -39,11 +39,11 @@ The custom tunnel-oriented changes include authoritative CLI roots, Windows driv
 
 ## Current Development Status
 
-R1-R6 are complete. R7 completed the roadmap, contributor-documentation, and scoped agent-guidance reset. R8 is now active; R9-R14 cover bounded-memory streaming, API cleanup, transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
+R1-R6 are complete. R7 completed the roadmap, contributor-documentation, and scoped agent-guidance reset. R8 completed conservative extension-independent encoding detection, including structurally validated BOMless UTF-16. R9 is now active; R10-R14 cover API cleanup, transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
 
 Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
 
-Encoding detection is content-based. File extensions are not used to select or bias an encoding. BOM-bearing Unicode files are deterministic; BOMless UTF-16 and other ambiguous inputs remain explicit roadmap work and may still require an `encoding` argument.
+Encoding detection is content-based. File extensions are not used to select or bias an encoding. Unicode BOMs remain authoritative. BOMless UTF-16 LE/BE is auto-detected only when byte structure, valid surrogate pairs, decoded-text quality, NUL-byte parity, and round-trip evidence agree; short, malformed, or endian-ambiguous inputs still require an explicit `encoding`.
 
 The existing semantic-tag release workflow remains available for the final 2.0 release. The optional Claude Code plugin is not part of the active OpenAI tunnel deployment and will be reviewed only during the final release gate.
 
@@ -101,6 +101,7 @@ This repository has evolved from its original upstream codebase. Compared with t
 - correct validation of descendants when a Windows drive root such as `D:\` is allowed;
 - encoding-aware `detect_line_endings` and byte-preserving `change_line_endings` support for all 24 registered encodings, including UTF-16 LE/BE;
 - real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests;
+- conservative, extension-independent BOMless UTF-16 LE/BE detection with malformed-Unicode rejection, binary false-positive protection, deterministic mode semantics, and surrogate-pair handling across chunk boundaries;
 - a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression;
 - a deterministic, cancellation-aware secure walker shared by `tree`, `directory_tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;

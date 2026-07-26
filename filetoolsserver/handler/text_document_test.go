@@ -10,23 +10,58 @@ import (
 	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
-func encodeUTF16LEWithBOM(t *testing.T, content string) []byte {
+func encodeUTF16WithoutBOM(t *testing.T, charset, content string) []byte {
 	t.Helper()
 
-	enc, ok := fileEncoding.Get("utf-16-le")
+	enc, ok := fileEncoding.Get(charset)
 	if !ok {
-		t.Fatal("utf-16-le encoding is not registered")
+		t.Fatalf("%s encoding is not registered", charset)
 	}
 	encoded, err := enc.NewEncoder().Bytes([]byte(content))
 	if err != nil {
-		t.Fatalf("encode UTF-16 LE fixture: %v", err)
+		t.Fatalf("encode %s fixture: %v", charset, err)
 	}
+	return encoded
+}
 
+func encodeUTF16LEWithBOM(t *testing.T, content string) []byte {
+	t.Helper()
+
+	encoded := encodeUTF16WithoutBOM(t, "utf-16-le", content)
 	bom := fileEncoding.BOMBytesFor("utf-16-le")
 	result := make([]byte, 0, len(bom)+len(encoded))
 	result = append(result, bom...)
 	result = append(result, encoded...)
 	return result
+}
+
+func TestHandleReadTextFileAutoDetectsBOMlessUTF16(t *testing.T) {
+	content := "title = encoding acceptance\r\nLatin: Città\r\nCyrillic: Привет\r\nCJK: 中文\r\nEmoji: 🌍\r\n"
+
+	for _, charset := range []string{"utf-16-le", "utf-16-be"} {
+		t.Run(charset, func(t *testing.T) {
+			tempDir := t.TempDir()
+			h := NewHandler([]string{tempDir})
+			path := filepath.Join(tempDir, "multilingual.random")
+			if err := os.WriteFile(path, encodeUTF16WithoutBOM(t, charset, content), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, output, err := h.HandleReadTextFile(context.Background(), nil, ReadTextFileInput{Path: path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.IsError {
+				t.Fatalf("expected success, got %v", result.Content)
+			}
+			if output.Content != content || output.DetectedEncoding != charset || output.EncodingConfidence < fileEncoding.HighConfidenceThreshold {
+				t.Fatalf("unexpected output: %+v", output)
+			}
+			if output.HasBOM || output.BOMType != "" {
+				t.Fatalf("unexpected BOM metadata: %+v", output)
+			}
+		})
+	}
 }
 
 func TestHandleReadTextFileStripsUTF16TransportBOM(t *testing.T) {

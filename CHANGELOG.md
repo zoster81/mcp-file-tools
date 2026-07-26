@@ -8,6 +8,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Added
 
+- Added conservative, extension-independent BOMless UTF-16 LE/BE detection using code-unit and surrogate validation, decoded-text quality metrics, NUL-byte parity, exact round-trip checks, and explicit ambiguity.
+- Added multilingual, malformed-Unicode, binary false-positive, filename-independence, chunk-boundary, public read/grep integration, and fuzz coverage for encoding detection.
 - Added a root `AGENTS.md` plus scoped guides for documentation, handlers, encoding, filesystem, security, and release scripts, with a portable `CONTRIBUTING.md` for human contributors.
 - Added a project-identity regression test that rejects private operator workspace and connector markers in tracked text files.
 - Added `internal/execution`, a shared process-preparation primitive for absolute working-directory validation, bounded timeout/output handling, cancellation, process-tree termination, and caller-supplied pre-launch revalidation.
@@ -16,6 +18,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Changed
 
+- Unified BOMless UTF-16 decisions across sample, chunked, and full detection modes; chunked analysis now preserves code-unit and surrogate state across 128 KiB boundaries and resolves equal legacy weights deterministically.
+- Updated runtime instructions, tool metadata, README, tool reference, roadmap, and publishing notes for completed R8 detection behavior and the active R9 streaming milestone.
 - Made the public development checklist and roadmap portable to normal repository clones, and replaced the private session-style history with a concise R1-R6 engineering history.
 - Generalized the Windows drive-root security fixture so tests do not embed a private workstation path.
 - Changed the default encoding for newly created files from legacy `cp1251` to standard UTF-8; existing files still preserve a confidently detected encoding, and `MCP_DEFAULT_ENCODING` or an explicit `encoding` can select legacy formats.
@@ -27,6 +31,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Fixed
 
+- Prevented the legacy detector from accepting non-canonical BOMless UTF-16 aliases without structural validation, while retaining GBK, CP1251, UTF-8, and ASCII detection.
+- Rejected malformed, short, endian-ambiguous, NUL-heavy, executable, image, archive, sparse-NUL, and random inputs instead of forcing a UTF-16 classification.
 - Rejected script replacement or in-place content changes between `run_script` preparation and launch, including same-size and restored-timestamp changes that metadata-only checks can miss.
 
 ## 1.8.0 - 2026-07-25

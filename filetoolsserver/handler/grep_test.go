@@ -364,6 +364,8 @@ func TestHandleGrep_UTF16Documents(t *testing.T) {
 	}{
 		{name: "auto detects UTF-16 LE BOM", charset: "utf-16-le", withBOM: true, pattern: "title = encoding acceptance", wantLine: "title = encoding acceptance"},
 		{name: "auto detects UTF-16 BE BOM", charset: "utf-16-be", withBOM: true, pattern: "中文注释", wantLine: "// 中文注释"},
+		{name: "auto detects UTF-16 LE without BOM", charset: "utf-16-le", pattern: "Привет", wantLine: "// Привет"},
+		{name: "auto detects UTF-16 BE without BOM", charset: "utf-16-be", pattern: "Città", wantLine: "// Città"},
 		{name: "explicit UTF-16 LE without BOM", charset: "utf-16-le", requestedEncoding: "utf-16-le", pattern: "Привет", wantLine: "// Привет"},
 	}
 
