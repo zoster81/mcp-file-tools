@@ -204,7 +204,7 @@ func TestHandleConvertEncoding_GB2312AliasResolves(t *testing.T) {
 func TestHandleConvertEncoding_UTF8ToUTF16LEAutoAddsBOMAndPreservesLineEndings(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "mixed.mq5")
+	path := filepath.Join(tempDir, "mixed.data")
 	content := "alpha\r\nbeta\ngamma\rdelta"
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ func TestHandleConvertEncoding_UTF8ToUTF16LEAutoAddsBOMAndPreservesLineEndings(t
 func TestHandleConvertEncoding_UTF16LEToUTF8AutoRemovesTransportBOM(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "expert.mq5")
+	path := filepath.Join(tempDir, "multilingual.data")
 	content := "// Città Привет 中文\r\n"
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, content), 0644); err != nil {
 		t.Fatal(err)

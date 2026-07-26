@@ -424,7 +424,7 @@ func TestHandleDetectLineEndings_BOMOnlyFiles(t *testing.T) {
 func TestHandleDetectLineEndings_BOMEncodingConflict(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	testFile := filepath.Join(tempDir, "conflict.mq5")
+	testFile := filepath.Join(tempDir, "conflict.data")
 	original := encodeLineEndingFixture(t, "utf-16-le", "line1\r\nline2", true)
 	if err := os.WriteFile(testFile, original, 0644); err != nil {
 		t.Fatal(err)
@@ -468,7 +468,7 @@ func TestHandleDetectLineEndings_UnsupportedExplicitEncoding(t *testing.T) {
 func TestHandleDetectLineEndings_UTF16LEWithBOM(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	testFile := filepath.Join(tempDir, "metaeditor.mqh")
+	testFile := filepath.Join(tempDir, "multilingual.data")
 
 	// UTF-16 LE BOM followed by "line1\r\nline2\r\nline3".
 	content := []byte{

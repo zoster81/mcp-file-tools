@@ -12,8 +12,11 @@ func TestLoad_Defaults(t *testing.T) {
 
 	cfg := Load()
 
-	if cfg.DefaultEncoding != DefaultEncoding {
-		t.Errorf("expected default encoding %q, got %q", DefaultEncoding, cfg.DefaultEncoding)
+	if DefaultEncoding != "utf-8" {
+		t.Fatalf("DefaultEncoding = %q, want utf-8", DefaultEncoding)
+	}
+	if cfg.DefaultEncoding != "utf-8" {
+		t.Errorf("expected default encoding utf-8, got %q", cfg.DefaultEncoding)
 	}
 
 	if cfg.MemoryThreshold != DefaultMaxSize {
@@ -22,13 +25,13 @@ func TestLoad_Defaults(t *testing.T) {
 }
 
 func TestLoad_CustomEncoding(t *testing.T) {
-	os.Setenv(EnvDefaultEncoding, "utf-8")
+	os.Setenv(EnvDefaultEncoding, "cp1251")
 	defer os.Unsetenv(EnvDefaultEncoding)
 
 	cfg := Load()
 
-	if cfg.DefaultEncoding != "utf-8" {
-		t.Errorf("expected encoding utf-8, got %q", cfg.DefaultEncoding)
+	if cfg.DefaultEncoding != "cp1251" {
+		t.Errorf("expected encoding cp1251, got %q", cfg.DefaultEncoding)
 	}
 }
 

@@ -11,7 +11,7 @@ ChatGPT Web sees `Настройки` — not `????` or `Íàñòðîéêè`.
 
 MCP server for file operations with non-UTF-8 encoding support. Auto-detects and converts 24 encodings (Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030) and provides encoding-aware CRLF/LF detection and conversion for UTF-16 files.
 
-**Perfect for:** exposing local Windows project files and controlled execution tools to ChatGPT Web through the OpenAI Secure MCP Tunnel, including legacy Delphi/Pascal projects, VB6 applications, old PHP/HTML sites, non-UTF-8 configuration files, and MetaTrader 4/5 MQL sources (`.mq4`, `.mq5`, `.mqh`) commonly stored as UTF-16 LE with BOM and CRLF line endings.
+**Perfect for:** exposing local Windows project files and controlled execution tools to ChatGPT Web through the OpenAI Secure MCP Tunnel, including legacy Delphi/Pascal projects, VB6 applications, old PHP/HTML sites, configuration and data files, and other text assets whose encoding cannot be inferred reliably from their filename or extension.
 
 ## Purpose of This Fork
 
@@ -33,15 +33,19 @@ The fork does not require Claude Code, Codex, or another local AI application. T
 
 Another browser-hosted LLM could use the current server only if its MCP connector infrastructure provides an equivalent gateway capable of launching and bridging a local stdio MCP process. Native HTTP/JSON or Streamable HTTP transport is **not implemented yet**.
 
-A future compatibility phase may add an optional native HTTP/JSON transport while preserving stdio support. That work requires a separate security, authentication, binding, and deployment design before implementation.
+The planned `2.0.0` release will add native MCP Streamable HTTP while preserving stdio support. Security design, transport separation, implementation, hardening, and release gates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 The custom tunnel-oriented changes include authoritative CLI roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware text-document core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency for batch operations, shared process preparation, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## Current Development Status
 
-The current source branch includes completed R1-R6 refactoring: the shared text-document core, secure filesystem walker, atomic mutation layer, typed operation error model, bounded ordered concurrency utility, and execution-preparation/tool-metadata consolidation. Recursive tools share deterministic traversal, cancellation, and symlink/junction/reparse-point containment. File mutations share durable staging and optimistic conflict checks. Batch read and grep share one bounded ordered coordinator. `run_script` and `shell` share only process-level preparation, timeout, cancellation, output limiting, and pre-launch working-directory revalidation; their distinct security policies remain separate. Runtime registration and generated Registry metadata consume one embedded authoritative catalog, with tests enforcing runtime and documentation coverage without changing public schemas.
+R1-R6 are complete and deployed in the internal development runtime. R7 completed the roadmap and documentation reset. R8 is now active; R9-R14 cover bounded-memory streaming, API cleanup, transport separation, Streamable HTTP security and implementation, and final 2.0 hardening.
 
-Fork releases are produced from semantic version tags by the verified GoReleaser workflow. Each published version includes raw platform binaries, archives, and `checksums.txt`; the Claude Code plugin is pinned to the same version and refuses unverified downloads.
+Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
+
+Encoding detection is content-based. File extensions are not used to select or bias an encoding. BOM-bearing Unicode files are deterministic; BOMless UTF-16 and other ambiguous inputs remain explicit roadmap work and may still require an `encoding` argument.
+
+The existing semantic-tag release workflow remains available for the final 2.0 release. The optional Claude Code plugin is not part of the active OpenAI tunnel deployment and will be reviewed only during the final release gate.
 
 ## What It Does
 
@@ -259,9 +263,9 @@ Once the connector is active, ask ChatGPT Web or the connected MCP client:
 - "Read config.ini and detect its encoding"
 - "Show all supported encodings"
 - "Read MainForm.dfm using CP1251 encoding"
-- "Detect line endings in ExpertAdvisor.mq5 using UTF-16 LE"
-- "Convert the UTF-16 LE MQL4 file strategy.mq4 from mixed endings to CRLF without changing its BOM"
-- "Convert expert.mq5 from UTF-8 to UTF-16 LE with `bom: auto` and create a backup"
+- "Detect this extensionless file's encoding and line endings"
+- "Convert data.legacy from mixed endings to CRLF without changing its encoding or BOM"
+- "Convert multilingual.data from UTF-8 to UTF-16 LE with `bom: auto` and create a backup"
 
 **Security:** File tools access only explicitly allowed directories:
 - **OpenAI Tunnel:** the directory arguments embedded in `MCP_COMMAND` are the authoritative baseline;
@@ -274,8 +278,8 @@ The server can be configured via environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MCP_DEFAULT_ENCODING` | Default encoding for `write_file` when none specified | `cp1251` |
-| `MCP_MEMORY_THRESHOLD` | Memory threshold in bytes. Files smaller are loaded into memory for faster I/O; larger files use streaming. Also affects encoding detection mode. | `67108864` (64MB) |
+| `MCP_DEFAULT_ENCODING` | Default encoding for newly created files when `write_file` is called without `encoding`. Existing files keep a confidently detected encoding. Legacy encodings such as `cp1251` remain available as explicit overrides. | `utf-8` |
+| `MCP_MEMORY_THRESHOLD` | Advisory large-file threshold in bytes. The current shared document path logs a warning above this value but still loads the complete file; bounded-memory streaming is planned in R9. | `67108864` (64MB) |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_SHELL` | Enables only the unrestricted `shell` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_EXECUTION` | Enables both `run_script` and `shell`; use only in a trusted environment. | disabled |
@@ -302,7 +306,7 @@ To override, set environment variables in the tunnel launcher or another stdio c
 Many legacy projects use non-UTF-8 encodings that AI assistants can't handle natively:
 
 - **Delphi/Pascal** (Windows-1251): Source files with Cyrillic UI text
-- **MetaTrader 4/5 MQL** (commonly UTF-16 LE with BOM): `.mq4`, `.mq5`, and `.mqh` sources created by MetaEditor or retained in legacy installations. Newer files may also be UTF-8, so use `detect_encoding` rather than relying only on the extension.
+- **Extensionless or custom-format text** (UTF-16, Windows code pages, ISO-8859, or UTF-8): detect from content and use an explicit encoding when evidence is ambiguous
 - **Visual Basic 6** (Windows-1252): Forms and config files with Western European characters
 - **Legacy PHP/HTML** (CP1251, ISO-8859-1): Web apps with localized content
 - **Old config files** (Various): INI, properties, registry files with legacy encodings

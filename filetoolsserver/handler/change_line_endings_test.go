@@ -140,7 +140,7 @@ func representativeTextForEncoding(t *testing.T, encodingName string) string {
 
 	switch encodingName {
 	case "utf-8", "utf-16-le", "utf-16-be":
-		return "MQL © 中文 Привет"
+		return "Text © 中文 Привет"
 	case "windows-1251", "koi8-r", "ibm866", "iso-8859-5":
 		return "Привет"
 	case "koi8-u":
@@ -549,8 +549,8 @@ func TestHandleChangeLineEndings_UnsupportedExplicitEncoding(t *testing.T) {
 func TestHandleChangeLineEndings_UTF16LEWithBOM_CRLFToLF(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	testFile := filepath.Join(tempDir, "metaeditor.mqh")
-	originalText := "// Copyright © MetaQuotes\r\nstring message = \"caffè\";\r\n"
+	testFile := filepath.Join(tempDir, "multilingual.data")
+	originalText := "// Copyright © Example\r\nstring message = \"caffè\";\r\n"
 	originalData := encodeLineEndingFixture(t, "utf-16-le", originalText, true)
 	if err := os.WriteFile(testFile, originalData, 0644); err != nil {
 		t.Fatal(err)
@@ -586,7 +586,7 @@ func TestHandleChangeLineEndings_UTF16LEWithBOM_CRLFToLF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantText := "// Copyright © MetaQuotes\nstring message = \"caffè\";\n"
+	wantText := "// Copyright © Example\nstring message = \"caffè\";\n"
 	if string(decoded) != wantText {
 		t.Errorf("decoded content = %q, want %q", string(decoded), wantText)
 	}

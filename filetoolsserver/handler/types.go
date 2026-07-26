@@ -25,7 +25,8 @@ type ReadTextFileOutput struct {
 	BOMType            string `json:"bomType,omitempty"`
 }
 
-// WriteFileInput - encoding defaults to cp1251 for legacy codebases.
+// WriteFileInput defaults new files to UTF-8 when encoding is omitted and no
+// existing encoding can be preserved. Legacy encodings remain explicit options.
 // BOM accepts "auto" (default), "always", "never", or "preserve".
 type WriteFileInput struct {
 	Path     string `json:"path"`

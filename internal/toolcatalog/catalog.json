@@ -39,7 +39,7 @@
     {
       "name": "detect_encoding",
       "title": "Detect Encoding",
-      "description": "Auto-detect file encoding with confidence score (0-100) and BOM detection. ALWAYS use this first when encountering garbled text or � characters. Use before read_text_file to determine the correct encoding. Parameters: path (required), mode (sample=fast default, chunked=thorough, full=entire file).",
+      "description": "Auto-detect file encoding from BOMs and file content with confidence score (0-100); filenames and extensions are never used as encoding hints. BOMless UTF-16 and other ambiguous inputs may require an explicit encoding until structural detection is expanded. Use this first when encountering garbled text or � characters. Parameters: path (required), mode (sample=fast default, chunked=thorough, full=entire file).",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -102,7 +102,7 @@
     {
       "name": "detect_line_endings",
       "title": "Detect Line Endings",
-      "description": "Detect line ending style (crlf/lf/mixed/none) after decoding any of the 24 registered encodings, including UTF-16 LE/BE. Rejects an explicit encoding that conflicts with a Unicode BOM. Suitable for MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh), which are commonly UTF-16 LE with BOM and CRLF endings. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
+      "description": "Detect line ending style (crlf/lf/mixed/none) after decoding any of the 24 registered encodings, including UTF-16 LE/BE. Rejects an explicit encoding that conflicts with a Unicode BOM. Encoding selection is content-based and independent of file extension. Returns dominant style, total lines, and line numbers with minority endings. Parameters: path (required), encoding (optional, auto-detected if omitted).",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -122,7 +122,7 @@
     {
       "name": "change_line_endings",
       "title": "Change Line Endings",
-      "description": "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Changed output uses synced atomic replacement with path revalidation and concurrent-modification detection. Handles UTF-16 LE/BE code units separately and supports MetaTrader MQL sources (.mq4, .mq5, .mqh). Returns original style, new style, and number of lines changed. No-op if already correct. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
+      "description": "Convert line endings in a file to LF or CRLF while preserving encoding, BOM state, and all non-line-ending bytes. Changed output uses synced atomic replacement with path revalidation and concurrent-modification detection. Handles UTF-16 LE/BE code units separately and applies the same behavior regardless of filename or extension. Returns original style, new style, and number of lines changed. No-op if already correct. Parameters: path (required), style (required: \"lf\" or \"crlf\"), encoding (optional, auto-detected if omitted).",
       "annotations": {
         "readOnlyHint": false,
         "idempotentHint": true,
@@ -144,7 +144,7 @@
     {
       "name": "write_file",
       "title": "Write File",
-      "description": "Write UTF-8 content through the shared document encoder and durable mutation layer. Output is staged and synced before atomic commit; existing targets are checked for practical concurrent changes, and new targets use no-replace commit. The supplied line endings are written exactly. Parameters: path (required), content (required), encoding (preserves a confidently detected existing encoding or defaults to cp1251), bom (optional: auto|always|never|preserve; default auto).",
+      "description": "Write UTF-8 content through the shared document encoder and durable mutation layer. Output is staged and synced before atomic commit; existing targets are checked for practical concurrent changes, and new targets use no-replace commit. The supplied line endings are written exactly. Parameters: path (required), content (required), encoding (new files default to UTF-8; existing files preserve a confidently detected encoding; legacy encodings remain explicit options), bom (optional: auto|always|never|preserve; default auto).",
       "annotations": {
         "readOnlyHint": false,
         "idempotentHint": true,

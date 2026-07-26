@@ -3,16 +3,9 @@
 Installs the [`zoster81/mcp-file-tools`](https://github.com/zoster81/mcp-file-tools)
 fork into Claude Code via `/plugin install`.
 
-The server provides 24 MCP tools for encoding-aware filesystem operations,
-BOM-preserving text handling, MetaTrader MQL support, deterministic secure
-traversal, durable atomic mutations with rollback-aware backups, typed operation
-errors with centralized MCP/batch mapping, bounded ordered batch concurrency,
-fork-specific stdio tunnel compatibility, and optional execution tools documented in the main
-[README](../README.md) and [TOOLS reference](../TOOLS.md).
+The server provides 24 MCP tools for encoding-aware filesystem operations, BOM-preserving text handling, deterministic secure traversal, durable atomic mutations with rollback-aware backups, typed operation errors with centralized MCP/batch mapping, bounded ordered batch concurrency, fork-specific stdio tunnel compatibility, and optional execution tools documented in the main [README](../README.md) and [TOOLS reference](../TOOLS.md). Encoding behavior is content-based and does not depend on file extensions.
 
-> Plugin versions are released together with matching fork binaries and a
-> `checksums.txt` asset. The launcher refuses inherited or incomplete tags whose
-> release assets do not match the pinned plugin version.
+> This Claude Code integration is optional and is not used by the OpenAI Secure MCP Tunnel deployment. It remains frozen during internal development and will be reviewed at the final `2.0.0` release gate. If retained, the plugin version must match the release binaries and `checksums.txt` asset.
 
 ## Install
 

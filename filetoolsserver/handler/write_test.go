@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/config"
 	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
@@ -150,9 +151,9 @@ func TestHandleWriteFile_DefaultEncoding_NewFile(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
 	testFile := filepath.Join(tempDir, "new_file.txt")
-	content := "Тест" // Russian "Test"
+	content := "Città Привет 中文 🌍"
 
-	// No encoding specified for NEW file - should use configured default (cp1251)
+	// A new file without an explicit encoding must use the modern UTF-8 default.
 	input := WriteFileInput{
 		Path:    testFile,
 		Content: content,
@@ -164,23 +165,54 @@ func TestHandleWriteFile_DefaultEncoding_NewFile(t *testing.T) {
 	}
 
 	if result.IsError {
-		t.Errorf("expected success, got error")
+		t.Fatalf("expected success, got %q", extractTextFromResultWrite(result.Content))
+	}
+	if output.Encoding != "utf-8" {
+		t.Errorf("default encoding = %q, want utf-8", output.Encoding)
+	}
+	if output.HasBOM || output.BOMType != "" {
+		t.Fatalf("default UTF-8 write unexpectedly emitted a BOM: %+v", output)
 	}
 
-	if !strings.Contains(output.Message, "cp1251") {
-		t.Errorf("expected default encoding cp1251 in message, got %q", output.Message)
-	}
-
-	// Verify CP1251 bytes were written
 	written, err := os.ReadFile(testFile)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !bytes.Equal(written, []byte(content)) {
+		t.Errorf("written bytes = % X, want UTF-8 % X", written, []byte(content))
+	}
+}
 
-	// Expected CP1251 bytes for "Тест"
-	expectedCP1251 := []byte{0xD2, 0xE5, 0xF1, 0xF2}
-	if !bytes.Equal(written, expectedCP1251) {
-		t.Errorf("expected CP1251 bytes %v, got %v", expectedCP1251, written)
+func TestHandleWriteFile_ConfiguredLegacyDefault_NewFile(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewHandler([]string{tempDir}, WithConfig(&config.Config{
+		DefaultEncoding: "cp1251",
+		MemoryThreshold: config.DefaultMaxSize,
+	}))
+	testFile := filepath.Join(tempDir, "legacy-new-file.txt")
+	content := "Тест"
+
+	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
+		Path:    testFile,
+		Content: content,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got %q", extractTextFromResultWrite(result.Content))
+	}
+	if output.Encoding != "cp1251" {
+		t.Errorf("configured encoding = %q, want cp1251", output.Encoding)
+	}
+
+	written, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []byte{0xD2, 0xE5, 0xF1, 0xF2}
+	if !bytes.Equal(written, expected) {
+		t.Errorf("written bytes = % X, want CP1251 % X", written, expected)
 	}
 }
 
@@ -343,8 +375,8 @@ func decodeWrittenText(t *testing.T, encodingName string, data []byte) string {
 func TestHandleWriteFile_UTF16LEAutoAddsSingleBOM(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "expert.mq5")
-	content := "#property strict\r\n// Città Привет 中文\r\n"
+	path := filepath.Join(tempDir, "multilingual.data")
+	content := "title = encoding acceptance\r\n// Città Привет 中文\r\n"
 
 	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
 		Path: path, Content: content, Encoding: "utf-16-le",
@@ -378,10 +410,10 @@ func TestHandleWriteFile_UTF16LEAutoAddsSingleBOM(t *testing.T) {
 func TestHandleWriteFile_BOMNeverWritesBOMlessUTF16(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "bomless.mqh")
+	path := filepath.Join(tempDir, "bomless.data")
 
 	result, output, err := h.HandleWriteFile(context.Background(), nil, WriteFileInput{
-		Path: path, Content: "input int Value = 1;\r\n", Encoding: "utf-16-le", BOM: "never",
+		Path: path, Content: "value = 1\r\n", Encoding: "utf-16-le", BOM: "never",
 	})
 	if err != nil {
 		t.Fatal(err)

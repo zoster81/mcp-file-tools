@@ -32,8 +32,8 @@ func encodeUTF16LEWithBOM(t *testing.T, content string) []byte {
 func TestHandleReadTextFileStripsUTF16TransportBOM(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "expert.mq5")
-	content := "#property strict\r\nstring label = \"Città\";"
+	path := filepath.Join(tempDir, "multilingual.data")
+	content := "title = encoding acceptance\r\nstring label = \"Città\";"
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, content), 0644); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestHandleReadTextFileStripsUTF16TransportBOM(t *testing.T) {
 func TestHandleReadTextFilePreservesLeadingTextBOMCodePoint(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "leading-feff.mq5")
+	path := filepath.Join(tempDir, "leading-feff.data")
 	content := "\uFEFFalpha\r\nbeta"
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, content), 0644); err != nil {
@@ -111,7 +111,7 @@ func TestHandleReadTextFileStripsUTF8TransportBOM(t *testing.T) {
 func TestHandleReadTextFilePaginatesDecodedUTF16Content(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "pagination.mq5")
+	path := filepath.Join(tempDir, "pagination.data")
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, "line1\r\nline2\r\nline3"), 0644); err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestHandleReadTextFilePaginatesDecodedUTF16Content(t *testing.T) {
 func TestReadSingleAndMultipleUseEquivalentDocumentPipeline(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "shared.mqh")
+	path := filepath.Join(tempDir, "shared.data")
 	content := "// Привет 🌍\r\nint value = 42;"
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, content), 0644); err != nil {
@@ -179,7 +179,7 @@ func TestReadSingleAndMultipleUseEquivalentDocumentPipeline(t *testing.T) {
 func TestHandleReadTextFileRejectsBOMEncodingConflict(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "conflict.mq5")
+	path := filepath.Join(tempDir, "conflict.data")
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, "alpha"), 0644); err != nil {
 		t.Fatal(err)
@@ -203,7 +203,7 @@ func TestHandleReadTextFileRejectsBOMEncodingConflict(t *testing.T) {
 func TestReadTextDocumentReportsDecodedLineEndings(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "line-endings.mq5")
+	path := filepath.Join(tempDir, "line-endings.data")
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, "alpha\r\nbeta\r\n"), 0644); err != nil {
 		t.Fatal(err)
@@ -224,7 +224,7 @@ func TestReadTextDocumentReportsDecodedLineEndings(t *testing.T) {
 func TestHandleReadMultipleFilesClassifiesBOMConflictAsEncodingError(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "batch-conflict.mq5")
+	path := filepath.Join(tempDir, "batch-conflict.data")
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, "alpha"), 0644); err != nil {
 		t.Fatal(err)

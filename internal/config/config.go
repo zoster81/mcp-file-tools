@@ -15,21 +15,20 @@ const (
 	EnvMemoryThreshold = "MCP_MEMORY_THRESHOLD"
 
 	// Default values
-	DefaultEncoding = "cp1251"
-	DefaultMaxSize  = int64(64 * 1024 * 1024) // 64MB - files smaller than this are loaded into memory
+	DefaultEncoding = "utf-8"
+	DefaultMaxSize  = int64(64 * 1024 * 1024) // 64MB advisory large-file threshold
 )
 
 // Config holds server configuration loaded from environment variables.
 type Config struct {
-	// DefaultEncoding is the default encoding for write_file when none is specified.
-	// Set via MCP_DEFAULT_ENCODING environment variable.
-	// Default: "cp1251" (for backward compatibility with legacy codebases)
+	// DefaultEncoding is the default encoding for new files when none is specified.
+	// Existing files keep a confidently detected encoding. Set via MCP_DEFAULT_ENCODING.
+	// Default: "utf-8"; legacy encodings remain available as explicit overrides.
 	DefaultEncoding string
 
-	// MemoryThreshold is the threshold for loading files into memory vs streaming.
-	// Files smaller than this are loaded entirely into memory for better performance.
-	// Files larger use streaming I/O to reduce memory usage.
-	// Also used as threshold for encoding detection mode (full vs sample).
+	// MemoryThreshold is the advisory size threshold for large-file diagnostics.
+	// The current shared text-document path still loads complete files into memory;
+	// bounded-memory streaming is tracked as roadmap milestone R9.
 	// Set via MCP_MEMORY_THRESHOLD environment variable.
 	// Default: 67108864 (64MB)
 	MemoryThreshold int64

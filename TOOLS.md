@@ -100,7 +100,7 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 **Parameters:**
 - `path` (required): Path to the file
 - `content` (required): UTF-8 content to write
-- `encoding` (optional): Target encoding; preserves a confidently detected existing encoding when omitted, otherwise uses the configured default (`cp1251` by default)
+- `encoding` (optional): Target encoding. New files use the configured default (`utf-8` by default); existing files preserve a confidently detected encoding. Set `MCP_DEFAULT_ENCODING` or pass `encoding` explicitly for legacy formats such as `cp1251`.
 - `bom` (optional): BOM policy — `auto` (default), `always`, `never`, or `preserve`
 
 **BOM policy:**
@@ -112,8 +112,8 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 **Example:**
 ```json
 {
-  "path": "/path/to/expert.mq5",
-  "content": "#property strict\r\n",
+  "path": "/path/to/multilingual.data",
+  "content": "title = \"città\"\r\n",
   "encoding": "utf-16-le",
   "bom": "auto"
 }
@@ -122,7 +122,7 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 **Response:**
 ```json
 {
-  "message": "Successfully wrote 38 bytes to /path/to/expert.mq5 (encoding: utf-16-le, BOM: auto)",
+  "message": "Successfully wrote 36 bytes to /path/to/multilingual.data (encoding: utf-16-le, BOM: auto)",
   "encoding": "utf-16-le",
   "bomPolicy": "auto",
   "hasBOM": true,
@@ -386,7 +386,7 @@ Search decoded text using regex patterns through the same encoding/BOM-aware doc
 
 ### detect_encoding
 
-Detect the encoding of a file with confidence percentage. Useful for diagnosing encoding issues (garbled text, � characters).
+Detect the encoding of a file with confidence percentage. Detection is based on BOMs and file content, never on the filename or extension. BOMless UTF-16 and other structurally ambiguous inputs are not yet guaranteed and may require an explicit encoding. Useful for diagnosing encoding issues (garbled text, � characters).
 
 **Parameters:**
 - `path` (required): Path to the file
@@ -432,7 +432,7 @@ Convert a file through the shared encoding/BOM-aware document pipeline. The deco
 **Example:**
 ```json
 {
-  "path": "/path/to/expert.mq5",
+  "path": "/path/to/multilingual.data",
   "from": "utf-16-le",
   "to": "utf-8",
   "backup": true,
@@ -443,10 +443,10 @@ Convert a file through the shared encoding/BOM-aware document pipeline. The deco
 **Response:**
 ```json
 {
-  "message": "Successfully converted /path/to/expert.mq5 from utf-16-le to utf-8 (BOM: auto) (backup: /path/to/expert.mq5.bak)",
+  "message": "Successfully converted /path/to/multilingual.data from utf-16-le to utf-8 (BOM: auto) (backup: /path/to/multilingual.data.bak)",
   "sourceEncoding": "utf-16-le",
   "targetEncoding": "utf-8",
-  "backupPath": "/path/to/expert.mq5.bak",
+  "backupPath": "/path/to/multilingual.data.bak",
   "bomPolicy": "auto",
   "hasBOM": false,
   "changed": true
@@ -464,7 +464,7 @@ Detect line ending style (CRLF/LF/mixed) after decoding the file through the sha
 **Example:**
 ```json
 {
-  "path": "/path/to/file.mq5",
+  "path": "/path/to/extensionless-file",
   "encoding": "utf-16-le"
 }
 ```
@@ -484,7 +484,7 @@ Detect line ending style (CRLF/LF/mixed) after decoding the file through the sha
 - `mixed`: File has both CRLF and LF endings - `inconsistentLines` lists lines with minority style
 - `none`: File has no line endings (single line or empty)
 
-**MetaTrader/MQL note:** `.mq4`, `.mq5`, and `.mqh` files are commonly stored as UTF-16 LE with BOM and CRLF line endings. Auto-detection handles BOM-bearing files; use `"encoding": "utf-16-le"` for deterministic handling when the BOM is absent or detection is ambiguous.
+**Detection note:** encoding is inferred from bytes and decoded-content evidence, not from file extensions. Auto-detection handles BOM-bearing UTF-16 files deterministically; use an explicit encoding for BOMless or otherwise ambiguous input.
 
 ### change_line_endings
 
@@ -498,7 +498,7 @@ Convert line endings in a file to LF or CRLF while preserving the original encod
 **Example:**
 ```json
 {
-  "path": "/path/to/file.mq5",
+  "path": "/path/to/extensionless-file",
   "style": "lf",
   "encoding": "utf-16-le"
 }
@@ -507,7 +507,7 @@ Convert line endings in a file to LF or CRLF while preserving the original encod
 **Response:**
 ```json
 {
-  "message": "Converted /path/to/file.mq5 from crlf to lf (3 lines changed)",
+  "message": "Converted /path/to/extensionless-file from crlf to lf (3 lines changed)",
   "originalStyle": "crlf",
   "newStyle": "lf",
   "linesChanged": 3

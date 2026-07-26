@@ -201,7 +201,7 @@ func TestHandleEditFile_CRLFPreservation(t *testing.T) {
 func TestHandleEditFile_UTF16LEPreservesBOMAndCRLF(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "expert.mq5")
+	path := filepath.Join(tempDir, "multilingual.data")
 	originalText := "alpha\r\nbeta\r\nstring label = \"Città\";"
 
 	if err := os.WriteFile(path, encodeUTF16LEWithBOM(t, originalText), 0644); err != nil {
@@ -241,7 +241,7 @@ func TestHandleEditFile_UTF16LEPreservesBOMAndCRLF(t *testing.T) {
 func TestHandleEditFile_UTF16BEPreservesBOMAndCRLF(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "expert-be.mq5")
+	path := filepath.Join(tempDir, "multilingual-be.data")
 	originalText := "alpha\r\nbeta\r\nstring label = \"Città\";"
 
 	if err := os.WriteFile(path, encodeLineEndingFixture(t, "utf-16-be", originalText, true), 0644); err != nil {
@@ -281,7 +281,7 @@ func TestHandleEditFile_UTF16BEPreservesBOMAndCRLF(t *testing.T) {
 func TestHandleEditFile_UTF16LEFirstLineEditPreservesSingleBOM(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "first-line.mq4")
+	path := filepath.Join(tempDir, "first-line.data")
 	original := encodeUTF16LEWithBOM(t, "alpha\r\nbeta")
 
 	if err := os.WriteFile(path, original, 0644); err != nil {
@@ -323,7 +323,7 @@ func TestHandleEditFile_UTF16LEFirstLineEditPreservesSingleBOM(t *testing.T) {
 func TestHandleEditFile_UTF16LENoOpIsByteIdentical(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "noop.mqh")
+	path := filepath.Join(tempDir, "noop.data")
 	original := encodeUTF16LEWithBOM(t, "alpha\r\nbeta\r\n")
 
 	if err := os.WriteFile(path, original, 0644); err != nil {

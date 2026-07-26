@@ -12,18 +12,20 @@ Git remote.
 - Implemented MCP transport: stdio
 - Native HTTP/JSON or Streamable HTTP transport: not implemented
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
-- Current source capabilities: completed shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors with centralized MCP/batch mapping (R4), bounded ordered concurrency for batch read and grep processing (R5), and shared execution preparation plus authoritative tool metadata (R6)
-- Next source milestone: no additional refactoring milestone is currently selected
-- Release source: fork-owned semantic tags whose plugin, marketplace, binary, and Registry versions must match
+- Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), and shared execution preparation plus authoritative tool metadata (R6)
+- Active milestone: R8 generic extension-independent encoding detection
+- Authoritative plan: [ROADMAP.md](ROADMAP.md), with reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
+- Development policy: internal commit builds only until the next public release, `2.0.0`
+- Release source: the final fork-owned semantic tag whose plugin, marketplace, binary, and Registry versions must match
 - Go module path: `github.com/zoster81/mcp-file-tools`
 
-The fork owns its Go module identity and all internal imports. Clone-and-build is
-recommended for development commits; packaged installations must use a fork-owned
-semantic tag with matching binary assets and verified checksums.
+The fork owns its Go module identity and all internal imports. Clone-and-build is the supported path for internal development commits. No intermediate public release is planned; packaged installations remain on the latest published release until the R14 `2.0.0` gate is complete.
 
 ## Fork release flow
 
-1. Ensure `main` is clean, tested, and pushed to `origin`.
+This flow is reserved for the R14 `2.0.0` release gate. Do not bump plugin metadata, create a tag, or publish intermediate development builds.
+
+1. Ensure R7-R14 are complete and `main` is clean, tested, and pushed to `origin`.
 2. Choose a semantic version that has not been used by this fork.
 3. Update the version in:
    - `plugin/.claude-plugin/plugin.json`
@@ -52,10 +54,7 @@ semantic tag with matching binary assets and verified checksums.
 9. Verify the release asset names and SHA-256 values before announcing it.
 10. `.github/workflows/release.yml` invokes the reusable `.github/workflows/publish-registry.yml`, which generates and publishes the fork-owned `server.json` from those verified assets.
 
-The plugin launcher reads its pinned version from
-`plugin/.claude-plugin/plugin.json` and downloads binaries from the fork release.
-A plugin version must therefore have a matching GitHub Release and
-`checksums.txt` asset.
+The optional Claude Code plugin launcher reads its pinned version from `plugin/.claude-plugin/plugin.json` and downloads binaries from the fork release. It is not part of the active OpenAI tunnel deployment. Whether it remains supported will be decided in R14; if retained, its version must match the `2.0.0` GitHub Release and `checksums.txt` asset.
 
 ## OpenAI Tunnel example
 
@@ -85,10 +84,7 @@ The upstream Claude Code marketplace and existing MCP Registry listing install
 the upstream implementation. They do not include this fork's execution tools,
 tunnel compatibility changes, or Windows drive-root fix.
 
-The fork plugin references `zoster81/mcp-file-tools` and is versioned together with
-the matching platform binaries and `checksums.txt`. The release workflow rejects a
-tag whose version differs from the plugin or marketplace metadata. Mirrored or
-inherited tags without the fork assets remain insufficient.
+The optional fork plugin references `zoster81/mcp-file-tools`. It remains frozen during internal development. If retained for 2.0, it will be versioned together with the matching platform binaries and `checksums.txt`; the release workflow will continue rejecting a tag whose version differs from plugin or marketplace metadata.
 
 ## Upstream synchronization
 
@@ -127,6 +123,9 @@ available.
 
 ## Release verification checklist
 
+Run this checklist only after every milestone and completion gate in [ROADMAP.md](ROADMAP.md) passes. Use [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md) for internal milestones and builds.
+
+- R7-R14 complete;
 - working tree clean;
 - expected branch and HEAD verified;
 - no credentials or real tunnel identifiers in tracked files or history;

@@ -12,9 +12,9 @@ import (
 	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
-const mqlFixtureDir = "testdata/mql"
+const encodingAcceptanceFixtureDir = "testdata/encoding_acceptance"
 
-type mqlAcceptanceFixture struct {
+type encodingAcceptanceFixture struct {
 	File      string
 	Encoding  string
 	Style     string
@@ -22,33 +22,33 @@ type mqlAcceptanceFixture struct {
 	HasBOM    bool
 }
 
-func mqlAcceptanceFixtures() []mqlAcceptanceFixture {
-	return []mqlAcceptanceFixture{
+func encodingAcceptanceFixtures() []encodingAcceptanceFixture {
+	return []encodingAcceptanceFixture{
 		{
-			File:      "localized_utf16le_crlf.mq5",
+			File:      "multilingual_utf16le_crlf.data",
 			Encoding:  "utf-16-le",
 			Style:     LineEndingCRLF,
-			FirstLine: "#property strict",
+			FirstLine: "title = \"encoding acceptance\"",
 			HasBOM:    true,
 		},
 		{
-			File:      "localized_utf16le_crlf.mqh",
+			File:      "multilingual_utf16le_crlf",
 			Encoding:  "utf-16-le",
 			Style:     LineEndingCRLF,
-			FirstLine: "#ifndef LOCALIZED_FIXTURE_MQH",
+			FirstLine: "BEGIN GENERIC FIXTURE",
 			HasBOM:    true,
 		},
 		{
-			File:      "localized_utf8_lf.mq5",
+			File:      "multilingual_utf8_lf.random",
 			Encoding:  "utf-8",
 			Style:     LineEndingLF,
-			FirstLine: "#property strict",
+			FirstLine: "title = \"encoding acceptance\"",
 			HasBOM:    false,
 		},
 	}
 }
 
-func copyMQLFixture(t *testing.T, source, destination string) []byte {
+func copyEncodingAcceptanceFixture(t *testing.T, source, destination string) []byte {
 	t.Helper()
 
 	data, err := os.ReadFile(source)
@@ -83,7 +83,7 @@ func assertExpectedBOM(t *testing.T, data []byte, encodingName string, wantBOM b
 	}
 }
 
-func assertMQLTextCoverage(t *testing.T, content string) {
+func assertEncodingAcceptanceTextCoverage(t *testing.T, content string) {
 	t.Helper()
 
 	for _, want := range []string{"città", "Привет", "中文", "🌍"} {
@@ -93,23 +93,23 @@ func assertMQLTextCoverage(t *testing.T, content string) {
 	}
 }
 
-func TestMQLFixturesSharedTextDocumentAcceptance(t *testing.T) {
-	for _, fixture := range mqlAcceptanceFixtures() {
+func TestEncodingFixturesSharedTextDocumentAcceptance(t *testing.T) {
+	for _, fixture := range encodingAcceptanceFixtures() {
 		fixture := fixture
 		t.Run(fixture.File, func(t *testing.T) {
-			sourcePath := filepath.Join(mqlFixtureDir, fixture.File)
+			sourcePath := filepath.Join(encodingAcceptanceFixtureDir, fixture.File)
 			original, err := os.ReadFile(sourcePath)
 			if err != nil {
 				t.Fatal(err)
 			}
 			assertExpectedBOM(t, original, fixture.Encoding, fixture.HasBOM)
 			expectedText := decodeLineEndingFixture(t, fixture.Encoding, original)
-			assertMQLTextCoverage(t, expectedText)
+			assertEncodingAcceptanceTextCoverage(t, expectedText)
 
 			tempDir := t.TempDir()
 			h := NewHandler([]string{tempDir})
 			workingPath := filepath.Join(tempDir, fixture.File)
-			copyMQLFixture(t, sourcePath, workingPath)
+			copyEncodingAcceptanceFixture(t, sourcePath, workingPath)
 
 			readResult, readOutput, err := h.HandleReadTextFile(context.Background(), nil, ReadTextFileInput{Path: workingPath})
 			if err != nil {
@@ -143,7 +143,7 @@ func TestMQLFixturesSharedTextDocumentAcceptance(t *testing.T) {
 			}
 
 			editPath := filepath.Join(tempDir, "edit_"+fixture.File)
-			copyMQLFixture(t, sourcePath, editPath)
+			copyEncodingAcceptanceFixture(t, sourcePath, editPath)
 			editedFirstLine := fixture.FirstLine + " // edited"
 			editResult, _, err := h.HandleEditFile(context.Background(), nil, EditFileInput{
 				Path:     editPath,
@@ -236,7 +236,7 @@ func TestMQLFixturesSharedTextDocumentAcceptance(t *testing.T) {
 			}
 
 			convertNoOpPath := filepath.Join(tempDir, "convert_noop_"+fixture.File)
-			copyMQLFixture(t, sourcePath, convertNoOpPath)
+			copyEncodingAcceptanceFixture(t, sourcePath, convertNoOpPath)
 			if err := os.Chtimes(convertNoOpPath, fixedTime, fixedTime); err != nil {
 				t.Fatal(err)
 			}
@@ -269,7 +269,7 @@ func TestMQLFixturesSharedTextDocumentAcceptance(t *testing.T) {
 			}
 
 			convertPath := filepath.Join(tempDir, "convert_"+fixture.File)
-			copyMQLFixture(t, sourcePath, convertPath)
+			copyEncodingAcceptanceFixture(t, sourcePath, convertPath)
 			targetEncoding := "utf-8"
 			targetBOMPolicy := "never"
 			wantConvertedBOM := false
@@ -302,7 +302,7 @@ func TestMQLFixturesSharedTextDocumentAcceptance(t *testing.T) {
 			}
 
 			lineNoOpPath := filepath.Join(tempDir, "line_noop_"+fixture.File)
-			copyMQLFixture(t, sourcePath, lineNoOpPath)
+			copyEncodingAcceptanceFixture(t, sourcePath, lineNoOpPath)
 			if err := os.Chtimes(lineNoOpPath, fixedTime, fixedTime); err != nil {
 				t.Fatal(err)
 			}
@@ -334,7 +334,7 @@ func TestMQLFixturesSharedTextDocumentAcceptance(t *testing.T) {
 			}
 
 			lineChangePath := filepath.Join(tempDir, "line_change_"+fixture.File)
-			copyMQLFixture(t, sourcePath, lineChangePath)
+			copyEncodingAcceptanceFixture(t, sourcePath, lineChangePath)
 			beforeChangeInfo, err := os.Stat(lineChangePath)
 			if err != nil {
 				t.Fatal(err)

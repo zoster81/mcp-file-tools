@@ -1,0 +1,301 @@
+# Development Roadmap to 2.0.0
+
+This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
+
+The project is in internal development. Development commits may be built and deployed locally, but no intermediate public release is planned. The next public release target is `2.0.0`, after the native MCP Streamable HTTP server and all completion gates in this document are finished.
+
+Operational handoff state belongs in `D:\OpenAI-Tunnel\todo.md`. Reusable engineering gates belong in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md). Completed R1-R6 evidence is archived in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
+
+## Operating rules
+
+- Only one milestone may be `ACTIVE` at a time.
+- Complete milestones in order unless the user explicitly reprioritizes them.
+- Keep changes atomic and limited to the active milestone.
+- Use content bytes and structural evidence for encoding detection. File extensions must not select or bias an encoding.
+- Treat domain-specific files, including MQL sources, as ordinary test fixtures rather than special encoding profiles.
+- Preserve stdio support while adding Streamable HTTP.
+- Keep `run_script` and `shell` disabled by default on every transport.
+- Build internal commit binaries as needed; do not create public tags or releases before the 2.0 release gate.
+- Every milestone must pass [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md) before it is marked complete.
+
+## Milestone overview
+
+| Milestone | Status | Outcome |
+|---|---|---|
+| R7 | COMPLETE | Replaced the historical roadmap with a clear operating plan and removed domain-specific MQL emphasis. |
+| R8 | ACTIVE | Generic, conservative, extension-independent encoding detection, including BOMless UTF-16. |
+| R9 | QUEUED | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
+| R10 | QUEUED | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
+| R11 | QUEUED | Separate transport bootstrap from the shared MCP server and tool policies. |
+| R12 | QUEUED | Approve the Streamable HTTP threat model and security design. |
+| R13 | QUEUED | Implement and verify native MCP Streamable HTTP while preserving stdio. |
+| R14 | QUEUED | Complete hardening, CI, packaging, migration documentation, and the 2.0.0 release. |
+
+---
+
+# R7 — Roadmap and documentation reset
+
+## Goal
+
+Create one pragmatic development sequence, make the current limitations explicit, and remove the incorrect impression that MQL filenames receive special encoding behavior.
+
+## Checklist
+
+- [x] Preserve the previous R1-R6 handoff as historical documentation.
+- [x] Create this authoritative R7-R14 roadmap.
+- [x] Create one reusable development and verification checklist.
+- [x] Replace `D:\OpenAI-Tunnel\todo.md` with a short operational handoff.
+- [x] State consistently that internal builds continue until the next public release, `2.0.0`.
+- [x] Move Claude Code plugin verification out of active development and into the final 2.0 release gate.
+- [x] Remove MQL-specific product claims from README, tool documentation, plugin documentation, runtime instructions, and tool catalog descriptions.
+- [x] Replace MQL-specific examples with neutral filenames and content-based guidance.
+- [x] Rename MQL acceptance tests and fixture directories to generic encoding acceptance names.
+- [x] Keep coverage for UTF-16, UTF-8, multilingual text, BOMs, and CRLF/LF behavior after the rename.
+- [x] Document that current BOMless UTF-16 auto-detection is incomplete and explicit encoding may still be required.
+- [x] Correct documentation that currently implies large files are streamed when the shared document path still uses `os.ReadFile`.
+- [x] Link README and publishing notes to this roadmap and the development checklist.
+- [x] Run catalog, documentation, Go, Node, formatting, link, and diff verification.
+
+## Completion record
+
+Completed on 2026-07-26. The previous 699-line handoff is archived, active planning is separated from reusable engineering gates, public descriptions are extension-independent, generic UTF-16/UTF-8 acceptance fixtures pass under `.data`, extensionless, and `.random` filenames, and documentation/catalog drift checks are green.
+
+---
+
+# R8 — Generic encoding detection
+
+## Goal
+
+Infer encodings from byte structure and decoded-content evidence, independently of filenames and extensions. Prefer an explicit ambiguous result over a confident false classification.
+
+## Design requirements
+
+- BOM detection remains authoritative for UTF-8, UTF-16, and UTF-32 signatures.
+- Extension, basename, directory, or language-specific content must not influence the selected encoding.
+- BOMless UTF-16 LE/BE detection must combine multiple independent signals rather than rely only on alternating NUL bytes.
+- Malformed Unicode input must be rejected or left ambiguous rather than silently repaired.
+- Binary classification must occur after candidate decoding as well as on raw structural evidence.
+- Detection results must remain deterministic for the same byte sequence.
+
+## Checklist
+
+- [ ] Add structural BOMless UTF-16 LE and BE candidate detection.
+- [ ] Measure NUL distribution on even and odd byte positions.
+- [ ] Require even byte length for UTF-16 candidates.
+- [ ] Validate UTF-16 code units and surrogate pairs.
+- [ ] Reject isolated high/low surrogates and truncated pairs.
+- [ ] Measure printable, whitespace, replacement, control, and NUL rune ratios after decoding.
+- [ ] Verify decode/encode round-trip consistency for candidates.
+- [ ] Define conservative confidence thresholds and a minimum evidence size.
+- [ ] Avoid forcing a candidate when evidence is insufficient.
+- [ ] Integrate the same decision logic into sample, chunked, and full modes.
+- [ ] Verify candidate decisions across chunk boundaries.
+- [ ] Add fixtures with `.txt`, `.dat`, no extension, random extensions, and identical content under different names.
+- [ ] Add Latin, Cyrillic, Greek, Hebrew, Arabic, CJK, emoji, and mixed-script fixtures.
+- [ ] Add empty, BOM-only, very short, odd-length, truncated, and malformed UTF-16 cases.
+- [ ] Add executable, image, archive, random-byte, sparse-NUL, and binary-structure false-positive tests.
+- [ ] Fuzz detection and Unicode validation.
+- [ ] Document confidence semantics and ambiguous results.
+
+## Completion gate
+
+The same byte sequence must produce the same result under any filename. BOMless UTF-16 must be recognized only when structural and decoded-text evidence agree, and binary false-positive tests must pass.
+
+---
+
+# R9 — Bounded-memory streaming pipeline
+
+## Goal
+
+Make large-file behavior match the documented memory guarantees. The current shared document path warns above `MCP_MEMORY_THRESHOLD` but still loads the full file with `os.ReadFile`; R9 removes that mismatch.
+
+## Architecture requirements
+
+- Detection, BOM handling, decoding, line framing, and consuming operations must be separable streaming stages.
+- Multibyte sequences, UTF-16 code units, CRLF pairs, and regex context may span chunks.
+- Mutation output must be staged and synced before atomic commit without first materializing the complete target as `[]byte`.
+- Memory bounds must account for concurrent workers, decoded expansion, result buffers, and exceptionally long lines.
+
+## Checklist
+
+- [ ] Define explicit per-operation memory and line-length limits.
+- [ ] Add a shared incremental decoder for all registered encodings.
+- [ ] Add chunk-boundary tests for multibyte text, surrogate pairs, BOMs, CRLF, and lone CR/LF.
+- [ ] Stream `read_text_file` while preserving offset, limit, total line count, and character truncation semantics.
+- [ ] Bound aggregate memory in `read_multiple_files`, not only worker count.
+- [ ] Stream `grep_text_files` with a bounded previous-line ring buffer and bounded following context.
+- [ ] Preserve deterministic file and match order with streaming workers.
+- [ ] Stream `convert_encoding` from decoder to staged encoder output.
+- [ ] Preserve exact CRLF, LF, CR, and mixed line-ending sequences during conversion.
+- [ ] Add writer/reader-based mutation staging APIs.
+- [ ] Stream `detect_line_endings` and `change_line_endings`.
+- [ ] Stream `manage_bom` prefix inspection and staged copy.
+- [ ] Define and enforce an explicit full-document size limit for `edit_file` and unified diff generation.
+- [ ] Remove or make private `DetectSample` after all byte-slice consumers migrate.
+- [ ] Remove inaccurate streaming comments and warnings from configuration and documentation.
+- [ ] Test cancellation, read failures, write failures, disk-full simulation, cleanup, and concurrent source changes mid-stream.
+- [ ] Benchmark memory and throughput on representative small, medium, and large files.
+
+## Completion gate
+
+Every operation documented as streaming must have a verified bounded-memory path. Large-file tests must demonstrate that memory does not scale linearly with complete input size except for explicitly bounded full-document operations such as editing.
+
+---
+
+# R10 — Public API and compatibility cleanup
+
+## Goal
+
+Use the major-version boundary to resolve inconsistent schemas, defaults, deprecated tools, and unsupported promises before the 2.x API is stabilized.
+
+## Checklist
+
+- [ ] Decide whether to remove the deprecated `directory_tree` tool.
+- [x] Use UTF-8 as the international default for newly created files; retain `MCP_DEFAULT_ENCODING` and explicit legacy encodings such as `cp1251` as overrides.
+- [ ] Define behavior for empty and ambiguous files across every text tool.
+- [ ] Decide whether UTF-32 becomes a registered read/write encoding or remains BOM-management only.
+- [ ] Normalize JSON field naming such as `has_bom` versus `hasBom`.
+- [ ] Define stable public error codes for single-tool and batch operations.
+- [ ] Define configurable limits for file size, decoded characters, line length, batch size, matches, output, and sessions.
+- [ ] Review every tool input/output schema for redundant or misleading fields.
+- [ ] Remove obsolete helpers and compatibility shims that are not retained for 2.0.
+- [ ] Produce a draft 1.8-to-2.0 migration table before implementation is finalized.
+- [ ] Update catalog, docs, manual tests, and schema compatibility tests together.
+
+## Completion gate
+
+All intentional breaking changes are explicit, tested, and listed in the migration guide. No deprecated or internally inconsistent public API remains accidentally carried into 2.x.
+
+---
+
+# R11 — Transport-independent server architecture
+
+## Goal
+
+Run one shared MCP server implementation through stdio and Streamable HTTP without duplicating tool registration, policies, roots, or error behavior.
+
+## Checklist
+
+- [ ] Separate configuration loading from CLI parsing.
+- [ ] Separate server construction from transport startup.
+- [ ] Keep one authoritative tool catalog and registration path.
+- [ ] Define a transport-neutral server lifecycle abstraction.
+- [ ] Define explicit CLI/config transport selection.
+- [ ] Preserve stdio as a supported transport.
+- [ ] Keep allowed-directory policy authoritative and transport-independent.
+- [ ] Keep execution feature flags and authorization identical across transports.
+- [ ] Make logging, cancellation, graceful shutdown, and update checks lifecycle-aware.
+- [ ] Add equivalence tests for tools/list metadata and representative tool calls across transport adapters.
+
+## Completion gate
+
+The stdio executable uses the new architecture without behavior regression, and a second transport can be attached without duplicating handlers or weakening policy boundaries.
+
+---
+
+# R12 — Streamable HTTP security design
+
+## Goal
+
+Approve a concrete threat model and secure defaults before exposing filesystem and optional execution tools over an HTTP listener.
+
+## Checklist
+
+- [ ] Document assets, trust boundaries, actors, and supported deployment models.
+- [ ] Bind to loopback by default.
+- [ ] Require explicit configuration for non-loopback binding.
+- [ ] Define token authentication and reverse-proxy integration.
+- [ ] Use constant-time credential comparison where applicable.
+- [ ] Define secure token loading without command-line secret exposure.
+- [ ] Validate `Host` and `Origin` and address DNS rebinding.
+- [ ] Disable CORS by default.
+- [ ] Define TLS expectations for direct and reverse-proxy deployments.
+- [ ] Set request body, header, connection, and concurrency limits.
+- [ ] Set read-header, read, write, idle, session, and shutdown timeouts.
+- [ ] Define session identifiers, expiry, cleanup, and hijacking protections.
+- [ ] Define CSRF and browser-origin protections.
+- [ ] Prevent sensitive headers, tokens, and file contents from entering logs.
+- [ ] Keep `run_script` and `shell` disabled by default.
+- [ ] Require a distinct explicit opt-in for execution over HTTP.
+- [ ] Define rate limiting and denial-of-service behavior.
+- [ ] Define trusted-proxy handling without accepting spoofed forwarding headers.
+- [ ] Define health and readiness endpoints that expose no sensitive data.
+- [ ] Define security tests and release-blocking findings.
+
+## Completion gate
+
+A reviewed security design exists, every identified threat has a mitigation or explicit accepted risk, and implementation tests are specified before HTTP code is merged.
+
+---
+
+# R13 — Native MCP Streamable HTTP
+
+## Goal
+
+Implement the MCP Streamable HTTP transport according to R11 and R12 while preserving stdio behavior.
+
+## Checklist
+
+- [ ] Implement the Streamable HTTP endpoint using the shared server.
+- [ ] Support required JSON-RPC request and streaming response behavior.
+- [ ] Implement session creation, lookup, expiration, and cleanup.
+- [ ] Propagate disconnect and request cancellation into tool contexts.
+- [ ] Implement graceful shutdown for listeners and active sessions.
+- [ ] Add health and readiness endpoints.
+- [ ] Apply authentication, host/origin, size, timeout, and concurrency policies from R12.
+- [ ] Reject malformed content types, methods, JSON, and protocol messages deterministically.
+- [ ] Keep stdio startup and protocol output unchanged.
+- [ ] Test simultaneous clients and concurrent sessions.
+- [ ] Test disconnect, reconnect, timeout, cancellation, and shutdown races.
+- [ ] Test oversized payloads, slow clients, saturation, and resource cleanup.
+- [ ] Compare tool catalogs and representative tool results across stdio and HTTP.
+- [ ] Verify allowed-directory and execution policies on both transports.
+- [ ] Run direct HTTP end-to-end tests and OpenAI tunnel compatibility tests where applicable.
+
+## Completion gate
+
+All 24 retained tools operate through native Streamable HTTP and stdio with equivalent schemas and policy boundaries, and the R12 security suite passes.
+
+---
+
+# R14 — Hardening and 2.0.0 release
+
+## Goal
+
+Finish platform, container, CI, documentation, packaging, migration, and release verification for the first public 2.x release.
+
+## Known cleanup items
+
+- `Dockerfile` currently uses Go 1.24 while `go.mod` requires Go 1.26.5.
+- normal Build/Test workflows ignore Markdown-only changes even though documentation/catalog consistency is tested.
+- the Build workflow does not build all six release targets.
+- `.goreleaser.yml` contains a stale TODO for native Registry checksum support; the project already uses a separate verified Registry workflow.
+- the Claude Code plugin is optional and is not part of the active OpenAI tunnel deployment.
+
+## Checklist
+
+- [ ] Align Docker builder Go version with `go.mod`.
+- [ ] Pin the final runtime image and dependencies.
+- [ ] Run the container as a non-root user.
+- [ ] Define mounts, temporary storage, allowed roots, healthcheck, and shutdown behavior.
+- [ ] Cover all six Windows/Linux/macOS amd64/arm64 targets in CI.
+- [ ] Ensure documentation and catalog changes trigger consistency tests.
+- [ ] Add HTTP tests to supported CI platforms.
+- [ ] Run race detector, vet, Staticcheck, govulncheck, actionlint, ShellCheck, and Gitleaks.
+- [ ] Add fuzzing for detection, decoding, line framing, HTTP parsing, and JSON inputs.
+- [ ] Run sustained load, memory, cancellation, and session cleanup tests.
+- [ ] Runtime-execute representative Windows, Linux, and macOS builds where infrastructure permits.
+- [ ] Remove or update the stale GoReleaser Registry TODO.
+- [ ] Update README, TOOLS, catalog, Smithery, tunnel examples, container docs, and publishing notes.
+- [ ] Finish the 1.8-to-2.0 migration guide.
+- [ ] Decide whether to retain the Claude Code plugin.
+- [ ] If retained, verify plugin download, checksum, cache, platform mapping, and update behavior against 2.0.0 assets.
+- [ ] Set plugin and marketplace metadata to `2.0.0` only at release preparation.
+- [ ] Run the complete release checklist in [PUBLISHING.md](PUBLISHING.md).
+- [ ] Create and push `v2.0.0` only after all prior gates pass.
+- [ ] Verify release binaries, archives, checksums, signatures where available, and MCP Registry publication.
+- [ ] Deploy the 2.0.0 runtime, execute smoke and rollback tests, and record the final handoff.
+
+## Completion gate
+
+`v2.0.0` is reproducible, verified across supported targets, includes secure native MCP Streamable HTTP and stdio, has complete migration documentation, and passes deployment plus rollback verification.

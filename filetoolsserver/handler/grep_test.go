@@ -362,7 +362,7 @@ func TestHandleGrep_UTF16Documents(t *testing.T) {
 		pattern           string
 		wantLine          string
 	}{
-		{name: "auto detects UTF-16 LE BOM MQL", charset: "utf-16-le", withBOM: true, pattern: "#property strict", wantLine: "#property strict"},
+		{name: "auto detects UTF-16 LE BOM", charset: "utf-16-le", withBOM: true, pattern: "title = encoding acceptance", wantLine: "title = encoding acceptance"},
 		{name: "auto detects UTF-16 BE BOM", charset: "utf-16-be", withBOM: true, pattern: "中文注释", wantLine: "// 中文注释"},
 		{name: "explicit UTF-16 LE without BOM", charset: "utf-16-le", requestedEncoding: "utf-16-le", pattern: "Привет", wantLine: "// Привет"},
 	}
@@ -371,8 +371,8 @@ func TestHandleGrep_UTF16Documents(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
 			h := NewHandler([]string{tempDir})
-			path := filepath.Join(tempDir, "expert.mq5")
-			content := "#property strict\r\n// Città\r\n// Привет\r\n// 中文注释\r\n"
+			path := filepath.Join(tempDir, "multilingual.data")
+			content := "title = encoding acceptance\r\n// Città\r\n// Привет\r\n// 中文注释\r\n"
 			if err := os.WriteFile(path, encodeGrepFixture(t, tt.charset, content, tt.withBOM), 0644); err != nil {
 				t.Fatal(err)
 			}
@@ -404,7 +404,7 @@ func TestHandleGrep_UTF16Documents(t *testing.T) {
 func TestHandleGrep_UTF16MultilingualComments(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewHandler([]string{tempDir})
-	path := filepath.Join(tempDir, "localized.mq5")
+	path := filepath.Join(tempDir, "multilingual.random")
 	content := "// Città\r\n// Привет\r\n// 中文注释\r\n"
 	if err := os.WriteFile(path, encodeGrepFixture(t, "utf-16-le", content, true), 0644); err != nil {
 		t.Fatal(err)

@@ -15,7 +15,7 @@ var Version = "dev"
 // Server instructions for AI assistants
 const serverInstructions = `MCP filesystem server with non-UTF-8 encoding support (24 encodings, including CP1251, KOI8-R/U, ISO-8859-x, UTF-16 LE/BE, GBK, and GB18030).
 
-MetaTrader 4/5 MQL sources (.mq4, .mq5, .mqh) are commonly UTF-16 LE with BOM and CRLF line endings. Use auto-detection for BOM-bearing files or pass encoding=utf-16-le when deterministic handling is required.
+Encoding detection is content-based and never uses filenames or extensions. BOM-bearing Unicode files are deterministic; pass an explicit encoding for BOMless or otherwise ambiguous input until structural detection is expanded.
 
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
 - read_text_file: auto-detects encoding, returns UTF-8. Use offset/limit for files >2000 lines.
