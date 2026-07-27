@@ -21,6 +21,10 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added stable single-tool `_meta.errorCode` metadata, matching batch error codes, configurable `MCP_MAX_*` limits, 2.0 schema-contract tests, and a 1.8-to-2.0 migration guide.
 - Added `BuildServer` with explicit process-wide options, a lifecycle-aware stdio runner, signal cancellation, and explicit `--transport=stdio` or `MCP_TRANSPORT=stdio` selection without adding an HTTP listener.
 - Added architecture tests proving that multiple connections to one server expose the same 23-tool catalog, configured roots, and explicitly supplied handler configuration.
+- Added `docs/HTTP_SECURITY.md`, the approved R12 threat model and implementation contract for fail-closed native Streamable HTTP, including authentication, Host/Origin validation, session policy, limits, logging redaction, test requirements, accepted risks, and release blockers.
+- Added native stateful MCP Streamable HTTP with loopback binding, mandatory bearer authentication, exact Host and all-method Origin checks, no CORS, optional TLS, trusted-proxy boundaries, minimal health/readiness endpoints, and graceful shutdown.
+- Added bounded HTTP admission for per-request and aggregate body memory, non-SSE concurrency, live sessions, per-peer request rate, idle session cleanup, forwarded-address parsing, and deterministic saturation responses.
+- Added HTTP equivalence and security tests covering the complete 23-tool metadata, shared process roots, CP1251 reads, typed errors, roots-notification immutability, cancellation, session lifecycle, header/body limits, authentication, proxy trust, logging redaction, and execution policy.
 
 ### Changed
 
@@ -41,6 +45,10 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Separated environment defaults, CLI parsing, shared server construction, and transport startup while preserving stdio protocol output and the existing `NewServer` embedding API.
 - Defined allowed directories as process-wide policy shared by every connection or future HTTP session; sessions remain lifecycle and concurrency units rather than per-agent ACLs, and prompt-level write restrictions are not server-enforced.
 - Limited dynamic MCP roots to roots-capable stdio clients started without configured directories; startup roots remain immutable for the process and future HTTP sessions cannot change them.
+- Marked R12 and R13 complete and R14 active after approving and implementing loopback-by-default, bearer-authenticated Streamable HTTP with no CORS, bounded state, dual execution opt-in, and no initial event store.
+- Added `streamable-http` transport selection while preserving stdio as the default and retaining one shared `BuildServer` registration and process-wide root policy.
+- Required a second `MCP_HTTP_ENABLE_EXECUTION` opt-in before existing execution flags can expose `run_script` or `shell` through HTTP.
+- Removed HTTP token-source variables from the process environment after startup configuration is snapshotted so optional child processes cannot inherit bearer credentials.
 
 ### Fixed
 
@@ -49,6 +57,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Rejected script replacement or in-place content changes between `run_script` preparation and launch, including same-size and restored-timestamp changes that metadata-only checks can miss.
 - Fixed dynamic roots updates so an empty client roots list removes stale dynamic access instead of leaving previously authorized roots active.
 - Bound asynchronous update checks to the server lifecycle so shutdown cancellation cannot leave a detached update-check context running.
+- Prevented oversized chunked HTTP bodies from reaching unbounded SDK decoding, prevented aggregate concurrent body reservations from exceeding the configured budget, and aligned external session accounting with the SDK by pausing idle expiry for active POST requests while allowing SSE-only sessions to expire without keepalive traffic.
 
 ## 1.8.0 - 2026-07-25
 

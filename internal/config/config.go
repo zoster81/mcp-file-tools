@@ -18,7 +18,7 @@ const (
 	EnvMaxBatchFiles        = "MCP_MAX_BATCH_FILES"
 	EnvMaxMatches           = "MCP_MAX_MATCHES"
 	EnvMaxOutputBytes       = "MCP_MAX_OUTPUT_BYTES"
-	EnvMaxSessions          = "MCP_MAX_SESSIONS"
+	EnvMaxSessions          = "MCP_MAX_SESSIONS" // Maximum live native Streamable HTTP sessions.
 
 	DefaultEncoding             = "utf-8"
 	DefaultMaxFileBytes         = int64(64 * 1024 * 1024)

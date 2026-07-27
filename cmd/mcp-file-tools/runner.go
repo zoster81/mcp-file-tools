@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
+	"github.com/zoster81/mcp-file-tools/internal/httptransport"
 )
 
 type serverRunner interface {
@@ -22,11 +25,43 @@ func (runner singleSessionRunner) Run(ctx context.Context, server *mcp.Server) e
 	return server.Run(ctx, runner.transport)
 }
 
-func newRunner(transport transportName) (serverRunner, error) {
+type runnerSelection struct {
+	runner            serverRunner
+	enableClientRoots bool
+	executionPolicy   *handler.ExecutionPolicy
+}
+
+func selectRunner(
+	transport transportName,
+	getenv func(string) string,
+	maxSessions int,
+) (runnerSelection, error) {
 	switch transport {
 	case transportStdio:
-		return singleSessionRunner{transport: &mcp.StdioTransport{}}, nil
+		return runnerSelection{
+			runner:            singleSessionRunner{transport: &mcp.StdioTransport{}},
+			enableClientRoots: true,
+		}, nil
+	case transportStreamableHTTP:
+		httpConfig, err := httptransport.LoadConfig(getenv, maxSessions)
+		if err != nil {
+			return runnerSelection{}, err
+		}
+		httptransport.ClearCredentialEnvironment()
+		basePolicy := handler.ExecutionPolicyFromEnvironment(getenv)
+		executionPolicy := &handler.ExecutionPolicy{
+			AllowRunScript: httpConfig.EnableExecution && basePolicy.AllowRunScript,
+			AllowShell:     httpConfig.EnableExecution && basePolicy.AllowShell,
+		}
+		return runnerSelection{
+			runner: httptransport.Runner{
+				Config: httpConfig,
+				Logger: slog.Default(),
+			},
+			enableClientRoots: false,
+			executionPolicy:   executionPolicy,
+		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported transport %q", transport)
+		return runnerSelection{}, fmt.Errorf("unsupported transport %q", transport)
 	}
 }

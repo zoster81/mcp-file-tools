@@ -17,7 +17,7 @@ MCP server for file operations with non-UTF-8 encoding support. Auto-detects and
 
 This fork is maintained primarily to use a local MCP server from **ChatGPT Web through the OpenAI Secure MCP Tunnel**.
 
-The server currently exposes **stdio transport only**. ChatGPT Web does not connect directly to this process: the OpenAI tunnel client launches the local stdio server and bridges it to the remote MCP connector.
+The server supports both **stdio** and native stateful **MCP Streamable HTTP**. ChatGPT Web through the currently validated OpenAI Secure MCP Tunnel deployment still uses stdio: the tunnel client launches the local process and bridges it to the remote MCP connector.
 
 The currently validated deployment model is:
 
@@ -31,9 +31,7 @@ ChatGPT Web
 
 The fork does not require Claude Code, Codex, or another local AI application. The upstream integrations for those clients may still work and are retained as reference, but they are not the primary deployment target of this fork.
 
-Another browser-hosted LLM could use the current server only if its MCP connector infrastructure provides an equivalent gateway capable of launching and bridging a local stdio MCP process. Native HTTP/JSON or Streamable HTTP transport is **not implemented yet**.
-
-The planned `2.0.0` release will add native MCP Streamable HTTP while preserving stdio support. Security design, transport separation, implementation, hardening, and release gates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
+Other MCP clients may launch the stdio process directly or connect to the native Streamable HTTP endpoint. The HTTP transport is bearer-authenticated, loopback-bound by default, stateful, and governed by the approved threat model and secure defaults in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md). Release sequencing and remaining hardening gates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Process-wide directory and session model
 
@@ -41,13 +39,13 @@ Allowed directories are a **process-wide authorization boundary**. Every MCP con
 
 This deliberately supports deployments where several agents work on different projects under one allowed drive or workspace, read shared documentation or libraries, and follow prompt-level rules about where each agent may write. The server does not enforce those per-agent read/write conventions. When technical isolation is required, run separate server processes with narrower allowed directories and, for concurrent Git work, separate checkouts or worktrees.
 
-Directories supplied when the process starts remain authoritative and cannot be changed by a session. For stdio compatibility only, a roots-capable client may provide dynamic MCP roots when the process starts with no directory arguments. Native HTTP is not implemented yet; its later implementation will reuse the same process-wide configured roots rather than introduce session-specific filesystem permissions.
+Directories supplied when the process starts remain authoritative and cannot be changed by a session. For stdio compatibility only, a roots-capable client may provide dynamic MCP roots when the process starts with no directory arguments. Streamable HTTP disables client roots and every HTTP session shares the same process-wide configured directories.
 
-The custom tunnel-oriented changes include authoritative process roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, a transport-independent server builder, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
+The custom tunnel-oriented changes include authoritative process roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, a transport-independent server builder, a fail-closed native Streamable HTTP transport, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## Current Development Status
 
-R1-R6 are complete. R7 completed the roadmap and contributor-guidance reset; R8 completed conservative extension-independent encoding detection; R9 completed bounded-memory streaming; R10 completed the 2.0 public API cleanup; and R11 completed the transport-independent server architecture. R12 is now active; R13-R14 cover Streamable HTTP implementation and final 2.0 hardening.
+R1-R6 are complete. R7 completed the roadmap and contributor-guidance reset; R8 completed conservative extension-independent encoding detection; R9 completed bounded-memory streaming; R10 completed the 2.0 public API cleanup; R11 completed the transport-independent server architecture; R12 approved the Streamable HTTP security design; and R13 implemented and verified native Streamable HTTP. R14 is now active for final 2.0 hardening, packaging, migration review, and release.
 
 Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
 
@@ -223,7 +221,7 @@ From Command Prompt, use:
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\OpenAI-Mcp-Tunnel\start-openai-tunnel.ps1"
 ```
 
-The script validates paths and placeholders, runs `tunnel-client doctor --explain`, then starts the tunnel with the local operator UI at `http://127.0.0.1:8080/ui`. The MCP server itself remains stdio-only; the tunnel is the bridge to ChatGPT Web.
+The script validates paths and placeholders, runs `tunnel-client doctor --explain`, then starts the tunnel with the local operator UI at `http://127.0.0.1:8080/ui`. This validated tunnel workflow continues to use the server's stdio transport even though the same binary also supports native Streamable HTTP.
 
 ### Other stdio MCP clients
 
@@ -241,7 +239,35 @@ The same binary can be used directly by clients that launch local stdio MCP serv
 }
 ```
 
-The transport can be selected explicitly with `--transport=stdio` or `MCP_TRANSPORT=stdio`; stdio remains the only implemented value. A roots-capable stdio client may provide workspace directories dynamically only when the process starts without directory arguments. Once directories are configured at startup, they remain the authoritative process-wide set.
+The transport can be selected explicitly with `--transport=stdio` or `MCP_TRANSPORT=stdio`. A roots-capable stdio client may provide workspace directories dynamically only when the process starts without directory arguments. Once directories are configured at startup, they remain the authoritative process-wide set.
+
+### Native Streamable HTTP
+
+The native HTTP transport is stateful, bearer-authenticated, and bound to loopback by default. Every session shares the directory arguments supplied when the process starts; HTTP clients cannot add or change roots.
+
+Create a private token file and start the endpoint from PowerShell:
+
+```powershell
+$tokenPath = Join-Path $env:TEMP "mcp-file-tools.token"
+$tokenBytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $rng.GetBytes($tokenBytes) } finally { $rng.Dispose() }
+[System.IO.File]::WriteAllText(
+    $tokenPath,
+    [Convert]::ToBase64String($tokenBytes),
+    [System.Text.UTF8Encoding]::new($false)
+)
+
+$env:MCP_HTTP_TOKEN_FILE = $tokenPath
+$env:MCP_HTTP_ADDR = "127.0.0.1:8765"
+.\mcp-file-tools_windows_amd64.exe --transport=streamable-http D:\Projects
+```
+
+The MCP endpoint is `http://127.0.0.1:8765/mcp`. Clients must send the token as `Authorization: Bearer <token>` on every MCP `POST`, `GET`, and `DELETE` request. `/healthz` and `/readyz` expose only minimal liveness/readiness status.
+
+`MCP_HTTP_TOKEN` and `MCP_HTTP_TOKEN_FILE` are cleared from the server process environment immediately after startup configuration is validated, preventing optional execution tools from inheriting the credential. The token itself remains fixed for the process lifetime; rotation requires a controlled restart.
+
+Do not put tokens in command-line arguments, URLs, cookies, or query parameters. Browser CORS is disabled. Non-loopback listeners require explicit opt-in plus TLS or an explicitly trusted proxy boundary. See [`docs/HTTP_SECURITY.md`](docs/HTTP_SECURITY.md) for the complete deployment and threat model.
 
 ### Updating the fork
 
@@ -289,7 +315,22 @@ The server can be configured via environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MCP_TRANSPORT` | Process transport selection. R11 accepts only `stdio`; native Streamable HTTP is added in a later milestone. The CLI `--transport` option takes precedence. | `stdio` |
+| `MCP_TRANSPORT` | Process transport selection: `stdio` or `streamable-http`. The CLI `--transport` option takes precedence. | `stdio` |
+| `MCP_HTTP_ADDR` | Native HTTP listen address. Only `localhost` or an IP literal is accepted; non-loopback requires explicit opt-in. | `127.0.0.1:8765` |
+| `MCP_HTTP_PATH` | Clean absolute MCP endpoint path, distinct from `/healthz` and `/readyz`. | `/mcp` |
+| `MCP_HTTP_TOKEN` | Bearer token supplied through the environment. Exactly one token source is required for HTTP. | unset |
+| `MCP_HTTP_TOKEN_FILE` | Preferred bearer-token source; must reference a regular readable file. Mutually exclusive with `MCP_HTTP_TOKEN`. | unset |
+| `MCP_HTTP_ALLOWED_HOSTS` | Additional comma-separated exact `Host` values. Wildcards and suffix matching are rejected. | listener-derived |
+| `MCP_HTTP_ALLOWED_ORIGINS` | Comma-separated exact browser origins. Empty rejects every request carrying `Origin`; no CORS allow headers are emitted. | empty |
+| `MCP_HTTP_ALLOW_NON_LOOPBACK` | Explicit opt-in required for a non-loopback listener. | disabled |
+| `MCP_HTTP_TLS_CERT_FILE` | TLS certificate for direct HTTPS. Must be configured with `MCP_HTTP_TLS_KEY_FILE`. | unset |
+| `MCP_HTTP_TLS_KEY_FILE` | TLS private key for direct HTTPS. Must be configured with `MCP_HTTP_TLS_CERT_FILE`. | unset |
+| `MCP_HTTP_TRUSTED_PROXY_CIDRS` | Comma-separated proxy networks permitted to supply a bounded `X-Forwarded-For` chain. | empty |
+| `MCP_HTTP_MAX_BODY_BYTES` | Maximum body size of one HTTP POST. | `16777216` |
+| `MCP_HTTP_MAX_INFLIGHT_BODY_BYTES` | Aggregate reservation budget for concurrent HTTP POST bodies. | `67108864` |
+| `MCP_HTTP_MAX_CONCURRENT_REQUESTS` | Maximum simultaneous non-SSE HTTP handlers. SSE streams remain bounded by `MCP_MAX_SESSIONS`. | `64` |
+| `MCP_HTTP_SESSION_TIMEOUT` | Idle lifetime of a stateful HTTP session. | `15m` |
+| `MCP_HTTP_ENABLE_EXECUTION` | Additional HTTP-only gate required before `run_script` or `shell` can use their existing authorization flags. | disabled |
 | `MCP_DEFAULT_ENCODING` | Default encoding for newly created files when `write_file` is called without `encoding`. Existing files keep a confidently detected encoding. Legacy encodings such as `cp1251` remain available as explicit overrides. | `utf-8` |
 | `MCP_MAX_FILE_BYTES` | Hard source-size limit for full-document operations such as `edit_file`. | `67108864` |
 | `MCP_MAX_DECODED_CHARACTERS` | Maximum decoded characters returned by `read_text_file`. | `16777216` |
@@ -297,7 +338,7 @@ The server can be configured via environment variables:
 | `MCP_MAX_BATCH_FILES` | Maximum paths accepted by `read_multiple_files`. | `256` |
 | `MCP_MAX_MATCHES` | Server maximum for `grep_text_files.maxMatches`. | `10000` |
 | `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, and inconsistent-line output budget. | `67108864` |
-| `MCP_MAX_SESSIONS` | Reserved limit for native Streamable HTTP sessions. | `128` |
+| `MCP_MAX_SESSIONS` | Maximum live native Streamable HTTP sessions. | `128` |
 | `MCP_MEMORY_THRESHOLD` | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`; specific variables take precedence. | unset |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_SHELL` | Enables only the unrestricted `shell` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |

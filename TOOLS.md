@@ -600,13 +600,15 @@ The execution tools are fork-specific and disabled by default. Enable only the c
 
 Accepted true values are `1`, `true`, `yes`, `on`, and `enabled`, matched case-insensitively.
 
+On native Streamable HTTP, the corresponding flag above is necessary but not sufficient: `MCP_HTTP_ENABLE_EXECUTION=1` is also required. This dual opt-in prevents execution enabled for a trusted stdio deployment from being exposed automatically on the network transport.
+
 Both tools use one internal process-preparation primitive for absolute working-directory validation, timeout bounds, closed standard input, bounded stdout/stderr capture, cancellation, and process-tree termination. The primitive does not authorize commands or paths: `run_script` and `shell` retain separate handler policies. Immediately before launch, both revalidate the working directory against the current allowed roots. `run_script` also verifies that the authorized script still matches its prepared metadata and SHA-256 snapshot. The default timeout is 60 seconds, the maximum is 600 seconds, and each output stream is limited to 256 KiB. On timeout or cancellation, Windows termination uses `taskkill /T /F` before the direct process kill.
 
 ### run_script
 
 Executes a regular script or executable whose path is inside an allowed directory. The optional working directory is also validated. When `cwd` is omitted, the script's parent directory is used. Script arguments are passed directly to the selected interpreter or executable without shell interpolation. The path, working directory, metadata, and SHA-256 content snapshot are checked again immediately before launch.
 
-**Security boundary:** pre-launch path and digest revalidation reduces replacement races but cannot eliminate the final check-to-exec window without a handle-relative launch primitive. The script is not sandboxed: once launched, it runs with the full permissions and environment of the MCP server process and may access resources that the operating system allows.
+**Security boundary:** pre-launch path and digest revalidation reduces replacement races but cannot eliminate the final check-to-exec window without a handle-relative launch primitive. The script is not sandboxed: once launched, it runs with the operating-system permissions and normal environment of the MCP server process and may access resources that the operating system allows. In Streamable HTTP mode, the bearer-token environment variables are removed immediately after startup configuration is snapshotted, so child processes do not inherit those credentials.
 
 **Parameters:**
 
@@ -643,7 +645,7 @@ Executes a regular script or executable whose path is inside an allowed director
 
 Executes an arbitrary command through a selected shell.
 
-**Critical security warning:** only `cwd` is checked against the allowed directories. The command text is intentionally unrestricted and can read, modify, execute, or access anything permitted to the MCP server's Windows or Unix identity, including paths outside the allowed directories and network resources. Do not enable this tool for untrusted clients or prompts.
+**Critical security warning:** only `cwd` is checked against the allowed directories. The command text is intentionally unrestricted and can read, modify, execute, or access anything permitted to the MCP server's Windows or Unix identity, including paths outside the allowed directories and network resources. Do not enable this tool for untrusted clients or prompts. Streamable HTTP additionally requires `MCP_HTTP_ENABLE_EXECUTION=1`, and the HTTP bearer-token environment variables are removed before tool execution can start.
 
 **Parameters:**
 

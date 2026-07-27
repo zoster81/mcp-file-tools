@@ -47,23 +47,27 @@ All values must be positive decimal integers.
 | `MCP_MAX_BATCH_FILES` | 256 | Maximum paths accepted by `read_multiple_files`. |
 | `MCP_MAX_MATCHES` | 10,000 | Server maximum for `grep_text_files.maxMatches`. The request default remains 1,000. |
 | `MCP_MAX_OUTPUT_BYTES` | 67,108,864 | Aggregate read output, retained grep state, and inconsistent-line output. |
-| `MCP_MAX_SESSIONS` | 128 | Reserved hard limit for native Streamable HTTP sessions when that transport is implemented. |
+| `MCP_MAX_SESSIONS` | 128 | Maximum live native Streamable HTTP sessions. |
 | `MCP_MEMORY_THRESHOLD` | — | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`. Specific variables take precedence. |
 
 ## Transport selection and directory policy
 
-R11 separates process configuration, CLI parsing, shared server construction, and transport startup. Stdio remains the only implemented transport and is selected by default. It may also be selected explicitly with either:
+R11 separates process configuration, CLI parsing, shared server construction, and transport startup. Stdio remains the default, while native stateful Streamable HTTP can be selected explicitly:
 
 ```text
 --transport=stdio
+--transport=streamable-http
 MCP_TRANSPORT=stdio
+MCP_TRANSPORT=streamable-http
 ```
 
-The CLI option takes precedence over the environment default. Other transport values are rejected until native Streamable HTTP is implemented.
+The CLI option takes precedence over the environment default. Streamable HTTP fails startup unless exactly one bearer-token source is configured through `MCP_HTTP_TOKEN` or the preferred `MCP_HTTP_TOKEN_FILE`. It binds to `127.0.0.1:8765` by default and uses `/mcp`; non-loopback exposure requires the additional controls in [`HTTP_SECURITY.md`](HTTP_SECURITY.md).
 
-Allowed directories are process-wide policy. Every connection or future HTTP session attached to one server process shares the same configured roots, 23-tool catalog, limits, execution flags, and error behavior. Sessions separate protocol lifecycle, cancellation, and concurrent requests; they do not create per-agent filesystem ACLs. Prompt instructions may narrow an agent's intended write scope, but technical isolation requires separate processes and, for concurrent Git changes, separate checkouts or worktrees.
+Allowed directories are process-wide policy. Every connection or HTTP session attached to one server process shares the same configured roots, 23-tool catalog, limits, execution flags, and error behavior. Sessions separate protocol lifecycle, cancellation, and concurrent requests; they do not create per-agent filesystem ACLs. Prompt instructions may narrow an agent's intended write scope, but technical isolation requires separate processes and, for concurrent Git changes, separate checkouts or worktrees.
 
-Startup directories remain authoritative and immutable for the process. A roots-capable stdio client may provide dynamic MCP roots only when the process starts without directory arguments. Future HTTP sessions will use startup roots and will not mutate them.
+Startup directories remain authoritative and immutable for the process. A roots-capable stdio client may provide dynamic MCP roots only when the process starts without directory arguments. HTTP disables client roots and cannot mutate the process-wide set.
+
+Native HTTP reauthenticates every MCP request, validates exact Host and Origin values, emits no CORS allow headers, bounds per-request and aggregate body memory, limits sessions and concurrent handlers, and disables event replay. `run_script` and `shell` require `MCP_HTTP_ENABLE_EXECUTION=1` in addition to their existing tool-specific or combined authorization flag. After HTTP startup configuration is validated, the token and token-file environment variables are removed so optional child processes cannot inherit them.
 
 ## Schema review
 

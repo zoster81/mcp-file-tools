@@ -27,9 +27,9 @@ Current milestone status and completion gates live in this document. Reusable en
 | R9 | COMPLETE | Real bounded-memory streaming for large-file read, grep, conversion, line-ending, and BOM paths. |
 | R10 | COMPLETE | Resolve public API inconsistencies and compatibility debt before the 2.0 boundary. |
 | R11 | COMPLETE | Separate transport bootstrap from the shared MCP server and tool policies. |
-| R12 | ACTIVE | Approve the Streamable HTTP threat model and security design. |
-| R13 | QUEUED | Implement and verify native MCP Streamable HTTP while preserving stdio. |
-| R14 | QUEUED | Complete hardening, CI, packaging, migration documentation, and the 2.0.0 release. |
+| R12 | COMPLETE | Approve the Streamable HTTP threat model and security design. |
+| R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
+| R14 | ACTIVE | Complete hardening, CI, packaging, migration documentation, and the 2.0.0 release. |
 
 ---
 
@@ -216,7 +216,7 @@ The stdio executable uses the new architecture without behavior regression, and 
 
 ## Completion record
 
-Completed on 2026-07-27. Configuration loading, CLI parsing, server construction, and transport startup are separate. `BuildServer` owns one shared 23-tool registration and process-wide policy; the stdio runner is lifecycle-aware and responds to process cancellation; explicit `--transport=stdio` and `MCP_TRANSPORT=stdio` selection preserve stdio as the sole implemented transport. Multiple connections to one server are verified to expose equivalent tool catalogs and the same configured roots, while provided configuration controls handler behavior. Dynamic client roots are limited to roots-capable stdio clients started without configured directories, and empty updates remove stale dynamic access. The complete race-detector suite and Gitleaks scans of Git history plus the working tree passed. HTTP listeners, authentication, and session policy remain unimplemented pending R12 and R13.
+Completed on 2026-07-27. Configuration loading, CLI parsing, server construction, and transport startup are separate. `BuildServer` owns one shared 23-tool registration and process-wide policy; the stdio runner is lifecycle-aware and responds to process cancellation; explicit `--transport=stdio` and `MCP_TRANSPORT=stdio` preserved stdio as the sole implemented transport at the R11 boundary. Multiple connections to one server were verified to expose equivalent tool catalogs and the same configured roots, while provided configuration controls handler behavior. Dynamic client roots are limited to roots-capable stdio clients started without configured directories, and empty updates remove stale dynamic access. The complete race-detector suite and Gitleaks scans of Git history plus the working tree passed. R12 and R13 subsequently added the reviewed security design and native HTTP implementation on top of this architecture.
 
 ---
 
@@ -226,33 +226,39 @@ Completed on 2026-07-27. Configuration loading, CLI parsing, server construction
 
 Approve a concrete threat model and secure defaults before exposing filesystem and optional execution tools over an HTTP listener.
 
+The approved design is [`HTTP_SECURITY.md`](HTTP_SECURITY.md). It is the source of truth for R13 HTTP configuration, trust boundaries, middleware order, accepted risks, security tests, and release blockers.
+
 ## Checklist
 
-- [ ] Document assets, trust boundaries, actors, and supported deployment models.
-- [ ] Preserve the R11 process-wide root model: all HTTP sessions share startup roots, client roots cannot mutate them, and per-agent isolation uses separate processes when required.
-- [ ] Bind to loopback by default.
-- [ ] Require explicit configuration for non-loopback binding.
-- [ ] Define token authentication and reverse-proxy integration.
-- [ ] Use constant-time credential comparison where applicable.
-- [ ] Define secure token loading without command-line secret exposure.
-- [ ] Validate `Host` and `Origin` and address DNS rebinding.
-- [ ] Disable CORS by default.
-- [ ] Define TLS expectations for direct and reverse-proxy deployments.
-- [ ] Set request body, header, connection, and concurrency limits.
-- [ ] Set read-header, read, write, idle, session, and shutdown timeouts.
-- [ ] Define session identifiers, expiry, cleanup, and hijacking protections.
-- [ ] Define CSRF and browser-origin protections.
-- [ ] Prevent sensitive headers, tokens, and file contents from entering logs.
-- [ ] Keep `run_script` and `shell` disabled by default.
-- [ ] Require a distinct explicit opt-in for execution over HTTP.
-- [ ] Define rate limiting and denial-of-service behavior.
-- [ ] Define trusted-proxy handling without accepting spoofed forwarding headers.
-- [ ] Define health and readiness endpoints that expose no sensitive data.
-- [ ] Define security tests and release-blocking findings.
+- [x] Document assets, trust boundaries, actors, and supported deployment models.
+- [x] Preserve the R11 process-wide root model: all HTTP sessions share startup roots, client roots cannot mutate them, and per-agent isolation uses separate processes when required.
+- [x] Bind to loopback by default.
+- [x] Require explicit configuration for non-loopback binding.
+- [x] Define token authentication and reverse-proxy integration.
+- [x] Use constant-time credential comparison where applicable.
+- [x] Define secure token loading without command-line secret exposure.
+- [x] Validate `Host` and `Origin` and address DNS rebinding.
+- [x] Disable CORS by default.
+- [x] Define TLS expectations for direct and reverse-proxy deployments.
+- [x] Set request body, header, connection, and concurrency limits.
+- [x] Set read-header, request, idle, session, and shutdown timeouts without breaking SSE.
+- [x] Define session identifiers, expiry, cleanup, and hijacking protections.
+- [x] Define CSRF and browser-origin protections.
+- [x] Prevent sensitive headers, tokens, file contents, commands, and session identifiers from entering logs.
+- [x] Keep `run_script` and `shell` disabled by default.
+- [x] Require a distinct explicit opt-in for execution over HTTP.
+- [x] Define rate limiting and denial-of-service behavior.
+- [x] Define trusted-proxy handling without accepting spoofed forwarding headers.
+- [x] Define health and readiness endpoints that expose no sensitive data.
+- [x] Define security tests and release-blocking findings.
 
 ## Completion gate
 
 A reviewed security design exists, every identified threat has a mitigation or explicit accepted risk, and implementation tests are specified before HTTP code is merged.
+
+## Completion record
+
+Completed on 2026-07-27. [`HTTP_SECURITY.md`](HTTP_SECURITY.md) defines a fail-closed stateful Streamable HTTP profile with loopback binding, mandatory bearer authentication on every MCP request, exact Host and all-method Origin validation, no CORS, explicit non-loopback/TLS/proxy rules, bounded bodies, headers, requests, sessions, rate state, and timeouts, redacted logging, minimal health endpoints, and a second execution opt-in. It preserves R11 process-wide roots, disables HTTP client roots, keeps the initial event store unset, records SDK integration constraints, and lists required negative tests plus release-blocking findings before R13 implementation.
 
 ---
 
@@ -262,27 +268,35 @@ A reviewed security design exists, every identified threat has a mitigation or e
 
 Implement the MCP Streamable HTTP transport according to R11 and R12 while preserving stdio behavior.
 
+R13 must implement [`HTTP_SECURITY.md`](HTTP_SECURITY.md) without broadening its accepted risks or adding an unauthenticated compatibility mode.
+
 ## Checklist
 
-- [ ] Implement the Streamable HTTP endpoint using the shared server.
-- [ ] Support required JSON-RPC request and streaming response behavior.
-- [ ] Implement session creation, lookup, expiration, and cleanup.
-- [ ] Propagate disconnect and request cancellation into tool contexts.
-- [ ] Implement graceful shutdown for listeners and active sessions.
-- [ ] Add health and readiness endpoints.
-- [ ] Apply authentication, host/origin, size, timeout, and concurrency policies from R12.
-- [ ] Reject malformed content types, methods, JSON, and protocol messages deterministically.
-- [ ] Keep stdio startup and protocol output unchanged.
-- [ ] Test simultaneous clients and concurrent sessions.
-- [ ] Test disconnect, reconnect, timeout, cancellation, and shutdown races.
-- [ ] Test oversized payloads, slow clients, saturation, and resource cleanup.
-- [ ] Compare tool catalogs and representative tool results across stdio and HTTP.
-- [ ] Verify allowed-directory and execution policies on both transports, including shared process roots across simultaneous HTTP sessions.
-- [ ] Run direct HTTP end-to-end tests and OpenAI tunnel compatibility tests where applicable.
+- [x] Implement the Streamable HTTP endpoint using the shared server and the approved security middleware order.
+- [x] Support required JSON-RPC request and streaming response behavior.
+- [x] Implement session creation, lookup, expiration, and cleanup.
+- [x] Propagate disconnect and request cancellation into tool contexts.
+- [x] Implement graceful shutdown for listeners and active sessions.
+- [x] Add health and readiness endpoints.
+- [x] Apply authentication, Host/Origin, per-request and aggregate size, timeout, rate, session, and concurrency policies from R12.
+- [x] Reject malformed content types, methods, JSON, protocol messages, query credentials, and event replay deterministically.
+- [x] Keep stdio startup and protocol output unchanged.
+- [x] Test simultaneous clients and concurrent sessions.
+- [x] Test disconnect, timeout, cancellation, POST-paused idle expiry, SSE-only expiry, cleanup, and shutdown races.
+- [x] Test oversized known-length/chunked payloads, oversized headers, saturation, bounded limiter state, and resource cleanup.
+- [x] Compare complete tool metadata and representative tool results across stdio/direct and HTTP adapters.
+- [x] Verify allowed-directory and dual execution policies on both transports, including shared process roots across simultaneous HTTP sessions.
+- [x] Run native HTTP end-to-end tests and the existing stdio manual harness; the OpenAI Secure MCP Tunnel deployment remains stdio and was not changed or restarted.
 
 ## Completion gate
 
 All 23 retained tools operate through native Streamable HTTP and stdio with equivalent schemas and policy boundaries, and the R12 security suite passes.
+
+## Completion record
+
+Completed on 2026-07-27. The executable now selects `stdio` or stateful `streamable-http` while constructing the 23 tools once through `BuildServer`. Native HTTP is loopback-bound and bearer-authenticated by default, validates exact Host and all-method Origin values, emits no CORS allow headers, disables HTTP client roots and event replay, supports optional TLS and bounded trusted-proxy handling, exposes minimal health/readiness routes, and coordinates graceful shutdown. Per-request and aggregate body budgets, non-SSE concurrency, live sessions, bounded per-peer rate state, idle cleanup, header limits, and cancellation are enforced before or around the pinned SDK handler. HTTP execution requires its own opt-in in addition to the existing tool authorization, and token-source variables are removed from the process environment after startup snapshotting.
+
+Tests verified multiple simultaneous HTTP clients, unique sessions, DELETE and idle cleanup, SDK-aligned POST-paused and SSE-only expiry, cancellation propagation, authentication on every method, Host/Origin and proxy rejection, known-length and chunked `413` behavior, aggregate/concurrency `429` behavior, oversized-header `431`, log and TLS-path redaction, immutable process roots after an HTTP roots notification, and equivalence with the direct adapter for all tool metadata, CP1251 reads, allowed directories, and representative typed errors. Focused and complete Go tests, `go vet`, Staticcheck, govulncheck, the full race detector, the stdio manual harness, Node release tests, documentation/catalog checks, and Gitleaks history plus working-tree scans passed. No binary build, push, launcher change, service restart, or live deployment was performed.
 
 ---
 

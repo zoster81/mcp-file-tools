@@ -52,7 +52,8 @@ func runCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		slog.Debug("normalized allowed directories", "dirs", normalized)
 	}
 
-	runner, err := newRunner(options.transport)
+	applicationConfig := config.Load()
+	selection, err := selectRunner(options.transport, getenv, applicationConfig.Limits.MaxSessions)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 		return 1
@@ -60,12 +61,13 @@ func runCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 	server := filetoolsserver.BuildServer(filetoolsserver.ServerOptions{
 		Version:            version,
 		AllowedDirectories: normalized,
-		Config:             config.Load(),
-		EnableClientRoots:  options.transport == transportStdio,
+		Config:             applicationConfig,
+		ExecutionPolicy:    selection.executionPolicy,
+		EnableClientRoots:  selection.enableClientRoots,
 		LifecycleContext:   ctx,
 	})
 
-	if err := runner.Run(ctx, server); err != nil {
+	if err := selection.runner.Run(ctx, server); err != nil {
 		if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
 			return 0
 		}

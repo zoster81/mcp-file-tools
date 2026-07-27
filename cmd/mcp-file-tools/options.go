@@ -9,7 +9,10 @@ const envTransport = "MCP_TRANSPORT"
 
 type transportName string
 
-const transportStdio transportName = "stdio"
+const (
+	transportStdio          transportName = "stdio"
+	transportStreamableHTTP transportName = "streamable-http"
+)
 
 type commandOptions struct {
 	transport          transportName
@@ -49,8 +52,13 @@ func parseCommandOptions(args []string, defaults commandOptions) (commandOptions
 		directories = append(directories, argument)
 	}
 
-	if transport != transportStdio {
-		return commandOptions{}, fmt.Errorf("unsupported transport %q; supported transports: %s", transport, transportStdio)
+	if transport != transportStdio && transport != transportStreamableHTTP {
+		return commandOptions{}, fmt.Errorf(
+			"unsupported transport %q; supported transports: %s, %s",
+			transport,
+			transportStdio,
+			transportStreamableHTTP,
+		)
 	}
 	return commandOptions{transport: transport, allowedDirectories: directories}, nil
 }

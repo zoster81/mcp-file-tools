@@ -9,12 +9,12 @@ Git remote.
 
 - GitHub repository: `https://github.com/zoster81/mcp-file-tools`
 - Primary deployment: ChatGPT Web through the OpenAI Secure MCP Tunnel
-- Implemented MCP transport: stdio
-- Native HTTP/JSON or Streamable HTTP transport: not implemented
+- Implemented MCP transports in the development source: stdio and native stateful Streamable HTTP
+- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; the native HTTP implementation has direct end-to-end coverage but is not yet built or deployed
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
-- Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), and transport-independent server construction plus lifecycle-aware stdio startup (R11)
-- Active milestone: R12 Streamable HTTP threat model and security design
-- Authoritative plan: [ROADMAP.md](ROADMAP.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
+- Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), transport-independent server construction plus lifecycle-aware stdio startup (R11), the approved Streamable HTTP threat model and secure defaults (R12), and native stateful Streamable HTTP with security and equivalence coverage (R13)
+- Active milestone: R14 hardening, CI, packaging, migration review, and 2.0.0 release
+- Authoritative plan: [ROADMAP.md](ROADMAP.md), HTTP security design in [HTTP_SECURITY.md](HTTP_SECURITY.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
 - Development policy: internal commit builds only until the next public release, `2.0.0`
 - Release source: the final fork-owned semantic tag whose plugin, marketplace, binary, and Registry versions must match
 - Go module path: `github.com/zoster81/mcp-file-tools`
@@ -22,6 +22,8 @@ Git remote.
 The fork owns its Go module identity and all internal imports. Clone-and-build is the supported path for internal development commits. No intermediate public release is planned; packaged installations remain on the latest published release until the R14 `2.0.0` gate is complete.
 
 R11 defines one process-wide authorization model for every transport: all connections or future HTTP sessions share the directories configured when the process starts, together with the same tool catalog, limits, execution flags, and errors. Sessions are lifecycle and concurrency units, not per-agent ACLs. Prompt instructions may narrow an agent's intended write scope, but technical isolation requires separate server processes and, for concurrent Git changes, separate checkouts or worktrees. Dynamic client roots remain a stdio-only fallback when no startup directories are configured; HTTP sessions must not mutate process roots.
+
+R12's [HTTP security design](HTTP_SECURITY.md) remains release-blocking through R14. The R13 implementation is fail-closed: loopback by default, bearer-authenticated on every MCP request, exact Host and Origin validation, no CORS, bounded per-request and aggregate body memory, bounded sessions and request resources, redacted logging, and a second explicit execution opt-in. It has not yet been packaged, pushed, or deployed.
 
 ## Fork release flow
 

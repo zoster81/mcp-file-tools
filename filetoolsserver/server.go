@@ -63,6 +63,7 @@ type ServerOptions struct {
 	AllowedDirectories []string
 	Logger             *slog.Logger
 	Config             *config.Config
+	ExecutionPolicy    *handler.ExecutionPolicy
 	EnableClientRoots  bool
 	LifecycleContext   context.Context
 }
@@ -82,7 +83,11 @@ func BuildServer(options ServerOptions) *mcp.Server {
 		lifecycleCtx = context.Background()
 	}
 
-	h := handler.NewHandler(options.AllowedDirectories, handler.WithConfig(cfg))
+	handlerOptions := []handler.Option{handler.WithConfig(cfg)}
+	if options.ExecutionPolicy != nil {
+		handlerOptions = append(handlerOptions, handler.WithExecutionPolicy(*options.ExecutionPolicy))
+	}
+	h := handler.NewHandler(options.AllowedDirectories, handlerOptions...)
 	logger := options.Logger
 	impl := &mcp.Implementation{
 		Name:    "mcp-file-tools",

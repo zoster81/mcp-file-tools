@@ -13,6 +13,7 @@ Do not copy private workstation state, local process details, credentials, or op
 - Contributor workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Tool behavior and examples: [`TOOLS.md`](TOOLS.md)
 - Release procedure: [`docs/PUBLISHING.md`](docs/PUBLISHING.md)
+- Streamable HTTP security design: [`docs/HTTP_SECURITY.md`](docs/HTTP_SECURITY.md)
 - Authoritative MCP tool metadata: [`internal/toolcatalog/catalog.json`](internal/toolcatalog/catalog.json)
 
 Link to these documents instead of duplicating their detailed content.
@@ -25,6 +26,7 @@ Link to these documents instead of duplicating their detailed content.
 - `internal/encoding`: encoding registry and content-based detection.
 - `internal/security`: path normalization, resolution, and allowed-root enforcement.
 - `internal/filesystem`: secure traversal and durable mutation primitives.
+- `internal/httptransport`: secured native Streamable HTTP listener, admission, sessions, and lifecycle.
 - `internal/operation`: transport-independent error categories.
 - `internal/concurrency`: bounded deterministic worker coordination.
 - `internal/textstream`: incremental decoding consumers, bounded line framing, and streaming line-ending transforms.
@@ -58,6 +60,7 @@ Use focused TDD when practical: reproduce, confirm the expected failure, impleme
 - `run_script` and `shell` remain disabled by default. Do not weaken their distinct authorization boundaries.
 - Allowed directories are process-wide policy shared by every connection; do not introduce per-session filesystem ACLs or let future HTTP sessions mutate startup roots without an explicit roadmap decision.
 - Dynamic MCP client roots are a stdio-only compatibility path when no startup directories are configured.
+- Native HTTP must follow `docs/HTTP_SECURITY.md`; do not weaken authentication, Host/Origin checks, session limits, logging redaction, or the dual execution opt-in.
 - Preserve stdio behavior while transport work is in progress.
 
 ## Verification commands
@@ -99,6 +102,7 @@ Additional instructions exist in:
 - [`filetoolsserver/handler/AGENTS.md`](filetoolsserver/handler/AGENTS.md)
 - [`internal/encoding/AGENTS.md`](internal/encoding/AGENTS.md)
 - [`internal/filesystem/AGENTS.md`](internal/filesystem/AGENTS.md)
+- [`internal/httptransport/AGENTS.md`](internal/httptransport/AGENTS.md)
 - [`internal/security/AGENTS.md`](internal/security/AGENTS.md)
 - [`scripts/AGENTS.md`](scripts/AGENTS.md)
 

@@ -80,7 +80,7 @@ Update `CHANGELOG.md` for user-visible behavior, compatibility, security, packag
 
 ## Security-sensitive changes
 
-Changes under `internal/security`, `internal/filesystem`, execution handlers, allowed-root handling, or future HTTP transport require explicit negative tests. Preserve fail-closed behavior and document any unavoidable TOCTOU or platform limitation.
+Changes under `internal/security`, `internal/filesystem`, execution handlers, allowed-root handling, or native HTTP transport require explicit negative tests. HTTP work must follow [`docs/HTTP_SECURITY.md`](docs/HTTP_SECURITY.md); preserve its fail-closed defaults and document any unavoidable TOCTOU, SDK, proxy, or platform limitation.
 
 Never weaken path validation to make a test pass. Fix the abstraction or test setup instead.
 

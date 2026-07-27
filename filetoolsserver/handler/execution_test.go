@@ -144,3 +144,33 @@ func TestExecutionFeatureFlagsRemainIndependent(t *testing.T) {
 		t.Fatal("run_script flag incorrectly enabled shell")
 	}
 }
+
+func TestExecutionPolicyFromEnvironment(t *testing.T) {
+	values := map[string]string{
+		"MCP_ENABLE_RUN_SCRIPT": "1",
+		"MCP_ENABLE_SHELL":      "0",
+	}
+	policy := ExecutionPolicyFromEnvironment(func(name string) string { return values[name] })
+	if !policy.AllowRunScript || policy.AllowShell {
+		t.Fatalf("policy = %#v", policy)
+	}
+
+	values["MCP_ENABLE_EXECUTION"] = "true"
+	policy = ExecutionPolicyFromEnvironment(func(name string) string { return values[name] })
+	if !policy.AllowRunScript || !policy.AllowShell {
+		t.Fatalf("combined flag policy = %#v", policy)
+	}
+}
+
+func TestExplicitExecutionPolicyOverridesEnvironment(t *testing.T) {
+	t.Setenv("MCP_ENABLE_EXECUTION", "1")
+	h := NewHandler(nil, WithExecutionPolicy(ExecutionPolicy{}))
+	if h.executionAllowed("MCP_ENABLE_RUN_SCRIPT") || h.executionAllowed("MCP_ENABLE_SHELL") {
+		t.Fatal("explicit deny policy was bypassed by environment flags")
+	}
+
+	h = NewHandler(nil, WithExecutionPolicy(ExecutionPolicy{AllowShell: true}))
+	if h.executionAllowed("MCP_ENABLE_RUN_SCRIPT") || !h.executionAllowed("MCP_ENABLE_SHELL") {
+		t.Fatal("explicit policy did not remain tool-specific")
+	}
+}

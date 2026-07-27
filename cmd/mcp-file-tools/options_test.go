@@ -64,10 +64,20 @@ func TestParseCommandOptionsSeparatorPreservesFlagLikeDirectory(t *testing.T) {
 	}
 }
 
+func TestParseCommandOptionsAcceptsStreamableHTTP(t *testing.T) {
+	opts, err := parseCommandOptions([]string{"--transport=streamable-http", "project"}, commandOptions{transport: transportStdio})
+	if err != nil {
+		t.Fatalf("parseCommandOptions() error = %v", err)
+	}
+	if opts.transport != transportStreamableHTTP {
+		t.Fatalf("transport = %q, want %q", opts.transport, transportStreamableHTTP)
+	}
+}
+
 func TestParseCommandOptionsRejectsUnsupportedTransport(t *testing.T) {
 	defaults := loadCommandDefaults(func(name string) string {
 		if name == envTransport {
-			return "streamable-http"
+			return "websocket"
 		}
 		return ""
 	})

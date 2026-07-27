@@ -37,7 +37,7 @@ func TestRunCommandRejectsUnsupportedTransportBeforeStartup(t *testing.T) {
 	var stderr bytes.Buffer
 	code := runCommand(context.Background(), nil, &stdout, &stderr, func(name string) string {
 		if name == envTransport {
-			return "streamable-http"
+			return "websocket"
 		}
 		return ""
 	})
@@ -48,6 +48,21 @@ func TestRunCommandRejectsUnsupportedTransportBeforeStartup(t *testing.T) {
 		t.Fatalf("stdout = %q, want empty", stdout.String())
 	}
 	if !strings.Contains(stderr.String(), "unsupported transport") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunCommandRejectsHTTPWithoutTokenBeforeStartup(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := runCommand(context.Background(), []string{"--transport=streamable-http"}, &stdout, &stderr, func(string) string { return "" })
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "MCP_HTTP_TOKEN") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }

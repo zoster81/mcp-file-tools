@@ -16,21 +16,30 @@ const (
 
 // Handler handles all file tool operations
 type Handler struct {
-	config         *config.Config
-	configuredDirs []string // immutable process-wide baseline; always allowed
-	allowedDirs    []string
-	mu             sync.RWMutex
+	config          *config.Config
+	executionPolicy *ExecutionPolicy
+	configuredDirs  []string // immutable process-wide baseline; always allowed
+	allowedDirs     []string
+	mu              sync.RWMutex
 }
 
 // Option is a functional option for configuring Handler
 type Option func(*Handler)
 
-// WithConfig sets the configuration for the handler
+// WithConfig sets the configuration for the handler.
 func WithConfig(cfg *config.Config) Option {
 	return func(h *Handler) {
 		if cfg != nil {
 			h.config = cfg
 		}
+	}
+}
+
+// WithExecutionPolicy sets an immutable transport-specific execution policy.
+func WithExecutionPolicy(policy ExecutionPolicy) Option {
+	return func(h *Handler) {
+		policyCopy := policy
+		h.executionPolicy = &policyCopy
 	}
 }
 

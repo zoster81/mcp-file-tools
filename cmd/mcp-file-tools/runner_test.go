@@ -3,13 +3,82 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zoster81/mcp-file-tools/filetoolsserver"
 	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/mcp-file-tools/internal/httptransport"
 )
+
+func TestSelectRunnerPreservesStdioPolicy(t *testing.T) {
+	selection, err := selectRunner(transportStdio, func(string) string { return "" }, 128)
+	if err != nil {
+		t.Fatalf("selectRunner() error = %v", err)
+	}
+	if !selection.enableClientRoots || selection.executionPolicy != nil {
+		t.Fatalf("stdio selection = %#v", selection)
+	}
+	if _, ok := selection.runner.(singleSessionRunner); !ok {
+		t.Fatalf("stdio runner type = %T", selection.runner)
+	}
+}
+
+func TestSelectRunnerHTTPClearsCredentialEnvironment(t *testing.T) {
+	t.Setenv(httptransport.EnvToken, testHTTPToken())
+	t.Setenv(httptransport.EnvTokenFile, "")
+	if _, err := selectRunner(transportStreamableHTTP, os.Getenv, 7); err != nil {
+		t.Fatalf("selectRunner() error = %v", err)
+	}
+	if value := os.Getenv(httptransport.EnvToken); value != "" {
+		t.Fatalf("HTTP token remained in process environment: %q", value)
+	}
+	if value := os.Getenv(httptransport.EnvTokenFile); value != "" {
+		t.Fatalf("HTTP token file remained in process environment: %q", value)
+	}
+}
+
+func TestSelectRunnerHTTPRequiresDualExecutionOptIn(t *testing.T) {
+	values := map[string]string{
+		httptransport.EnvToken:   testHTTPToken(),
+		"MCP_ENABLE_EXECUTION":   "1",
+		httptransport.EnvAddress: "127.0.0.1:8765",
+		httptransport.EnvPath:    "/mcp",
+	}
+	getenv := func(name string) string { return values[name] }
+
+	selection, err := selectRunner(transportStreamableHTTP, getenv, 7)
+	if err != nil {
+		t.Fatalf("selectRunner() error = %v", err)
+	}
+	if selection.enableClientRoots || selection.executionPolicy == nil {
+		t.Fatalf("HTTP selection = %#v", selection)
+	}
+	if selection.executionPolicy.AllowRunScript || selection.executionPolicy.AllowShell {
+		t.Fatalf("HTTP execution bypassed transport gate: %#v", selection.executionPolicy)
+	}
+	if _, ok := selection.runner.(httptransport.Runner); !ok {
+		t.Fatalf("HTTP runner type = %T", selection.runner)
+	}
+
+	values[httptransport.EnvEnableExecution] = "true"
+	values["MCP_ENABLE_EXECUTION"] = ""
+	values["MCP_ENABLE_RUN_SCRIPT"] = "1"
+	selection, err = selectRunner(transportStreamableHTTP, getenv, 7)
+	if err != nil {
+		t.Fatalf("selectRunner() with execution error = %v", err)
+	}
+	if !selection.executionPolicy.AllowRunScript || selection.executionPolicy.AllowShell {
+		t.Fatalf("tool-specific dual policy = %#v", selection.executionPolicy)
+	}
+}
+
+func testHTTPToken() string {
+	return strings.Repeat("test-token-", 4)
+}
 
 func TestSingleSessionRunnerUsesSharedServerAndHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

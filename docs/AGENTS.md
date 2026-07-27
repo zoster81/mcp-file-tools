@@ -9,6 +9,7 @@ This guide applies to files under `docs/`. Follow the root [`AGENTS.md`](../AGEN
 - `ROADMAP_HISTORY.md`: concise public engineering history, not an operator session log.
 - `PUBLISHING.md`: maintainer release and distribution procedure.
 - `MIGRATION_2.0.md`: authoritative intentional breaking changes and migration actions for 1.8 to 2.0.
+- `HTTP_SECURITY.md`: approved Streamable HTTP threat model, secure defaults, implementation constraints, test matrix, and release blockers.
 
 Keep operational details in their proper source instead of duplicating them across documents.
 
@@ -32,6 +33,7 @@ Historical documents should record architectural outcomes, compatibility decisio
 
 - Keep roadmap status consistent with README and publishing notes.
 - Keep current limitations explicit and distinguish implemented behavior from planned work.
+- Keep Streamable HTTP implementation aligned with `HTTP_SECURITY.md`; changes to its trust model or accepted risks require explicit review.
 - Do not imply that filename extensions influence encoding detection.
 - Do not claim streaming, atomicity, sandboxing, or platform support beyond what tests and implementation establish.
 - When tool behavior changes, verify links and descriptions against `internal/toolcatalog/catalog.json` and `TOOLS.md`.

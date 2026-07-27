@@ -36,8 +36,8 @@ type ExecutionOutput = internalexecution.Result
 
 // HandleRunScript executes a supported script whose path is inside an allowed directory.
 func (h *Handler) HandleRunScript(ctx context.Context, req *mcp.CallToolRequest, input RunScriptInput) (*mcp.CallToolResult, ExecutionOutput, error) {
-	if !executionFeatureEnabled("MCP_ENABLE_RUN_SCRIPT") {
-		return errorResult("run_script is disabled; set MCP_ENABLE_RUN_SCRIPT=1 or MCP_ENABLE_EXECUTION=1 before starting the server"), ExecutionOutput{}, nil
+	if !h.executionAllowed("MCP_ENABLE_RUN_SCRIPT") {
+		return errorResult(h.executionDisabledMessage("run_script")), ExecutionOutput{}, nil
 	}
 
 	validatedScript := h.ValidatePath(input.Path)
@@ -92,8 +92,8 @@ func (h *Handler) HandleRunScript(ctx context.Context, req *mcp.CallToolRequest,
 
 // HandleShell executes an arbitrary command through the selected shell.
 func (h *Handler) HandleShell(ctx context.Context, req *mcp.CallToolRequest, input ShellInput) (*mcp.CallToolResult, ExecutionOutput, error) {
-	if !executionFeatureEnabled("MCP_ENABLE_SHELL") {
-		return errorResult("shell is disabled; set MCP_ENABLE_SHELL=1 or MCP_ENABLE_EXECUTION=1 before starting the server"), ExecutionOutput{}, nil
+	if !h.executionAllowed("MCP_ENABLE_SHELL") {
+		return errorResult(h.executionDisabledMessage("shell")), ExecutionOutput{}, nil
 	}
 	if strings.TrimSpace(input.Command) == "" {
 		return errorResult("command is required and must be a non-empty string"), ExecutionOutput{}, nil
@@ -181,12 +181,7 @@ func executionFeatureEnabled(specificVariable string) bool {
 }
 
 func environmentFlagEnabled(name string) bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
-	case "1", "true", "yes", "on", "enabled":
-		return true
-	default:
-		return false
-	}
+	return environmentFlagValue(os.Getenv(name))
 }
 
 func buildScriptCommand(scriptPath string, scriptArgs []string) (string, []string, error) {
