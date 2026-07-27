@@ -97,4 +97,4 @@ A pull request should state:
 - checks not performed and why;
 - remaining risks or follow-up work.
 
-Release tags, published assets, Registry publication, and plugin version changes follow [`docs/PUBLISHING.md`](docs/PUBLISHING.md) and are maintainer-controlled.
+Release tags, published assets, and Registry publication follow [`docs/PUBLISHING.md`](docs/PUBLISHING.md) and are maintainer-controlled.

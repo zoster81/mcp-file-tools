@@ -26,4 +26,6 @@ mkdir -p "$tools_dir/actionlint"
 tar -xzf "$actionlint_archive" -C "$tools_dir/actionlint"
 tar -xzf "$shellcheck_archive" -C "$tools_dir"
 
-PATH="$tools_dir/actionlint:$tools_dir/shellcheck-v${SHELLCHECK_VERSION}:$PATH" actionlint
+validation_path="$tools_dir/actionlint:$tools_dir/shellcheck-v${SHELLCHECK_VERSION}:$PATH"
+PATH="$validation_path" actionlint
+PATH="$validation_path" shellcheck scripts/*.sh

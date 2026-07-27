@@ -29,7 +29,7 @@ ChatGPT Web
     -> explicitly allowed Windows directories
 ```
 
-The fork does not require Claude Code, Codex, or another local AI application. The upstream integrations for those clients may still work and are retained as reference, but they are not the primary deployment target of this fork.
+The fork does not require Claude Code, Codex, or another local AI application. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; Claude users can still configure the released binary as an ordinary stdio MCP server.
 
 Other MCP clients may launch the stdio process directly or connect to the native Streamable HTTP endpoint. The HTTP transport is bearer-authenticated, loopback-bound by default, stateful, and governed by the approved threat model and secure defaults in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md). Release sequencing and remaining hardening gates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -51,7 +51,7 @@ Development commits may be built and deployed internally, but no intermediate pu
 
 Encoding detection is content-based. File extensions are not used to select or bias an encoding. Unicode BOMs and valid UTF-8 are authoritative. BOMless UTF-16 LE/BE is auto-detected only when structural and decoded-text evidence agree. Empty files are treated as assumed UTF-8; non-empty ambiguous input is reported explicitly and requires an `encoding` override in text operations.
 
-The existing semantic-tag release workflow remains available for the final 2.0 release. The optional Claude Code plugin is not part of the active OpenAI tunnel deployment and will be reviewed only during the final release gate.
+The existing semantic-tag release workflow remains available for the final 2.0 release. Release preparation validates the semantic tag against a dated changelog entry before generating binaries and Registry metadata.
 
 ## What It Does
 
@@ -263,11 +263,41 @@ $env:MCP_HTTP_ADDR = "127.0.0.1:8765"
 .\mcp-file-tools_windows_amd64.exe --transport=streamable-http D:\Projects
 ```
 
-The MCP endpoint is `http://127.0.0.1:8765/mcp`. Clients must send the token as `Authorization: Bearer <token>` on every MCP `POST`, `GET`, and `DELETE` request. `/healthz` and `/readyz` expose only minimal liveness/readiness status.
+The MCP endpoint is `http://127.0.0.1:8765/mcp`. Clients must send the token as `Authorization: Bearer <token>` on every MCP `POST`, `GET`, and `DELETE` request. `/healthz` and `/readyz` expose only minimal liveness/readiness status. A complete sanitized Windows launcher with loopback defaults, optional TLS/proxy settings, environment restoration, and both execution gates disabled is available at [`examples/start-streamable-http.ps1`](examples/start-streamable-http.ps1).
 
 `MCP_HTTP_TOKEN` and `MCP_HTTP_TOKEN_FILE` are cleared from the server process environment immediately after startup configuration is validated, preventing optional execution tools from inheriting the credential. The token itself remains fixed for the process lifetime; rotation requires a controlled restart.
 
 Do not put tokens in command-line arguments, URLs, cookies, or query parameters. Browser CORS is disabled. Non-loopback listeners require explicit opt-in plus TLS or an explicitly trusted proxy boundary. See [`docs/HTTP_SECURITY.md`](docs/HTTP_SECURITY.md) for the complete deployment and threat model.
+
+### Container image
+
+The repository Dockerfile uses the Go version declared by `go.mod`, a version-pinned Alpine runtime, a statically linked binary, and an unprivileged runtime identity (`10001:10001`). The container working directory is `/data`; cache and temporary files use `/tmp/mcp-file-tools`. The image remains transport-neutral, so its entry point is the server binary and callers select stdio or Streamable HTTP explicitly.
+
+Build a development image with an explicit embedded version:
+
+```bash
+docker build --build-arg VERSION=dev -t mcp-file-tools:dev .
+```
+
+A hardened stdio invocation mounts exactly one allowed root and keeps the rest of the container filesystem read-only:
+
+```bash
+docker run --rm -i \
+  --read-only \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --mount type=bind,source=/absolute/project,target=/data \
+  mcp-file-tools:dev --transport=stdio /data
+```
+
+The mounted directory must be accessible to UID/GID `10001`. For native HTTP, mount the workspace at `/data`, mount the bearer token and TLS files read-only under `/run/secrets`, publish port `8765`, and supply the fail-closed non-loopback/TLS settings documented above. A direct-TLS deployment can use an orchestration health check equivalent to:
+
+```text
+wget --no-check-certificate --spider -q https://127.0.0.1:8765/healthz
+```
+
+The Dockerfile intentionally does not bake in a health check because stdio has no HTTP endpoint. HTTP orchestrators should use `/healthz` for liveness and `/readyz` for readiness; stdio supervisors should monitor the process lifecycle. `SIGTERM` is the declared container stop signal and reaches the server's graceful-shutdown path.
 
 ### Updating the fork
 
@@ -290,7 +320,7 @@ Set `MCP_NO_UPDATE_CHECK=1` before starting the server to disable release checks
 
 ### Project lineage
 
-This project originated from the [original upstream repository](https://github.com/dimitar-grigorov/mcp-file-tools). The fork now owns its module path, release pipeline, plugin metadata, update source, and MCP Registry namespace. Upstream integrations are separate from this distribution and are retained here only as historical lineage.
+This project originated from the [original upstream repository](https://github.com/dimitar-grigorov/mcp-file-tools). The fork now owns its module path, release pipeline, update source, and MCP Registry namespace. Upstream integrations are separate from this distribution and are retained here only as historical lineage.
 
 ## How to Use
 

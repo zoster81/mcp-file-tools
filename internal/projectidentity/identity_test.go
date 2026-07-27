@@ -144,14 +144,46 @@ func TestOperationalMetadataTargetsFork(t *testing.T) {
 	assertFileContains(t, root, filepath.FromSlash("scripts/generate-server-json.js"), "const forkRepository = '"+forkRepository+"'")
 }
 
+func TestContainerAndSmitheryMetadataMatchTheRuntimeContract(t *testing.T) {
+	root := repositoryRoot(t)
+	assertFileContains(t, root, "Dockerfile", "FROM golang:1.26.5-alpine3.24 AS builder")
+	assertFileContains(t, root, "Dockerfile", "FROM alpine:3.24.1")
+	assertFileContains(t, root, "Dockerfile", "USER 10001:10001")
+	assertFileContains(t, root, "Dockerfile", `ENTRYPOINT ["/usr/local/bin/mcp-file-tools"]`)
+	assertFileContains(t, root, "smithery.yaml", "command: '/usr/local/bin/mcp-file-tools'")
+	assertFileContains(t, root, "smithery.yaml", "const args = ['--transport=stdio', config.allowedDirectory]")
+}
+
+func TestForkOwnedDownloaderPluginIsRemoved(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, relativePath := range []string{
+		filepath.FromSlash("plugin"),
+		filepath.FromSlash(".claude-plugin"),
+		filepath.FromSlash("scripts/bump-version.js"),
+	} {
+		_, err := os.Stat(filepath.Join(root, relativePath))
+		if err == nil {
+			t.Errorf("removed plugin path still exists: %s", relativePath)
+			continue
+		}
+		if !os.IsNotExist(err) {
+			t.Errorf("inspect removed plugin path %s: %v", relativePath, err)
+		}
+	}
+}
+
 func TestValidationToolVersionsArePinned(t *testing.T) {
 	root := repositoryRoot(t)
 	assertFileContains(t, root, filepath.FromSlash("scripts/validate-workflows.sh"), "ACTIONLINT_VERSION=1.7.12")
 	assertFileContains(t, root, filepath.FromSlash("scripts/validate-workflows.sh"), "SHELLCHECK_VERSION=0.11.0")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/test.yml"), "actions/checkout@v6.0.2")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/test.yml"), "actions/setup-go@v6.4.0")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/build.yml"), "actions/upload-artifact@v7.0.1")
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/test.yml"), "staticcheck@v0.7.0")
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/test.yml"), "govulncheck@v1.1.4")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/release.yml"), "goreleaser/goreleaser-action@v7.2.1")
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/release.yml"), "version: 'v2.17.0'")
-	assertFileContains(t, root, filepath.FromSlash(".github/workflows/publish-registry.yml"), "MCP_PUBLISHER_VERSION: 1.8.0")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/publish-registry.yml"), "MCP_PUBLISHER_VERSION: 1.7.9")
 }
 
 func assertFileContains(t *testing.T, root, relativePath, expected string) {

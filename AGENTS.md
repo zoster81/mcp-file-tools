@@ -32,7 +32,6 @@ Link to these documents instead of duplicating their detailed content.
 - `internal/textstream`: incremental decoding consumers, bounded line framing, and streaming line-ending transforms.
 - `internal/toolcatalog`: embedded tool metadata and drift checks.
 - `scripts`: release metadata and workflow validation utilities.
-- `plugin`: optional Claude Code packaging, frozen until the final 2.0 decision.
 
 ## Working method
 

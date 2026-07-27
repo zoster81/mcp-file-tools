@@ -2,7 +2,7 @@ version: 2
 
 before:
   hooks:
-    - go mod tidy
+    - go mod verify
 
 builds:
   - id: mcp-file-tools
@@ -17,6 +17,9 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+    mod_timestamp: '{{ .CommitTimestamp }}'
     # Embed the fork version in both the command and server package.
     ldflags:
       - -s -w
@@ -25,7 +28,14 @@ builds:
 
 archives:
   - id: default
-    formats: ['tar.gz', 'zip']
+    ids:
+      - mcp-file-tools
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
     files:
       - README.md
       - TOOLS.md
@@ -36,7 +46,10 @@ archives:
 
 # Also publish raw binaries for MCP registry (GoReleaser adds .exe automatically for Windows)
   - id: binaries
-    formats: ['binary']
+    ids:
+      - mcp-file-tools
+    formats:
+      - binary
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -56,23 +69,5 @@ release:
     owner: zoster81
     name: mcp-file-tools
 
-# MCP Registry publishing
-# Disabled: MCP registry now requires fileSha256 checksums which GoReleaser doesn't support yet
-# See: https://github.com/orgs/goreleaser/discussions/6251
-# TODO: Re-enable when GoReleaser adds checksum support for mcpb registry type
-# mcp:
-#   name: io.github.zoster81/mcp-file-tools
-#   title: MCP File Tools
-#   description: "MCP server for reading/writing legacy-encoded files (CP1251, Windows-1251, etc.)"
-#   homepage: https://github.com/zoster81/mcp-file-tools
-#   repository:
-#     url: https://github.com/zoster81/mcp-file-tools
-#     source: github
-#   auth:
-#     type: github-oidc
-#   disable: auto
-#   packages:
-#     - registry_type: mcpb
-#       identifier: "https://github.com/zoster81/mcp-file-tools/releases/download/v{{ .Version }}/mcp-file-tools_windows_amd64.exe"
-#       transport:
-#         type: stdio
+# MCP Registry publication is handled by publish-registry.yml after the release
+# workflow verifies checksums and generates the release-specific server.json.

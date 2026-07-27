@@ -198,7 +198,7 @@
     {
       "name": "run_script",
       "title": "Run Script",
-      "description": "Execute a script located inside an allowed directory. The script path and optional cwd are validated against the directories passed when the server starts and revalidated immediately before launch. Supported: .ps1, .bat, .cmd, .py, .js, .mjs, .cjs, .sh, .exe, .com. Parameters: path, args, cwd, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_RUN_SCRIPT=1 or MCP_ENABLE_EXECUTION=1.",
+      "description": "Execute a script located inside an allowed directory. The script path and optional cwd are validated against the directories passed when the server starts and revalidated immediately before launch. Supported: .ps1, .bat, .cmd, .py, .js, .mjs, .cjs, .sh, .exe, .com. Parameters: path, args, cwd, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_RUN_SCRIPT=1 or MCP_ENABLE_EXECUTION=1; Streamable HTTP also requires MCP_HTTP_ENABLE_EXECUTION=1.",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": true,
@@ -208,7 +208,7 @@
     {
       "name": "shell",
       "title": "Shell Command",
-      "description": "Execute an arbitrary shell command. The optional cwd must be inside a directory passed when the server starts and is revalidated immediately before launch; if omitted, the first allowed directory is used. WARNING: the command itself is unrestricted and can access resources outside cwd. On Windows shell may be powershell (default), pwsh, or cmd. Parameters: command, cwd, shell, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_SHELL=1 or MCP_ENABLE_EXECUTION=1.",
+      "description": "Execute an arbitrary shell command. The optional cwd must be inside a directory passed when the server starts and is revalidated immediately before launch; if omitted, the first allowed directory is used. WARNING: the command itself is unrestricted and can access resources outside cwd. On Windows shell may be powershell (default), pwsh, or cmd. Parameters: command, cwd, shell, timeoutSeconds (default 60, max 600). Requires MCP_ENABLE_SHELL=1 or MCP_ENABLE_EXECUTION=1; Streamable HTTP also requires MCP_HTTP_ENABLE_EXECUTION=1.",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": true,

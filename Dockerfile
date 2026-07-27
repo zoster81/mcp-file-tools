@@ -1,16 +1,32 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26.5-alpine3.24 AS builder
 
-WORKDIR /app
+ARG VERSION=dev
+WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
 COPY . .
-RUN go build -ldflags="-s -w" -o server ./cmd/mcp-file-tools
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath \
+    -ldflags="-s -w -X main.version=${VERSION} -X github.com/zoster81/mcp-file-tools/filetoolsserver.Version=${VERSION}" \
+    -o /out/mcp-file-tools \
+    ./cmd/mcp-file-tools
 
-FROM alpine:latest
+FROM alpine:3.24.1
 
-WORKDIR /app
-COPY --from=builder /app/server ./
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S -g 10001 mcp \
+    && adduser -S -D -H -u 10001 -G mcp mcp \
+    && mkdir -p /data /tmp/mcp-file-tools \
+    && chown -R 10001:10001 /data /tmp/mcp-file-tools
 
-ENTRYPOINT ["./server"]
+COPY --from=builder --chown=10001:10001 /out/mcp-file-tools /usr/local/bin/mcp-file-tools
+
+USER 10001:10001
+WORKDIR /data
+ENV HOME=/tmp/mcp-file-tools \
+    TMPDIR=/tmp/mcp-file-tools
+
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/usr/local/bin/mcp-file-tools"]

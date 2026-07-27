@@ -96,6 +96,57 @@ func TestScanLinesHonorsCancellation(t *testing.T) {
 	}
 }
 
+func FuzzScanLinesRoundTrip(f *testing.F) {
+	for _, seed := range []struct {
+		data  []byte
+		limit uint16
+	}{
+		{data: nil, limit: 64},
+		{data: []byte("alpha\r\nbeta\ngamma"), limit: 64},
+		{data: []byte("a\n"), limit: 1},
+		{data: []byte("a\rb\rc"), limit: 8},
+		{data: bytes.Repeat([]byte{'x'}, 65), limit: 64},
+	} {
+		f.Add(seed.data, seed.limit)
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte, rawLimit uint16) {
+		if len(data) > 64*1024 {
+			t.Skip()
+		}
+		limit := int(rawLimit%1024) + 1
+		var reconstructed bytes.Buffer
+		visited := 0
+		total, err := ScanLines(context.Background(), bytes.NewReader(data), limit, func(line Line) error {
+			visited++
+			if line.Number != visited {
+				t.Fatalf("line number = %d, want %d", line.Number, visited)
+			}
+			if len(line.Data) > limit {
+				t.Fatalf("line %d contains %d bytes, limit %d", line.Number, len(line.Data), limit)
+			}
+			if len(line.Ending) != 0 && !bytes.Equal(line.Ending, lfEnding) && !bytes.Equal(line.Ending, crlfEnding) {
+				t.Fatalf("line %d has unsupported ending %q", line.Number, line.Ending)
+			}
+			_, _ = reconstructed.Write(line.Data)
+			_, _ = reconstructed.Write(line.Ending)
+			return nil
+		})
+		if err != nil {
+			if operation.KindOf(err) != operation.KindLimit {
+				t.Fatalf("unexpected scan error: %v", err)
+			}
+			return
+		}
+		if total != visited {
+			t.Fatalf("total = %d, visited = %d", total, visited)
+		}
+		if !bytes.Equal(reconstructed.Bytes(), data) {
+			t.Fatalf("line framing changed bytes: %x != %x", reconstructed.Bytes(), data)
+		}
+	})
+}
+
 type singleByteReader struct {
 	data []byte
 }

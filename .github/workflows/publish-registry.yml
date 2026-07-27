@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Fork release tag to publish (for example, v1.7.4)'
+        description: 'Fork release tag to publish (for example, v2.0.0)'
         required: true
         type: string
 
@@ -22,13 +22,14 @@ jobs:
   publish:
     if: github.repository == 'zoster81/mcp-file-tools'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       VERSION_TAG: ${{ inputs.version }}
-      MCP_PUBLISHER_VERSION: 1.8.0
-      MCP_PUBLISHER_LINUX_AMD64_SHA256: 1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf
+      MCP_PUBLISHER_VERSION: 1.7.9
+      MCP_PUBLISHER_LINUX_AMD64_SHA256: ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6.0.2
 
       - name: Download fork release checksums
         run: |

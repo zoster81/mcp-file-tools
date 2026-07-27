@@ -156,7 +156,7 @@ Use [PUBLISHING.md](PUBLISHING.md) for the full release procedure. At minimum:
 
 - [ ] R7-R14 and the migration guide are complete;
 - [ ] the HTTP security design and transport test suite pass;
-- [ ] the optional plugin retention decision is complete;
-- [ ] release tag, binary, plugin, marketplace, and Registry versions match where applicable;
+- [x] the optional plugin retention decision is complete: the fork-owned downloader plugin is removed for 2.0;
+- [ ] release tag, dated changelog entry, embedded binary version, and Registry version match;
 - [ ] all supported platform assets and checksums are verified;
 - [ ] release, Registry publication, smoke tests, and rollback verification succeed.

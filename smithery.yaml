@@ -1,5 +1,6 @@
 # Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
-# Encoding-aware filesystem MCP server for 24 encodings with BOM-safe text operations, secure traversal, durable atomic mutations, and typed operation errors.
+# Encoding-aware filesystem MCP server with 23 tools, secure traversal,
+# durable mutations, typed errors, and content-based support for 24 encodings.
 
 runtime: container
 
@@ -9,24 +10,29 @@ startCommand:
     type: object
     required:
       - allowedDirectory
+    additionalProperties: false
     properties:
       allowedDirectory:
         type: string
-        description: The primary directory the server is allowed to access. Use '/app/data' for the default mount point in the container.
+        minLength: 1
+        description: The primary directory the server is allowed to access. Use '/data' for the default container mount point.
       additionalDirectories:
         type: array
+        maxItems: 31
+        uniqueItems: true
         items:
           type: string
-        description: Optional additional directories the server can access.
+          minLength: 1
+        description: Optional additional absolute directories mounted into the container.
   commandFunction:
     |-
     (config) => {
-      const args = [config.allowedDirectory];
-      if (config.additionalDirectories && Array.isArray(config.additionalDirectories)) {
+      const args = ['--transport=stdio', config.allowedDirectory];
+      if (Array.isArray(config.additionalDirectories)) {
         args.push(...config.additionalDirectories);
       }
-      return { command: './server', args: args };
+      return { command: '/usr/local/bin/mcp-file-tools', args };
     }
   exampleConfig:
-    allowedDirectory: /app/data
+    allowedDirectory: /data
     additionalDirectories: []

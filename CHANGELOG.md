@@ -25,6 +25,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added native stateful MCP Streamable HTTP with loopback binding, mandatory bearer authentication, exact Host and all-method Origin checks, no CORS, optional TLS, trusted-proxy boundaries, minimal health/readiness endpoints, and graceful shutdown.
 - Added bounded HTTP admission for per-request and aggregate body memory, non-SSE concurrency, live sessions, per-peer request rate, idle session cleanup, forwarded-address parsing, and deterministic saturation responses.
 - Added HTTP equivalence and security tests covering the complete 23-tool metadata, shared process roots, CP1251 reads, typed errors, roots-notification immutability, cancellation, session lifecycle, header/body limits, authentication, proxy trust, logging redaction, and execution policy.
+- Added a hardened transport-neutral container baseline using Go 1.26.5, Alpine 3.24.1, a static binary, UID/GID 10001, explicit `/data` and `/tmp` paths, and `SIGTERM` shutdown semantics.
+- Added independent CI builds for all six Windows/Linux/macOS amd64/arm64 targets and explicit Streamable HTTP integration tests on Linux, Windows, and macOS.
 
 ### Changed
 
@@ -49,6 +51,14 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added `streamable-http` transport selection while preserving stdio as the default and retaining one shared `BuildServer` registration and process-wide root policy.
 - Required a second `MCP_HTTP_ENABLE_EXECUTION` opt-in before existing execution flags can expose `run_script` or `shell` through HTTP.
 - Removed HTTP token-source variables from the process environment after startup configuration is snapshotted so optional child processes cannot inherit bearer credentials.
+- Made Build and Test workflows run for documentation and catalog changes, pinned release actions to point versions, and added bounded job timeouts plus deterministic artifact retention.
+- Made GoReleaser outputs reproducible with `-trimpath` and commit timestamps, emitted one platform-appropriate archive per target, and retained the checksum-verified Registry workflow as the sole publication path.
+- Pinned the Registry publisher workflow to the verified MCP Publisher 1.7.9 Linux amd64 artifact.
+- Changed release-version verification to require a semantic tag with a matching dated changelog entry.
+
+### Removed
+
+- Removed the fork-owned Claude Code downloader plugin, marketplace metadata, and version-bump script for 2.0. Direct stdio configuration remains supported without carrying a second network installer, cache, checksum parser, or platform-mapping trust boundary.
 
 ### Fixed
 

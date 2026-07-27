@@ -4,16 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main, master]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
   pull_request:
     branches: [main, master]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
 
 permissions:
   contents: read
@@ -23,33 +15,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  verify-modules:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6.0.2
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.4.0
         with:
           go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Verify dependencies
         run: go mod tidy && git diff --exit-code go.mod go.sum
 
-      - name: Build
-        run: go build -v ./cmd/mcp-file-tools
+  build:
+    needs: verify-modules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            filename: mcp-file-tools_linux_amd64
+          - goos: linux
+            goarch: arm64
+            filename: mcp-file-tools_linux_arm64
+          - goos: windows
+            goarch: amd64
+            filename: mcp-file-tools_windows_amd64.exe
+          - goos: windows
+            goarch: arm64
+            filename: mcp-file-tools_windows_arm64.exe
+          - goos: darwin
+            goarch: amd64
+            filename: mcp-file-tools_darwin_amd64
+          - goos: darwin
+            goarch: arm64
+            filename: mcp-file-tools_darwin_arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
 
-      - name: Build cross-platform
+      - name: Set up Go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build target
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+          OUTPUT: dist/${{ matrix.filename }}
         run: |
           mkdir -p dist
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/mcp-file-tools-windows-amd64.exe ./cmd/mcp-file-tools
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/mcp-file-tools-linux-amd64 ./cmd/mcp-file-tools
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/mcp-file-tools-darwin-amd64 ./cmd/mcp-file-tools
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/mcp-file-tools-darwin-arm64 ./cmd/mcp-file-tools
+          version="ci-${GITHUB_SHA::12}"
+          go build -trimpath \
+            -ldflags="-s -w -X main.version=${version} -X github.com/zoster81/mcp-file-tools/filetoolsserver.Version=${version}" \
+            -o "${OUTPUT}" \
+            ./cmd/mcp-file-tools
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+      - name: Upload target
+        uses: actions/upload-artifact@v7.0.1
         with:
-          name: binaries
-          path: dist/
+          name: ${{ matrix.filename }}
+          path: dist/${{ matrix.filename }}
+          if-no-files-found: error
+          retention-days: 7

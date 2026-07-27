@@ -1,0 +1,160 @@
+& {
+    # Native MCP Streamable HTTP quick start for Windows PowerShell 5.1.
+    #
+    # This example contains no credential. Create a private bearer-token file
+    # before running it and keep execution tools disabled for the first test.
+
+    Set-StrictMode -Version 3.0
+    $ErrorActionPreference = "Stop"
+
+    [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $OutputEncoding = [Console]::OutputEncoding
+
+    # --------------------------------------------------------------------------
+    # Required configuration
+    # --------------------------------------------------------------------------
+    $McpServer = Join-Path $PSScriptRoot "mcp-file-tools_windows_amd64.exe"
+    $AllowedDirectory = "C:\Path\To\AllowedProject"
+    $TokenFile = "C:\Path\To\mcp-file-tools.token"
+
+    # --------------------------------------------------------------------------
+    # Listener policy
+    # --------------------------------------------------------------------------
+    # Loopback HTTP is the safe default. A non-loopback listener requires
+    # AllowNonLoopback plus TLS or an explicitly trusted private proxy boundary.
+    $ListenAddress = "127.0.0.1:8765"
+    $EndpointPath = "/mcp"
+    $AllowNonLoopback = $false
+    $AllowedHosts = ""
+    $AllowedOrigins = ""
+    $TrustedProxyCidrs = ""
+    $TlsCertificateFile = ""
+    $TlsKeyFile = ""
+
+    # Keep execution disabled unless the client and deployment are fully trusted.
+    # HTTP requires this flag plus the existing per-tool or combined flag.
+    $EnableHttpExecution = $false
+    $EnableRunScript = $false
+    $EnableShell = $false
+
+    function Assert-RegularFile {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Path,
+
+            [Parameter(Mandatory = $true)]
+            [string]$Description
+        )
+
+        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+            throw "$Description was not found: $Path"
+        }
+        $item = Get-Item -LiteralPath $Path -Force
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "$Description must not be a symbolic link or reparse point: $Path"
+        }
+    }
+
+    function Set-BooleanEnvironmentFlag {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Name,
+
+            [Parameter(Mandatory = $true)]
+            [bool]$Enabled
+        )
+
+        if ($Enabled) {
+            [Environment]::SetEnvironmentVariable($Name, "1", "Process")
+        } else {
+            [Environment]::SetEnvironmentVariable($Name, $null, "Process")
+        }
+    }
+
+    if ($PSVersionTable.PSVersion.Major -lt 5) {
+        throw "Windows PowerShell 5.1 or later is required."
+    }
+
+    Assert-RegularFile -Path $McpServer -Description "MCP server executable"
+    Assert-RegularFile -Path $TokenFile -Description "HTTP bearer-token file"
+
+    if (-not (Test-Path -LiteralPath $AllowedDirectory -PathType Container)) {
+        throw "Allowed directory was not found: $AllowedDirectory"
+    }
+    $allowedItem = Get-Item -LiteralPath $AllowedDirectory -Force
+    if (($allowedItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Allowed directory must not itself be a symbolic link or reparse point: $AllowedDirectory"
+    }
+    $AllowedDirectory = $allowedItem.FullName
+
+    $token = [System.IO.File]::ReadAllText($TokenFile).Trim()
+    if ($token.Length -lt 32 -or $token.IndexOf([char]0) -ge 0 -or $token -match '[\r\n]') {
+        throw "The bearer-token file must contain one token of at least 32 characters."
+    }
+    $token = $null
+
+    if (($TlsCertificateFile -eq "") -xor ($TlsKeyFile -eq "")) {
+        throw "Configure both TLS certificate and key files, or neither."
+    }
+    if ($TlsCertificateFile -ne "") {
+        Assert-RegularFile -Path $TlsCertificateFile -Description "TLS certificate"
+        Assert-RegularFile -Path $TlsKeyFile -Description "TLS private key"
+    }
+    if (-not $AllowNonLoopback -and $ListenAddress -notmatch '^(127\.0\.0\.1|\[::1\]|localhost):\d+$') {
+        throw "A non-loopback listener requires AllowNonLoopback = `$true."
+    }
+
+    $managedVariables = @(
+        "MCP_TRANSPORT",
+        "MCP_HTTP_ADDR",
+        "MCP_HTTP_PATH",
+        "MCP_HTTP_TOKEN",
+        "MCP_HTTP_TOKEN_FILE",
+        "MCP_HTTP_ALLOW_NON_LOOPBACK",
+        "MCP_HTTP_ALLOWED_HOSTS",
+        "MCP_HTTP_ALLOWED_ORIGINS",
+        "MCP_HTTP_TRUSTED_PROXY_CIDRS",
+        "MCP_HTTP_TLS_CERT_FILE",
+        "MCP_HTTP_TLS_KEY_FILE",
+        "MCP_HTTP_ENABLE_EXECUTION",
+        "MCP_ENABLE_RUN_SCRIPT",
+        "MCP_ENABLE_SHELL",
+        "MCP_ENABLE_EXECUTION"
+    )
+    $previousEnvironment = @{}
+    foreach ($name in $managedVariables) {
+        $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+    }
+
+    try {
+        [Environment]::SetEnvironmentVariable("MCP_TRANSPORT", "streamable-http", "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_ADDR", $ListenAddress, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_PATH", $EndpointPath, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_TOKEN", $null, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_TOKEN_FILE", $TokenFile, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_ALLOWED_HOSTS", $AllowedHosts, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_ALLOWED_ORIGINS", $AllowedOrigins, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_TRUSTED_PROXY_CIDRS", $TrustedProxyCidrs, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_TLS_CERT_FILE", $TlsCertificateFile, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_TLS_KEY_FILE", $TlsKeyFile, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_ENABLE_EXECUTION", $null, "Process")
+        Set-BooleanEnvironmentFlag -Name "MCP_HTTP_ALLOW_NON_LOOPBACK" -Enabled $AllowNonLoopback
+        Set-BooleanEnvironmentFlag -Name "MCP_HTTP_ENABLE_EXECUTION" -Enabled $EnableHttpExecution
+        Set-BooleanEnvironmentFlag -Name "MCP_ENABLE_RUN_SCRIPT" -Enabled $EnableRunScript
+        Set-BooleanEnvironmentFlag -Name "MCP_ENABLE_SHELL" -Enabled $EnableShell
+
+        $scheme = if ($TlsCertificateFile -ne "") { "https" } else { "http" }
+        Write-Host "Starting MCP Streamable HTTP at $scheme`://$ListenAddress$EndpointPath"
+        Write-Host "Health: $scheme`://$ListenAddress/healthz"
+        Write-Host "Readiness: $scheme`://$ListenAddress/readyz"
+        & $McpServer --transport=streamable-http -- $AllowedDirectory
+        if ($LASTEXITCODE -ne 0) {
+            throw "MCP server exited with code $LASTEXITCODE."
+        }
+    } finally {
+        foreach ($name in $managedVariables) {
+            [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], "Process")
+        }
+    }
+}

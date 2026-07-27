@@ -3,29 +3,18 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const semanticVersionPattern = /^\d+\.\d+\.\d+$/;
 const releaseTagPattern = /^v(\d+\.\d+\.\d+)$/;
 
-function readJSON(filePath) {
-  let raw;
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function readText(filePath) {
   try {
-    raw = fs.readFileSync(filePath, 'utf8');
+    return fs.readFileSync(filePath, 'utf8');
   } catch (error) {
     throw new Error(`could not read ${filePath}: ${error.message}`);
   }
-
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`invalid JSON in ${filePath}: ${error.message}`);
-  }
-}
-
-function requireSemanticVersion(value, label) {
-  if (typeof value !== 'string' || !semanticVersionPattern.test(value)) {
-    throw new Error(`${label} must be a semantic version in major.minor.patch form`);
-  }
-  return value;
 }
 
 function verifyReleaseVersion(tag, root = path.resolve(__dirname, '..')) {
@@ -34,34 +23,18 @@ function verifyReleaseVersion(tag, root = path.resolve(__dirname, '..')) {
     throw new Error(`expected semantic release tag v<major.minor.patch>, got ${JSON.stringify(tag || '')}`);
   }
   const version = tagMatch[1];
-
-  const pluginPath = path.join(root, 'plugin', '.claude-plugin', 'plugin.json');
-  const marketplacePath = path.join(root, '.claude-plugin', 'marketplace.json');
-  const plugin = readJSON(pluginPath);
-  const marketplace = readJSON(marketplacePath);
-
-  const pluginVersion = requireSemanticVersion(plugin.version, 'plugin version');
-  const marketplaceEntry = Array.isArray(marketplace.plugins)
-    ? marketplace.plugins.find((entry) => entry && entry.name === 'mcp-file-tools')
-    : undefined;
-  if (!marketplaceEntry) {
-    throw new Error('marketplace metadata does not contain the mcp-file-tools plugin');
-  }
-  const marketplaceVersion = requireSemanticVersion(
-    marketplaceEntry.version,
-    'marketplace version',
+  const changelogPath = path.join(root, 'CHANGELOG.md');
+  const changelog = readText(changelogPath);
+  const releaseHeading = new RegExp(
+    `^## ${escapeRegExp(version)} - \\d{4}-\\d{2}-\\d{2}\\s*$`,
+    'm',
   );
-
-  if (marketplaceVersion !== pluginVersion) {
+  if (!releaseHeading.test(changelog)) {
     throw new Error(
-      `marketplace version ${marketplaceVersion} does not match plugin version ${pluginVersion}`,
+      `CHANGELOG.md does not contain a dated release heading for ${version}`,
     );
   }
-  if (version !== pluginVersion) {
-    throw new Error(`tag version ${version} does not match plugin version ${pluginVersion}`);
-  }
-
-  return { version, pluginVersion, marketplaceVersion };
+  return { version, changelogVersion: version };
 }
 
 if (require.main === module) {

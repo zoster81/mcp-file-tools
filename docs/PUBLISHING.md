@@ -10,31 +10,31 @@ Git remote.
 - GitHub repository: `https://github.com/zoster81/mcp-file-tools`
 - Primary deployment: ChatGPT Web through the OpenAI Secure MCP Tunnel
 - Implemented MCP transports in the development source: stdio and native stateful Streamable HTTP
-- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; the native HTTP implementation has direct end-to-end coverage but is not yet built or deployed
+- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; native HTTP has direct end-to-end coverage and remains in internal pre-release validation rather than active tunnel deployment
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
 - Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), transport-independent server construction plus lifecycle-aware stdio startup (R11), the approved Streamable HTTP threat model and secure defaults (R12), and native stateful Streamable HTTP with security and equivalence coverage (R13)
 - Active milestone: R14 hardening, CI, packaging, migration review, and 2.0.0 release
+- R14 container baseline: Go 1.26.5 builder, Alpine 3.24.1 runtime, static binary, UID/GID 10001, explicit `/data` root, temporary state under `/tmp`, and `SIGTERM` shutdown
+- R14 CI baseline: documentation-sensitive tests on Linux, Windows, and macOS plus independent builds for all six supported OS/architecture targets
 - Authoritative plan: [ROADMAP.md](ROADMAP.md), HTTP security design in [HTTP_SECURITY.md](HTTP_SECURITY.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
 - Development policy: internal commit builds only until the next public release, `2.0.0`
-- Release source: the final fork-owned semantic tag whose plugin, marketplace, binary, and Registry versions must match
+- Release source: the final fork-owned semantic tag, which must match the dated changelog entry, embedded binary version, and generated Registry version
 - Go module path: `github.com/zoster81/mcp-file-tools`
 
 The fork owns its Go module identity and all internal imports. Clone-and-build is the supported path for internal development commits. No intermediate public release is planned; packaged installations remain on the latest published release until the R14 `2.0.0` gate is complete.
 
 R11 defines one process-wide authorization model for every transport: all connections or future HTTP sessions share the directories configured when the process starts, together with the same tool catalog, limits, execution flags, and errors. Sessions are lifecycle and concurrency units, not per-agent ACLs. Prompt instructions may narrow an agent's intended write scope, but technical isolation requires separate server processes and, for concurrent Git changes, separate checkouts or worktrees. Dynamic client roots remain a stdio-only fallback when no startup directories are configured; HTTP sessions must not mutate process roots.
 
-R12's [HTTP security design](HTTP_SECURITY.md) remains release-blocking through R14. The R13 implementation is fail-closed: loopback by default, bearer-authenticated on every MCP request, exact Host and Origin validation, no CORS, bounded per-request and aggregate body memory, bounded sessions and request resources, redacted logging, and a second explicit execution opt-in. It has not yet been packaged, pushed, or deployed.
+R12's [HTTP security design](HTTP_SECURITY.md) remains release-blocking through R14. The R13 implementation is fail-closed: loopback by default, bearer-authenticated on every MCP request, exact Host and Origin validation, no CORS, bounded per-request and aggregate body memory, bounded sessions and request resources, redacted logging, and a second explicit execution opt-in. It remains an internal pre-release capability and has not been published or deployed.
 
 ## Fork release flow
 
-This flow is reserved for the R14 `2.0.0` release gate. Do not bump plugin metadata, create a tag, or publish intermediate development builds.
+This flow is reserved for the R14 `2.0.0` release gate. Do not create a tag or publish intermediate development builds.
 
 1. Ensure R7-R14 are complete and `main` is clean, tested, and pushed to `origin`.
 2. Choose a semantic version that has not been used by this fork.
-3. Update the version in:
-   - `plugin/.claude-plugin/plugin.json`
-   - `.claude-plugin/marketplace.json`
-4. Verify the prepared version and run the complete test baseline:
+3. Promote the `CHANGELOG.md` unreleased section to a dated `## X.Y.Z - YYYY-MM-DD` release heading.
+4. Verify that the semantic tag is represented by that exact changelog release:
 
    ```bash
    node scripts/verify-release-version.js vX.Y.Z
@@ -50,15 +50,16 @@ This flow is reserved for the R14 `2.0.0` release gate. Do not bump plugin metad
 
 7. `.github/workflows/release.yml` revalidates the tag/metadata match, then runs tests and GoReleaser.
 8. `.goreleaser.yml` publishes the release to `zoster81/mcp-file-tools` with:
-   - platform archives;
-   - raw platform binaries;
+   - reproducible `-trimpath` builds timestamped from the source commit;
+   - `.tar.gz` archives for Linux/macOS and `.zip` archives for Windows;
+   - raw binaries for all six supported OS/architecture targets;
    - `checksums.txt`;
    - `README.md`, `TOOLS.md`, `CHANGELOG.md`, `LICENSE`;
    - `examples/start-openai-tunnel.ps1`.
 9. Verify the release asset names and SHA-256 values before announcing it.
 10. `.github/workflows/release.yml` invokes the reusable `.github/workflows/publish-registry.yml`, which generates and publishes the fork-owned `server.json` from those verified assets.
 
-The optional Claude Code plugin launcher reads its pinned version from `plugin/.claude-plugin/plugin.json` and downloads binaries from the fork release. It is not part of the active OpenAI tunnel deployment. Whether it remains supported will be decided in R14; if retained, its version must match the `2.0.0` GitHub Release and `checksums.txt` asset.
+The fork-owned Claude Code downloader plugin is removed for 2.0. This avoids a second release downloader, cache, checksum parser, and platform-mapping trust boundary. Claude Code users can configure the published binary directly as a normal stdio MCP server.
 
 ## OpenAI Tunnel example
 
@@ -88,7 +89,7 @@ The upstream Claude Code marketplace and existing MCP Registry listing install
 the upstream implementation. They do not include this fork's execution tools,
 tunnel compatibility changes, or Windows drive-root fix.
 
-The optional fork plugin references `zoster81/mcp-file-tools`. It remains frozen during internal development. If retained for 2.0, it will be versioned together with the matching platform binaries and `checksums.txt`; the release workflow will continue rejecting a tag whose version differs from plugin or marketplace metadata.
+The fork does not publish a Claude Code marketplace plugin in 2.0. The supported distribution surfaces are release binaries and archives, the container definition, Smithery metadata, and the fork-owned MCP Registry entry.
 
 ## Upstream synchronization
 
@@ -116,9 +117,10 @@ The repository pins the release-validation toolchain instead of resolving
 floating `latest` versions during CI:
 
 - actionlint 1.7.12 and ShellCheck 0.11.0 for GitHub Actions workflows;
+- actions/checkout 6.0.2, actions/setup-go 6.4.0, and actions/upload-artifact 7.0.1;
 - Staticcheck v0.7.0 and govulncheck v1.1.4 for Go analysis;
-- GoReleaser v2.17.0 for release generation;
-- MCP Publisher v1.8.0 for registry validation and publication.
+- GoReleaser action 7.2.1 with GoReleaser v2.17.0 for release generation;
+- MCP Publisher v1.7.9 for registry validation and publication.
 
 The workflow-linter archives and MCP Publisher archive are verified against
 fixed SHA-256 values before extraction. Local release preparation should also
@@ -138,7 +140,7 @@ Run this checklist only after every milestone and completion gate in [ROADMAP.md
 - `go mod verify` succeeds;
 - PowerShell example parses under Windows PowerShell 5.1;
 - JSON, YAML, JavaScript, Markdown, actionlint, and ShellCheck checks succeed;
-- README, tool reference, changelog, plugin metadata, Smithery metadata, runtime catalog, roadmap, and generated Registry manifest describe the same fork-owned capabilities;
+- README, tool reference, changelog, Smithery metadata, runtime catalog, roadmap, and generated Registry manifest describe the same fork-owned capabilities;
 - runtime tool registration and annotations match `internal/toolcatalog/catalog.json`, every catalog tool is linked from README and documented in TOOLS.md, and `server.template.json` keeps `tools` empty;
 - secure traversal tests cover Unix symlinks and Windows junction/reparse-point escapes;
 - mutation tests cover synced staging, transactional backup rollback, cleanup, no-replace creation, concurrent-modification rejection, and platform cross-builds;
@@ -146,8 +148,10 @@ Run this checklist only after every milestone and completion gate in [ROADMAP.md
 - ordered-concurrency tests cover bounded in-flight work, deterministic commit order, cancellation modes, early stop, saturation, and race detection;
 - Staticcheck and govulncheck succeed at the versions pinned by CI;
 - Gitleaks reports no tracked-history secrets;
+- the container image is built from pinned bases, runs as UID/GID 10001, and passes stdio plus direct-TLS HTTP smoke tests with the documented mount, tmpfs, health, and shutdown model;
+- all six Windows/Linux/macOS amd64/arm64 builds are generated, and representative binaries are runtime-executed where infrastructure permits;
 - GoReleaser configuration targets `zoster81/mcp-file-tools` and passes `goreleaser check`;
 - a generated manifest passes `mcp-publisher validate` without publication;
-- `scripts/verify-release-version.js` confirms the release tag, plugin version, and marketplace version match before GoReleaser runs;
-- release tag, embedded binary version, plugin version, and marketplace version match;
+- `scripts/verify-release-version.js` confirms the release tag has a matching dated changelog entry before GoReleaser runs;
+- release tag, changelog release, embedded binary version, and generated Registry version match;
 - release assets and checksums are verified after publication.

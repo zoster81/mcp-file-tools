@@ -306,33 +306,29 @@ Tests verified multiple simultaneous HTTP clients, unique sessions, DELETE and i
 
 Finish platform, container, CI, documentation, packaging, migration, and release verification for the first public 2.x release.
 
-## Known cleanup items
+## Remaining cleanup items
 
-- `Dockerfile` currently uses Go 1.24 while `go.mod` requires Go 1.26.5.
-- normal Build/Test workflows ignore Markdown-only changes even though documentation/catalog consistency is tested.
-- the Build workflow does not build all six release targets.
-- `.goreleaser.yml` contains a stale TODO for native Registry checksum support; the project already uses a separate verified Registry workflow.
-- the Claude Code plugin is optional and is not part of the active OpenAI tunnel deployment.
+- container builds and runtime smoke tests still need to run on an environment with Docker or an equivalent OCI engine;
+- representative Windows, Linux, and macOS binaries still need runtime execution where infrastructure permits;
+- final release metadata, Registry validation, publication, deployment, and rollback remain outstanding;
 
 ## Checklist
 
-- [ ] Align Docker builder Go version with `go.mod`.
-- [ ] Pin the final runtime image and dependencies.
-- [ ] Run the container as a non-root user.
-- [ ] Define mounts, temporary storage, allowed roots, healthcheck, and shutdown behavior.
-- [ ] Cover all six Windows/Linux/macOS amd64/arm64 targets in CI.
-- [ ] Ensure documentation and catalog changes trigger consistency tests.
-- [ ] Add HTTP tests to supported CI platforms.
-- [ ] Run race detector, vet, Staticcheck, govulncheck, actionlint, ShellCheck, and Gitleaks.
-- [ ] Add fuzzing for detection, decoding, line framing, HTTP parsing, and JSON inputs.
-- [ ] Run sustained load, memory, cancellation, and session cleanup tests.
+- [x] Align Docker builder Go version with `go.mod`.
+- [x] Pin the container bases and CI/release action versions.
+- [x] Run the container as a non-root user.
+- [x] Define mounts, temporary storage, allowed roots, healthcheck, and shutdown behavior.
+- [x] Cover all six Windows/Linux/macOS amd64/arm64 targets in CI.
+- [x] Ensure documentation and catalog changes trigger consistency tests.
+- [x] Add HTTP tests to supported CI platforms.
+- [x] Run race detector, vet, Staticcheck, govulncheck, actionlint, ShellCheck, and Gitleaks on the R14 working tree.
+- [x] Add bounded fuzzing for detection, decoder chunking, line framing, HTTP parsing, proxy chains, and JSON-RPC inputs.
+- [x] Run deterministic load, resource-accounting, cancellation, and session-cleanup soak tests, including 102,400 admitted/rejected requests and repeated race-detector cycles.
 - [ ] Runtime-execute representative Windows, Linux, and macOS builds where infrastructure permits.
-- [ ] Remove or update the stale GoReleaser Registry TODO.
-- [ ] Update README, TOOLS, catalog, Smithery, tunnel examples, container docs, and publishing notes.
-- [ ] Finish the 1.8-to-2.0 migration guide.
-- [ ] Decide whether to retain the Claude Code plugin.
-- [ ] If retained, verify plugin download, checksum, cache, platform mapping, and update behavior against 2.0.0 assets.
-- [ ] Set plugin and marketplace metadata to `2.0.0` only at release preparation.
+- [x] Remove the stale GoReleaser Registry TODO and keep Registry publication in the checksum-verified workflow.
+- [x] Update README, TOOLS, catalog, tunnel/HTTP examples, Smithery metadata, container docs, and publishing notes.
+- [x] Finish the 1.8-to-2.0 migration guide.
+- [x] Remove the optional Claude Code downloader plugin and marketplace metadata rather than carry a second network installer and cache trust boundary into 2.0.
 - [ ] Run the complete release checklist in [PUBLISHING.md](PUBLISHING.md).
 - [ ] Create and push `v2.0.0` only after all prior gates pass.
 - [ ] Verify release binaries, archives, checksums, signatures where available, and MCP Registry publication.

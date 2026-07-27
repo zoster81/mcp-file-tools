@@ -6,61 +6,46 @@ const test = require('node:test');
 
 const { verifyReleaseVersion } = require('./verify-release-version');
 
-function createMetadataFixture(t, pluginVersion, marketplaceVersion) {
+function createChangelogFixture(t, content) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-file-tools-release-version-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-
-  fs.mkdirSync(path.join(root, 'plugin', '.claude-plugin'), { recursive: true });
-  fs.mkdirSync(path.join(root, '.claude-plugin'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, 'plugin', '.claude-plugin', 'plugin.json'),
-    JSON.stringify({ name: 'mcp-file-tools', version: pluginVersion }),
-  );
-  fs.writeFileSync(
-    path.join(root, '.claude-plugin', 'marketplace.json'),
-    JSON.stringify({ plugins: [{ name: 'mcp-file-tools', version: marketplaceVersion }] }),
-  );
+  fs.writeFileSync(path.join(root, 'CHANGELOG.md'), content, 'utf8');
   return root;
 }
 
-test('repository plugin and marketplace versions match', () => {
+test('repository changelog records the latest published release', () => {
   const root = path.resolve(__dirname, '..');
-  const plugin = JSON.parse(
-    fs.readFileSync(path.join(root, 'plugin', '.claude-plugin', 'plugin.json'), 'utf8'),
-  );
-  assert.deepEqual(verifyReleaseVersion(`v${plugin.version}`, root), {
-    version: plugin.version,
-    pluginVersion: plugin.version,
-    marketplaceVersion: plugin.version,
-  });
-});
-
-test('accepts matching semantic versions and a v-prefixed tag', (t) => {
-  const root = createMetadataFixture(t, '1.8.0', '1.8.0');
   assert.deepEqual(verifyReleaseVersion('v1.8.0', root), {
     version: '1.8.0',
-    pluginVersion: '1.8.0',
-    marketplaceVersion: '1.8.0',
+    changelogVersion: '1.8.0',
   });
 });
 
-test('rejects a tag that does not match plugin metadata', (t) => {
-  const root = createMetadataFixture(t, '1.8.0', '1.8.0');
+test('accepts a semantic tag with a matching dated changelog heading', (t) => {
+  const root = createChangelogFixture(t, '# Changelog\n\n## 2.0.0 - 2026-07-27\n');
+  assert.deepEqual(verifyReleaseVersion('v2.0.0', root), {
+    version: '2.0.0',
+    changelogVersion: '2.0.0',
+  });
+});
+
+test('rejects a tag without a matching changelog release', (t) => {
+  const root = createChangelogFixture(t, '# Changelog\n\n## 1.8.0 - 2026-07-25\n');
   assert.throws(
-    () => verifyReleaseVersion('v1.8.1', root),
-    /tag version 1\.8\.1 does not match plugin version 1\.8\.0/,
+    () => verifyReleaseVersion('v2.0.0', root),
+    /does not contain a dated release heading for 2\.0\.0/,
   );
 });
 
-test('rejects mismatched plugin and marketplace versions', (t) => {
-  const root = createMetadataFixture(t, '1.8.0', '1.7.3');
+test('rejects an undated changelog release heading', (t) => {
+  const root = createChangelogFixture(t, '# Changelog\n\n## 2.0.0\n');
   assert.throws(
-    () => verifyReleaseVersion('v1.8.0', root),
-    /marketplace version 1\.7\.3 does not match plugin version 1\.8\.0/,
+    () => verifyReleaseVersion('v2.0.0', root),
+    /does not contain a dated release heading/,
   );
 });
 
 test('rejects malformed release tags', (t) => {
-  const root = createMetadataFixture(t, '1.8.0', '1.8.0');
-  assert.throws(() => verifyReleaseVersion('release-1.8.0', root), /semantic release tag/);
+  const root = createChangelogFixture(t, '# Changelog\n\n## 2.0.0 - 2026-07-27\n');
+  assert.throws(() => verifyReleaseVersion('release-2.0.0', root), /semantic release tag/);
 });
