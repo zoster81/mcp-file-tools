@@ -68,6 +68,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Fixed dynamic roots updates so an empty client roots list removes stale dynamic access instead of leaving previously authorized roots active.
 - Bound asynchronous update checks to the server lifecycle so shutdown cancellation cannot leave a detached update-check context running.
 - Prevented oversized chunked HTTP bodies from reaching unbounded SDK decoding, prevented aggregate concurrent body reservations from exceeding the configured budget, and aligned external session accounting with the SDK by pausing idle expiry for active POST requests while allowing SSE-only sessions to expire without keepalive traffic.
+- Made GoReleaser archives byte-reproducible by normalizing binary and bundled-document owner, group, mode, and modification time to commit-derived values; two independent snapshots now produce identical checksums for all six raw binaries and six platform archives.
 
 ## 1.8.0 - 2026-07-25
 

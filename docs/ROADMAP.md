@@ -310,7 +310,7 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 
 - container builds and runtime smoke tests still need to run on an environment with Docker or an equivalent OCI engine;
 - representative Windows, Linux, and macOS binaries still need runtime execution where infrastructure permits;
-- final release metadata, Registry validation, publication, deployment, and rollback remain outstanding;
+- final release metadata, Registry validation against published release assets, publication, deployment, and rollback remain outstanding;
 
 ## Checklist
 
@@ -326,6 +326,9 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 - [x] Run deterministic load, resource-accounting, cancellation, and session-cleanup soak tests, including 102,400 admitted/rejected requests and repeated race-detector cycles.
 - [ ] Runtime-execute representative Windows, Linux, and macOS builds where infrastructure permits.
 - [x] Remove the stale GoReleaser Registry TODO and keep Registry publication in the checksum-verified workflow.
+- [x] Normalize archive entry metadata to commit-derived values and verify that two independent GoReleaser snapshots produce identical checksums for all 6 raw binaries and 6 platform archives.
+- [x] Generate internal prerelease manifests from both the direct six-target build and the reproducible GoReleaser snapshot checksums, then pass `mcp-publisher 1.7.9 validate` without login or publication.
+- [x] Verify the known-good R10 rollback binary offline: exact hash/version, 23-tool stdio startup, and byte-identical two-reference launcher reversal/restore.
 - [x] Update README, TOOLS, catalog, tunnel/HTTP examples, Smithery metadata, container docs, and publishing notes.
 - [x] Finish the 1.8-to-2.0 migration guide.
 - [x] Remove the optional Claude Code downloader plugin and marketplace metadata rather than carry a second network installer and cache trust boundary into 2.0.

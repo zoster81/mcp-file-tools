@@ -36,12 +36,42 @@ archives:
       - goos: windows
         formats:
           - zip
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
+      mtime: '{{ .CommitDate }}'
     files:
-      - README.md
-      - TOOLS.md
-      - CHANGELOG.md
-      - LICENSE
-      - examples/start-openai-tunnel.ps1
+      - src: README.md
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: TOOLS.md
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: CHANGELOG.md
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: examples/start-openai-tunnel.ps1
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 # Also publish raw binaries for MCP registry (GoReleaser adds .exe automatically for Windows)

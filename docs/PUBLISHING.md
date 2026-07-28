@@ -16,6 +16,9 @@ Git remote.
 - Active milestone: R14 hardening, CI, packaging, migration review, and 2.0.0 release
 - R14 container baseline: Go 1.26.5 builder, Alpine 3.24.1 runtime, static binary, UID/GID 10001, explicit `/data` root, temporary state under `/tmp`, and `SIGTERM` shutdown
 - R14 CI baseline: documentation-sensitive tests on Linux, Windows, and macOS plus independent builds for all six supported OS/architecture targets
+- R14 GoReleaser baseline: archive entry owner, group, mode, and modification time are normalized to commit-derived values; two independent snapshots produce identical checksums for all six raw binaries and six platform archives
+- R14 Registry baseline: internal manifests generated from both the direct six-target checksums and the reproducible GoReleaser snapshot pass `mcp-publisher 1.7.9 validate` without login or publication
+- R14 rollback baseline: the known-good R10 binary passes exact hash/version and 23-tool stdio checks, and the private launcher filename update is byte-identically reversible; an active rollback still requires a controlled restart
 - Authoritative plan: [ROADMAP.md](ROADMAP.md), HTTP security design in [HTTP_SECURITY.md](HTTP_SECURITY.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
 - Development policy: internal commit builds only until the next public release, `2.0.0`
 - Release source: the final fork-owned semantic tag, which must match the dated changelog entry, embedded binary version, and generated Registry version
@@ -51,6 +54,7 @@ This flow is reserved for the R14 `2.0.0` release gate. Do not create a tag or p
 7. `.github/workflows/release.yml` revalidates the tag/metadata match, then runs tests and GoReleaser.
 8. `.goreleaser.yml` publishes the release to `zoster81/mcp-file-tools` with:
    - reproducible `-trimpath` builds timestamped from the source commit;
+   - archive binary and documentation entries with commit-derived timestamps plus fixed owner, group, and modes;
    - `.tar.gz` archives for Linux/macOS and `.zip` archives for Windows;
    - raw binaries for all six supported OS/architecture targets;
    - `checksums.txt`;
@@ -81,7 +85,7 @@ Real credentials belong in a private copy outside the Git checkout.
 
 `.github/workflows/publish-registry.yml` runs only in `zoster81/mcp-file-tools`. After a fork release is published, it downloads that release's `checksums.txt`; `scripts/generate-server-json.js` injects the catalog's Registry-facing name/description projection, exact version, fork download URLs, and SHA-256 values into a temporary `server.json`. The generator rejects a duplicated template catalog, invalid or duplicate catalog tools, and missing or unexpected MCP binaries before GitHub OIDC authentication.
 
-The target registry identity is `io.github.zoster81/mcp-file-tools`. Publishing remains dependent on a real fork release with all six platform binaries and `checksums.txt`; inherited tags alone are insufficient.
+The target registry identity is `io.github.zoster81/mcp-file-tools`. Internal prerelease manifests generated from the verified direct-build checksum set and the reproducible GoReleaser snapshot checksum set both passed `mcp-publisher 1.7.9 validate` without authentication or publication. Final Registry validation remains dependent on a real fork release with all six platform binaries and `checksums.txt`; inherited tags alone are insufficient.
 
 ## Upstream integrations
 
@@ -150,8 +154,9 @@ Run this checklist only after every milestone and completion gate in [ROADMAP.md
 - Gitleaks reports no tracked-history secrets;
 - the container image is built from pinned bases, runs as UID/GID 10001, and passes stdio plus direct-TLS HTTP smoke tests with the documented mount, tmpfs, health, and shutdown model;
 - all six Windows/Linux/macOS amd64/arm64 builds are generated, and representative binaries are runtime-executed where infrastructure permits;
-- GoReleaser configuration targets `zoster81/mcp-file-tools` and passes `goreleaser check`;
+- GoReleaser configuration targets `zoster81/mcp-file-tools`, passes `goreleaser check`, and produces identical checksums across two independent snapshots;
 - a generated manifest passes `mcp-publisher validate` without publication;
 - `scripts/verify-release-version.js` confirms the release tag has a matching dated changelog entry before GoReleaser runs;
 - release tag, changelog release, embedded binary version, and generated Registry version match;
-- release assets and checksums are verified after publication.
+- release assets and checksums are verified after publication;
+- the known-good rollback binary and launcher reversal are verified offline before deployment, followed by an active rollback test during the controlled release cutover.

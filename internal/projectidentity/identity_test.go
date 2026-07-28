@@ -144,6 +144,33 @@ func TestOperationalMetadataTargetsFork(t *testing.T) {
 	assertFileContains(t, root, filepath.FromSlash("scripts/generate-server-json.js"), "const forkRepository = '"+forkRepository+"'")
 }
 
+func TestGoReleaserArchiveMetadataIsDeterministic(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, ".goreleaser.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "builds_info:") {
+		t.Error(".goreleaser.yml must define builds_info for archive binaries")
+	}
+	if got := strings.Count(content, "mtime: '{{ .CommitDate }}'"); got != 6 {
+		t.Errorf(".goreleaser.yml deterministic mtime count = %d, want 6", got)
+	}
+	if got := strings.Count(content, "owner: root"); got != 6 {
+		t.Errorf(".goreleaser.yml deterministic owner count = %d, want 6", got)
+	}
+	if got := strings.Count(content, "group: root"); got != 6 {
+		t.Errorf(".goreleaser.yml deterministic group count = %d, want 6", got)
+	}
+	if got := strings.Count(content, "mode: 0644"); got != 5 {
+		t.Errorf(".goreleaser.yml document mode count = %d, want 5", got)
+	}
+	if got := strings.Count(content, "mode: 0755"); got != 1 {
+		t.Errorf(".goreleaser.yml binary mode count = %d, want 1", got)
+	}
+}
+
 func TestContainerAndSmitheryMetadataMatchTheRuntimeContract(t *testing.T) {
 	root := repositoryRoot(t)
 	assertFileContains(t, root, "Dockerfile", "FROM golang:1.26.5-alpine3.24 AS builder")
