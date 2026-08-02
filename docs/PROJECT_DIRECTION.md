@@ -1,0 +1,43 @@
+# Project Direction and Upstream Relationship
+
+`zoster81/mcp-file-tools` is an independently versioned downstream fork of [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). It preserves the original project's encoding-aware text-file purpose and GPL-3.0 lineage, while maintaining its own module path, MCP Registry identity, release pipeline, public API decisions, transport architecture, and deployment documentation.
+
+This repository is not a compatibility branch intended for routine merging with upstream. Both projects may develop useful ideas independently, but changes must be reviewed and implemented against each project's current architecture rather than copied or synchronized mechanically.
+
+## Product scope
+
+The fork is a secure, encoding-aware MCP filesystem service for local, tunneled, containerized, and explicitly secured network deployments. Its supported scope includes:
+
+- the same authoritative 23-tool catalog over stdio and native stateful Streamable HTTP;
+- process-wide allowed-directory policy with symlink, junction, reparse-point, and missing-ancestor validation;
+- bounded-memory decoding, reading, grep, conversion, line-ending, and BOM operations across 24 registered encodings;
+- durable staged mutations with practical concurrent-change detection, no-replace creation, backup rollback, and platform-specific synchronization;
+- transport-independent error categories and tool metadata;
+- optional `run_script` and unrestricted `shell` tools, both disabled by default, with an additional execution gate for HTTP;
+- reproducible multi-platform releases, checksum-driven MCP Registry publication, and a non-root transport-neutral container.
+
+Binary or media interpretation remains outside the server's scope. Per-agent filesystem ACLs are also outside the current model: every connection to one process shares its startup roots and policy. Deploy separate processes when technical isolation is required.
+
+## Supported transports
+
+| Transport | Intended use | Authentication boundary | Directory policy |
+|---|---|---|---|
+| stdio | Client-managed local processes, desktop/CLI MCP clients, and secure tunnel bridges | Operating-system process and client configuration | Startup directories are authoritative; dynamic client roots are accepted only when no directories were configured at startup |
+| stateful Streamable HTTP | Persistent local services, containers, trusted reverse proxies, and explicitly secured remote deployments | Bearer token on every MCP request; loopback by default; TLS or a trusted proxy boundary for non-loopback listeners | Startup directories are immutable and shared by every HTTP session; HTTP client roots are disabled |
+
+Both transports construct the server through the same `BuildServer` path and expose the same tools, limits, execution policy, encoding behavior, and typed errors. The HTTP-specific threat model and deployment rules are defined in [HTTP_SECURITY.md](HTTP_SECURITY.md).
+
+## Relationship to upstream
+
+Upstream remains the source of the original encoding-aware file-tool implementation and continues to evolve as its own product. This fork retains attribution and tracks upstream developments for ideas, bug reports, and security lessons, but it does not promise source-level or schema compatibility with later upstream releases.
+
+Potential upstream suggestions should be concept-level and narrowly scoped to the original project's product boundaries. Features that depend on this fork's native HTTP service, execution tools, process-wide multi-transport policy, fork-owned Registry identity, or deployment infrastructure should remain fork-specific unless upstream independently chooses those directions.
+
+Conversely, upstream agent-experience improvements may be considered here only after they are adapted to this fork's bounded-memory pipeline, durable mutation layer, stable public schemas, transport equivalence requirements, and security model.
+
+## Maintenance policy
+
+- Release and API decisions are made for this fork's users rather than to minimize upstream merge conflicts.
+- Upstream changes are reviewed selectively; no automatic merge or rebasing policy exists.
+- Public documentation must distinguish shared lineage from current fork behavior.
+- Cross-project proposals should describe the user problem and desired behavior, not assume that either repository can accept the other's implementation unchanged.

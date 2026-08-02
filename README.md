@@ -7,31 +7,30 @@
 [![License: GPL-3.0](https://img.shields.io/github/license/zoster81/mcp-file-tools)](LICENSE)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.zoster81%2Fmcp--file--tools-blue)](https://registry.modelcontextprotocol.io/?search=io.github.zoster81%2Fmcp-file-tools)
 
-ChatGPT Web sees `Настройки` — not `????` or `Íàñòðîéêè`.
+AI clients see `Настройки` — not `????` or `Íàñòðîéêè`.
 
-MCP server for file operations with non-UTF-8 encoding support. Auto-detects and converts 24 encodings (Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030) and provides encoding-aware CRLF/LF detection and conversion for UTF-16 files.
+Secure, encoding-aware MCP filesystem service with two first-class transports: local **stdio** and native stateful **MCP Streamable HTTP**. It detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
 
-**Perfect for:** exposing local Windows project files and controlled execution tools to ChatGPT Web through the OpenAI Secure MCP Tunnel, including legacy Delphi/Pascal projects, VB6 applications, old PHP/HTML sites, configuration and data files, and other text assets whose encoding cannot be inferred reliably from their filename or extension.
+- **23 tools over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
+- **24 registered encodings** — Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030, and other legacy text formats.
+- **Fail-closed HTTP service** — bearer authentication on every MCP request, loopback defaults, exact Host/Origin checks, bounded sessions and request resources, no CORS, and explicit TLS/proxy requirements for non-loopback exposure.
+- **Secure filesystem and mutation model** — resolved-root containment, deterministic traversal, bounded streaming, staged writes, practical concurrent-change detection, transactional backups, and no-replace creation.
+- **Optional execution** — `run_script` and unrestricted `shell` are disabled by default; HTTP requires a second explicit execution opt-in.
 
-## Purpose of This Fork
+**Suitable for:** persistent local or containerized MCP services, desktop and CLI clients, secure tunnel bridges such as the OpenAI Secure MCP Tunnel, and legacy codebases whose text encoding cannot be inferred reliably from a filename or extension.
 
-This fork is maintained primarily to use a local MCP server from **ChatGPT Web through the OpenAI Secure MCP Tunnel**.
+## Project Direction
 
-The server supports both **stdio** and native stateful **MCP Streamable HTTP**. ChatGPT Web through the currently validated OpenAI Secure MCP Tunnel deployment still uses stdio: the tunnel client launches the local process and bridges it to the remote MCP connector.
+This repository began as a deployment-oriented fork for ChatGPT Web, but version 2.0 is an independently versioned downstream project rather than a thin synchronization branch. It owns its Go module, MCP Registry identity, release pipeline, public API decisions, transport architecture, container contract, and security documentation.
 
-The currently validated deployment model is:
+| Transport | Typical deployment | Security boundary | Roots behavior |
+|---|---|---|---|
+| stdio | Local MCP clients and secure tunnel bridges | Client configuration and operating-system process boundary | Startup directories are authoritative; dynamic roots are a compatibility fallback only when startup roots are empty |
+| stateful Streamable HTTP | Persistent localhost services, containers, trusted proxies, and explicitly secured remote services | Bearer token on every MCP request; loopback by default; TLS or a trusted proxy boundary for non-loopback listeners | Startup directories are immutable and shared by every session; HTTP client roots are disabled |
 
-```text
-ChatGPT Web
-    -> OpenAI remote MCP connector
-    -> OpenAI Secure MCP Tunnel
-    -> local mcp-file-tools stdio process
-    -> explicitly allowed Windows directories
-```
+Both transports use the same `BuildServer` path and expose the same 23 tools, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
 
-The fork does not require Claude Code, Codex, or another local AI application. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; Claude users can still configure the released binary as an ordinary stdio MCP server.
-
-Other MCP clients may launch the stdio process directly or connect to the native Streamable HTTP endpoint. The HTTP transport is bearer-authenticated, loopback-bound by default, stateful, and governed by the approved threat model and secure defaults in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md). Release history and remaining operator deployment work are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
+The OpenAI Secure MCP Tunnel remains a supported stdio deployment option, not the identity or only use case of the project. The fork does not require Claude Code, Codex, ChatGPT, or another specific MCP host. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; any compatible client can invoke the released binary directly or connect to its HTTP endpoint.
 
 ### Process-wide directory and session model
 
@@ -41,13 +40,13 @@ This deliberately supports deployments where several agents work on different pr
 
 Directories supplied when the process starts remain authoritative and cannot be changed by a session. For stdio compatibility only, a roots-capable client may provide dynamic MCP roots when the process starts with no directory arguments. Streamable HTTP disables client roots and every HTTP session shares the same process-wide configured directories.
 
-The custom tunnel-oriented changes include authoritative process roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, a transport-independent server builder, a fail-closed native Streamable HTTP transport, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
+The fork-specific architecture includes authoritative process roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, a transport-independent server builder, a fail-closed native Streamable HTTP transport, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
 ## Current Release Status
 
 Version `2.0.0` completes the planned 2.x API cleanup, bounded-memory text pipeline, transport-independent server architecture, fail-closed native Streamable HTTP transport, cross-platform CI, reproducible packaging, and migration documentation. The release exposes the same 23-tool catalog through stdio and native Streamable HTTP while preserving process-wide allowed-directory policy and disabled-by-default execution tools.
 
-Release binaries and archives are produced for Windows, Linux, and macOS on amd64 and arm64. Deployment, credential rotation, service restart, and active rollback remain operator-controlled actions documented in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/PUBLISHING.md](docs/PUBLISHING.md).
+Release binaries and archives are produced for Windows, Linux, and macOS on amd64 and arm64. The published Windows build has also passed a live dual-transport deployment smoke: the stdio connector and an authenticated stateful HTTP session both exposed the complete 23-tool catalog from the same `2.0.0` binary. Credential rotation, service supervision, and rollback remain operator-controlled procedures documented in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
 Encoding detection is content-based. File extensions are not used to select or bias an encoding. Unicode BOMs and valid UTF-8 are authoritative. BOMless UTF-16 LE/BE is auto-detected only when structural and decoded-text evidence agree. Empty files are treated as assumed UTF-8; non-empty ambiguous input is reported explicitly and requires an `encoding` override in text operations.
 
@@ -96,7 +95,7 @@ See [TOOLS.md](TOOLS.md) for detailed parameters and examples.
 
 **Security:** File operations and `run_script` paths are restricted to allowed directories. Recursive filesystem tools resolve every visited entry through a shared secure walker and skip symlinks, Windows junctions, and other reparse points that resolve outside those directories. Mutation handlers revalidate paths before commit and use optimistic snapshots plus atomic or no-replace platform operations. Before `run_script` starts, its script and working directory are revalidated and the script's metadata plus SHA-256 snapshot must still match; this reduces but cannot eliminate the final path-based TOCTOU window without handle-relative execution. The optional `shell` tool revalidates only its working directory; the command itself remains unrestricted and runs with the operating-system permissions of the MCP server process.
 
-## Custom Fork Changes
+## Fork Architecture and Changes
 
 This repository has evolved from its original upstream codebase. Compared with that baseline, the current source branch adds:
 
@@ -123,9 +122,11 @@ See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific change
 
 ## Installation
 
-### ChatGPT Web through the OpenAI Secure MCP Tunnel
+Choose **stdio** when the MCP client should own the child-process lifecycle or when a secure bridge expects a local command. Choose **Streamable HTTP** when the server should run as a persistent authenticated service, including localhost, containers, or a TLS/trusted-proxy deployment. The recipes below are deployment options, not a priority order; both transports expose the same tools and policy.
 
-The currently validated deployment is Windows plus the OpenAI tunnel client. The tunnel launches this fork as a local stdio MCP process and bridges it to the remote connector used by ChatGPT Web.
+### Stdio through the OpenAI Secure MCP Tunnel
+
+One validated stdio deployment is Windows plus the OpenAI tunnel client. The tunnel launches this fork as a local stdio MCP process and bridges it to the remote connector used by ChatGPT Web.
 
 Requirements:
 
@@ -320,9 +321,11 @@ Invoke-WebRequest `
 
 Set `MCP_NO_UPDATE_CHECK=1` before starting the server to disable release checks.
 
-### Project lineage
+### Project lineage and independence
 
-This project originated from the [original upstream repository](https://github.com/dimitar-grigorov/mcp-file-tools). The fork now owns its module path, release pipeline, update source, and MCP Registry namespace. Upstream integrations are separate from this distribution and are retained here only as historical lineage.
+This project originated from the [original upstream repository](https://github.com/dimitar-grigorov/mcp-file-tools) and retains its GPL-3.0 lineage and attribution. The fork now owns its module path, release pipeline, update source, MCP Registry namespace, public API decisions, transport architecture, and security model. It is maintained as an independent downstream project rather than a branch expected to remain merge-compatible with later upstream releases.
+
+Upstream continues to evolve separately and may contain useful agent-workflow ideas that are not yet present here. Likewise, several fork capabilities are intentionally outside upstream's narrower product direction. See [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md) for the maintenance and cross-project contribution boundaries.
 
 ## How to Use
 

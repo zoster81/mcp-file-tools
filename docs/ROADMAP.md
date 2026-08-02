@@ -1,10 +1,10 @@
-# Development Roadmap to 2.0.0
+# Development Roadmap
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-The `2.0.0` release candidate has completed the planned API, transport, hardening, CI, packaging, and migration scope. R14 remains active through publication, published-asset verification, operator deployment, and controlled rollback.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 remains active only for the controlled active rollback exercise and final deployment handoff.
 
-Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
+Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
 ## Operating rules
 
@@ -15,7 +15,7 @@ Current milestone status and completion gates live in this document. Reusable en
 - Treat domain-specific files, including MQL sources, as ordinary test fixtures rather than special encoding profiles.
 - Preserve stdio support while adding Streamable HTTP.
 - Keep `run_script` and `shell` disabled by default on every transport.
-- Build internal commit binaries as needed; do not create public tags or releases before the 2.0 release gate.
+- Build internal commit binaries as needed; create later public releases only after their dated changelog, verification, asset, Registry, and deployment gates pass.
 - Every milestone must pass [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md) before it is marked complete.
 
 ## Milestone overview
@@ -29,7 +29,8 @@ Current milestone status and completion gates live in this document. Reusable en
 | R11 | COMPLETE | Separate transport bootstrap from the shared MCP server and tool policies. |
 | R12 | COMPLETE | Approve the Streamable HTTP threat model and security design. |
 | R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
-| R14 | ACTIVE | Complete operator deployment and controlled rollback after the verified 2.0.0 publication. |
+| R14 | ACTIVE | Complete the controlled active rollback exercise and final handoff after verified 2.0.0 publication and dual-transport deployment. |
+| R15 | PLANNED | Improve agent ergonomics and project-aware workflows without weakening transport, memory, mutation, or security guarantees. |
 
 ---
 
@@ -308,7 +309,7 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 
 ## Remaining cleanup items
 
-- deploy the `2.0.0` runtime and complete the controlled active rollback test;
+- perform the controlled active rollback test, restore the published `2.0.0` runtime, and record the final deployment handoff;
 
 ## Checklist
 
@@ -335,14 +336,55 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 - [x] Run the complete release checklist in [PUBLISHING.md](PUBLISHING.md).
 - [x] Create and push `v2.0.0` only after all prior gates pass.
 - [x] Verify release binaries, archives, checksums, signatures where available, and MCP Registry publication.
-- [ ] Deploy the 2.0.0 runtime, execute smoke and rollback tests, and record the final handoff.
+- [x] Deploy the published 2.0.0 runtime and execute live stdio plus authenticated Streamable HTTP smoke tests.
+- [ ] Execute the controlled active rollback, restore 2.0.0, and record the final handoff.
 
 ## Publication record
 
 Published on 2026-08-02. Fork tag `v2.0.0` resolves to commit `1530fbb1eab529a1ef7236b4b3df8ab84a9a0d1d`. The tag workflow passed the complete Linux, Windows, and macOS test matrix, produced six raw binaries, six deterministic platform archives, and `checksums.txt`, and published `io.github.zoster81/mcp-file-tools` version `2.0.0` to the MCP Registry through GitHub OIDC. All 12 published binary/archive checksums were independently verified against the release checksum file. No separate signature assets were emitted by the configured release pipeline.
 
-Operator deployment remains pending: the private launcher references the verified Windows amd64 2.0.0 asset, but the active stdio tunnel and native HTTP processes have not been restarted and still use the prior internal binary.
+Operator deployment completed on 2026-08-02. The published Windows amd64 `2.0.0` binary now runs through both the stdio tunnel path and the native loopback Streamable HTTP path. Live verification confirmed the embedded version, HTTP health/readiness, unauthenticated `401`, authenticated session initialization, and the complete 23-tool catalog. The controlled active rollback and restoration exercise remains pending.
 
 ## Completion gate
 
 `v2.0.0` is reproducible, verified across supported targets, includes secure native MCP Streamable HTTP and stdio, has complete migration documentation, and passes deployment plus rollback verification.
+
+---
+
+# R15 — Agent ergonomics and project-aware workflows
+
+## Status
+
+Planned. R15 starts only after R14's active rollback and restoration gate is complete.
+
+## Goal
+
+Reduce unnecessary tool calls and token usage for common repository and encoding workflows while preserving the fork's bounded-memory pipeline, durable mutation semantics, stable public errors, process-wide root model, and stdio/HTTP equivalence.
+
+## Candidate evaluation backlog
+
+These are design candidates, not accepted API commitments:
+
+- optional absolute line numbers in paged `read_text_file` results;
+- grep output modes for full content, matching file paths, and per-file counts;
+- grep result paging and plural include/exclude patterns under existing aggregate budgets;
+- `.gitignore`-aware traversal with explicit opt-out and secure nested-pattern handling;
+- bounded sorting for directory/search results by name, modification time, or size;
+- batch encoding-conversion dry runs with machine-readable unsupported-character locations;
+- transport-independent MCP prompts for encoding audits, mojibake diagnosis, and controlled UTF-8 migration;
+- unified-diff edit input after strict single-file parsing, bounded hunk processing, and ambiguity tests;
+- fuzzy edit matching only if a deterministic complexity bound, explicit threshold, unique-match policy, and safe failure behavior are established.
+
+## Design constraints
+
+- Do not copy or mechanically synchronize another repository's implementation; design against this fork's current APIs and invariants.
+- Preserve the existing 23-tool contract unless a deliberate versioned API decision justifies a change.
+- Keep all read/search additions bounded by `MCP_MAX_*` limits and deterministic ordering.
+- Route mutations through the shared encoding-aware document and durable filesystem layers.
+- Keep prompts and tool metadata identical over stdio and Streamable HTTP.
+- Do not weaken HTTP authentication, Host/Origin validation, session limits, logging redaction, or dual execution authorization.
+- Do not add per-session filesystem ACLs or let HTTP clients mutate process roots.
+
+## Completion gate
+
+Accepted R15 features demonstrate measurable call/token reduction, pass normal and adversarial tests on supported platforms, remain bounded under large inputs, preserve exact mutation guarantees, and expose equivalent schemas and behavior through both transports.

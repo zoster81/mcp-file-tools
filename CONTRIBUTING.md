@@ -4,7 +4,7 @@ Thank you for contributing to `zoster81/mcp-file-tools`.
 
 ## Before you start
 
-Read the root [`AGENTS.md`](AGENTS.md) and any scoped `AGENTS.md` that applies to the files you plan to change. Product priorities and compatibility gates are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Read the root [`AGENTS.md`](AGENTS.md) and any scoped `AGENTS.md` that applies to the files you plan to change. Product identity, transport scope, and the independent upstream boundary are defined in [`docs/PROJECT_DIRECTION.md`](docs/PROJECT_DIRECTION.md); current priorities and compatibility gates are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 Prerequisites:
 

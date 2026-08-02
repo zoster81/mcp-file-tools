@@ -4,6 +4,7 @@ This guide applies to files under `docs/`. Follow the root [`AGENTS.md`](../AGEN
 
 ## Document responsibilities
 
+- `PROJECT_DIRECTION.md`: stable product identity, transport scope, independent-fork boundary, and upstream relationship.
 - `ROADMAP.md`: authoritative current milestones, design requirements, and completion gates.
 - `DEVELOPMENT_CHECKLIST.md`: reusable, portable engineering and verification checks.
 - `ROADMAP_HISTORY.md`: concise public engineering history, not an operator session log.
@@ -31,7 +32,7 @@ Historical documents should record architectural outcomes, compatibility decisio
 
 ## Consistency
 
-- Keep roadmap status consistent with README and publishing notes.
+- Keep project direction, roadmap status, README, tool reference, and publishing notes consistent.
 - Keep current limitations explicit and distinguish implemented behavior from planned work.
 - Keep Streamable HTTP implementation aligned with `HTTP_SECURITY.md`; changes to its trust model or accepted risks require explicit review.
 - Do not imply that filename extensions influence encoding detection.

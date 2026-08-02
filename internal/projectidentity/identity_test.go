@@ -39,9 +39,10 @@ func TestUpstreamReferencesAreDocumentationOnly(t *testing.T) {
 	root := repositoryRoot(t)
 	upstreamOwner := "dimitar" + "-grigorov"
 	allowedCounts := map[string]int{
-		"README.md":                              1,
-		"CHANGELOG.md":                           1,
-		filepath.FromSlash("docs/PUBLISHING.md"): 2,
+		"README.md":    1,
+		"CHANGELOG.md": 1,
+		filepath.FromSlash("docs/PROJECT_DIRECTION.md"): 2,
+		filepath.FromSlash("docs/PUBLISHING.md"):        3,
 	}
 	actualCounts := make(map[string]int)
 

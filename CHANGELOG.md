@@ -6,6 +6,12 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ## Unreleased
 
+### Changed
+
+- Reframed the project documentation around its independent dual-transport product scope: stdio and native stateful Streamable HTTP now have equal prominence, while the OpenAI Secure MCP Tunnel is documented as one supported stdio deployment rather than the project's sole identity.
+- Added `docs/PROJECT_DIRECTION.md` to define the fork's independent maintenance model, transport boundaries, stable relationship to upstream, and criteria for evaluating cross-project ideas without assuming source synchronization.
+- Recorded successful live deployment of the published Windows amd64 `2.0.0` binary through both stdio and authenticated Streamable HTTP, including health/readiness, unauthenticated rejection, session initialization, and complete 23-tool catalog verification.
+
 ## 2.0.0 - 2026-08-02
 
 ### Added

@@ -8,20 +8,21 @@ Git remote.
 ## Current state
 
 - GitHub repository: `https://github.com/zoster81/mcp-file-tools`
-- Primary deployment: ChatGPT Web through the OpenAI Secure MCP Tunnel
-- Implemented MCP transports in the development source: stdio and native stateful Streamable HTTP
-- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; native Streamable HTTP is a supported 2.0 transport with direct end-to-end coverage and the mandatory controls in [HTTP_SECURITY.md](HTTP_SECURITY.md)
+- Supported transports: stdio and native stateful Streamable HTTP, constructed from one shared server and 23-tool catalog
+- Validated stdio deployment: client-managed local process and ChatGPT Web through the OpenAI Secure MCP Tunnel
+- Validated HTTP deployment: persistent authenticated loopback service; non-loopback deployments require the TLS or trusted-proxy controls in [HTTP_SECURITY.md](HTTP_SECURITY.md)
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
 - Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), transport-independent server construction plus lifecycle-aware stdio startup (R11), the approved Streamable HTTP threat model and secure defaults (R12), and native stateful Streamable HTTP with security and equivalence coverage (R13)
-- Active milestone: R14 operator deployment and controlled rollback for the published 2.0.0 release
+- Active milestone: R14 controlled active rollback, 2.0.0 restoration, and final deployment handoff
 - R14 container baseline: Go 1.26.5 builder, Alpine 3.24.1 runtime, static binary, UID/GID 10001, explicit `/data` root, temporary state under `/tmp`, and `SIGTERM` shutdown
 - R14 CI baseline: the GitHub Test workflow passes on Linux, Windows, and macOS, including the complete race detector and native binary MCP smoke; the Build workflow passes all six supported OS/architecture targets plus the hardened Ubuntu container stdio/direct-TLS HTTP gate
 - R14 local container baseline: the Linux/amd64 image builds from the pinned Dockerfile and passes UID/GID 10001, read-only root filesystem, dropped-capability, `no-new-privileges`, bounded-tmpfs, SDK-driven stdio MCP, direct-TLS HTTP, `401`/`403`/`405`/no-CORS, readiness, and clean `SIGTERM` runtime checks under rootless Podman
 - R14 GoReleaser baseline: archive entry owner, group, mode, and modification time are normalized to commit-derived values; two independent snapshots produce identical checksums for all six raw binaries and six platform archives
 - R14 release baseline: fork tag `v2.0.0` points to commit `1530fbb1eab529a1ef7236b4b3df8ab84a9a0d1d`; the release workflow passed on Linux, Windows, and macOS, published all six raw binaries, six archives, and `checksums.txt`, and completed MCP Registry publication
 - R14 Registry baseline: the published `io.github.zoster81/mcp-file-tools` version is `2.0.0`; the release-specific manifest contains 6 packages and 23 tools and was published through GitHub OIDC with MCP Publisher 1.7.9
-- R14 rollback baseline: the known-good R10 binary passes exact hash/version and 23-tool stdio checks, and the private launcher filename update is byte-identically reversible; an active rollback still requires a controlled restart
-- Authoritative plan: [ROADMAP.md](ROADMAP.md), HTTP security design in [HTTP_SECURITY.md](HTTP_SECURITY.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
+- R14 deployment baseline: the published Windows amd64 binary is active through both stdio and native Streamable HTTP; live checks passed for version identity, health/readiness, unauthenticated `401`, authenticated session initialization, and the complete 23-tool catalog
+- R14 rollback baseline: the known-good R10 binary passes exact hash/version and 23-tool stdio checks, and the private launcher filename update is byte-identically reversible; the controlled active rollback and 2.0.0 restoration remain the final R14 gate
+- Authoritative product direction: [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md); plan: [ROADMAP.md](ROADMAP.md); HTTP security design: [HTTP_SECURITY.md](HTTP_SECURITY.md); migration guide: [MIGRATION_2.0.md](MIGRATION_2.0.md); reusable gates: [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
 - Release policy: semantic tags must match a dated changelog entry; `v2.0.0` is the first public 2.x release
 - Release source: the final fork-owned semantic tag, which must match the dated changelog entry, embedded binary version, and generated Registry version
 - Go module path: `github.com/zoster81/mcp-file-tools`
@@ -34,9 +35,9 @@ The released native HTTP transport preserves the mandatory [HTTP security design
 
 ## Fork release flow
 
-This flow is reserved for the R14 `2.0.0` release gate. Do not create a tag or publish intermediate development builds.
+Use this flow for later fork-owned semantic releases. Development commits may be tested or deployed internally, but public tags require a dated changelog entry and the full applicable release gate.
 
-1. Ensure R7-R14 are complete and `main` is clean, tested, and pushed to `origin`.
+1. Ensure the release-scoped roadmap work is complete and `main` is clean, tested, and pushed to `origin`.
 2. Choose a semantic version that has not been used by this fork.
 3. Promote the `CHANGELOG.md` unreleased section to a dated `## X.Y.Z - YYYY-MM-DD` release heading.
 4. Verify that the semantic tag is represented by that exact changelog release:
@@ -103,13 +104,13 @@ Real credentials belong in private copies outside the Git checkout.
 
 The registry identity is `io.github.zoster81/mcp-file-tools`. Version `2.0.0` was generated from the fork-owned release's `checksums.txt`, validated with MCP Publisher 1.7.9, authenticated through GitHub OIDC, and published with all six platform packages and the authoritative 23-tool projection. The inherited upstream `v2.0.0` tag was not used; the fork-owned tag resolves to the release commit recorded above.
 
-## Upstream integrations
+## Upstream relationship
 
-The upstream Claude Code marketplace and existing MCP Registry listing install
-the upstream implementation. They do not include this fork's execution tools,
-tunnel compatibility changes, or Windows drive-root fix.
+The upstream Claude Code marketplace and upstream MCP Registry listing install the independent `dimitar-grigorov/mcp-file-tools` implementation. Upstream has continued to evolve its encoding-focused stdio product and has independently implemented several ideas also explored in this fork, including stronger path containment, durable writes, BOM and line-ending behavior, ordered work, BOMless UTF-16 detection, richer grep/edit workflows, MCP prompts, and `.gitignore`-aware traversal.
 
-The fork does not publish a Claude Code marketplace plugin in 2.0. The supported distribution surfaces are release binaries and archives, the container definition, Smithery metadata, and the fork-owned MCP Registry entry.
+This fork is not an upstream synchronization branch. Its distinguishing scope includes native stateful Streamable HTTP, the reviewed HTTP security contract, optional execution tools, one process-wide multi-transport policy, stricter bounded-memory and durable-mutation guarantees, fork-owned release/Registry infrastructure, and tunnel/container deployment work. Cross-project ideas must be evaluated against each repository's current schemas and architecture rather than copied mechanically. See [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md).
+
+The fork does not publish a Claude Code marketplace plugin in 2.0. Its supported distribution surfaces are release binaries and archives, the container definition, Smithery metadata, and the fork-owned MCP Registry entry.
 
 ## Upstream synchronization
 
@@ -120,7 +121,7 @@ origin   -> https://github.com/zoster81/mcp-file-tools.git
 upstream -> https://github.com/dimitar-grigorov/mcp-file-tools.git
 ```
 
-Fetch and review upstream changes without rewriting local history:
+Fetch and review upstream changes without assuming that the histories remain directly mergeable:
 
 ```bash
 git fetch upstream
@@ -128,8 +129,7 @@ git log --oneline --left-right main...upstream/main
 git diff main...upstream/main
 ```
 
-Integrate upstream changes only after reviewing conflicts with fork-specific
-roots, execution, update-check, release, and tunnel behavior.
+Adopt upstream ideas or isolated changes only after redesigning or reviewing them against this fork's roots, streaming, mutation, execution, transport, update-check, release, and deployment behavior. Do not merge or rebase upstream mechanically merely to reduce commit divergence.
 
 ## Validation toolchain
 
@@ -149,9 +149,9 @@ available.
 
 ## Release verification checklist
 
-Run this checklist only after every milestone and completion gate in [ROADMAP.md](ROADMAP.md) passes. Use [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md) for internal milestones and builds.
+Run this checklist after the applicable release-scoped milestone and completion gates in [ROADMAP.md](ROADMAP.md) pass. Use [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md) for internal milestones and builds.
 
-- R7-R14 complete;
+- release-scoped roadmap work complete, with any intentionally post-publication deployment gate recorded explicitly;
 - working tree clean;
 - expected branch and HEAD verified;
 - no credentials or real tunnel identifiers in tracked files or history;

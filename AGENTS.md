@@ -8,6 +8,7 @@ Do not copy private workstation state, local process details, credentials, or op
 
 ## Sources of truth
 
+- Product identity, fork scope, transports, and upstream relationship: [`docs/PROJECT_DIRECTION.md`](docs/PROJECT_DIRECTION.md)
 - Product status and milestone gates: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - Reusable engineering checks: [`docs/DEVELOPMENT_CHECKLIST.md`](docs/DEVELOPMENT_CHECKLIST.md)
 - Contributor workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md)

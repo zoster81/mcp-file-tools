@@ -150,13 +150,14 @@ Use this section only for an explicitly requested internal build.
 - [ ] Preserve a known-good rollback artifact.
 - [ ] Keep local launcher, credentials, process state, and deployment evidence outside the repository.
 
-## 10. Public 2.0.0 release gate
+## 10. Public release and deployment gate
 
-Use [PUBLISHING.md](PUBLISHING.md) for the full release procedure. At minimum:
+Use [PUBLISHING.md](PUBLISHING.md) for the full release procedure. The `2.0.0` publication and deployment status is recorded here; future releases should apply the same checks to their active roadmap scope.
 
-- [ ] R7-R14 and the migration guide are complete;
-- [ ] the HTTP security design and transport test suite pass;
+- [x] R7-R13, the 2.0 release scope, and the migration guide are complete;
+- [x] the HTTP security design and transport test suite pass;
 - [x] the optional plugin retention decision is complete: the fork-owned downloader plugin is removed for 2.0;
-- [ ] release tag, dated changelog entry, embedded binary version, and Registry version match;
-- [ ] all supported platform assets and checksums are verified;
-- [ ] release, Registry publication, smoke tests, and rollback verification succeed.
+- [x] release tag, dated changelog entry, embedded binary version, and Registry version match;
+- [x] all supported platform assets and checksums are verified;
+- [x] release, Registry publication, and live stdio plus authenticated Streamable HTTP smoke tests succeed;
+- [ ] the controlled active rollback succeeds and the published runtime is restored before R14 is closed.
