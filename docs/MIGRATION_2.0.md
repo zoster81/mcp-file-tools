@@ -1,6 +1,6 @@
 # Migration from 1.8 to 2.0
 
-This guide records intentional public API changes planned for `mcp-file-tools` 2.0. Development builds may contain these changes before the final `v2.0.0` release.
+This guide records the intentional public API and deployment changes in `mcp-file-tools` `v2.0.0`.
 
 ## Breaking-change table
 

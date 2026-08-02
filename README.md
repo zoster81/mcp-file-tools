@@ -31,7 +31,7 @@ ChatGPT Web
 
 The fork does not require Claude Code, Codex, or another local AI application. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; Claude users can still configure the released binary as an ordinary stdio MCP server.
 
-Other MCP clients may launch the stdio process directly or connect to the native Streamable HTTP endpoint. The HTTP transport is bearer-authenticated, loopback-bound by default, stateful, and governed by the approved threat model and secure defaults in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md). Release sequencing and remaining hardening gates are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
+Other MCP clients may launch the stdio process directly or connect to the native Streamable HTTP endpoint. The HTTP transport is bearer-authenticated, loopback-bound by default, stateful, and governed by the approved threat model and secure defaults in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md). Release history and remaining operator deployment work are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### Process-wide directory and session model
 
@@ -43,15 +43,15 @@ Directories supplied when the process starts remain authoritative and cannot be 
 
 The custom tunnel-oriented changes include authoritative process roots, Windows drive-root handling, optional local execution tools, a shared encoding/BOM-aware streaming text core, deterministic secure traversal, durable atomic mutations, transport-independent typed operation errors, bounded ordered concurrency and aggregate output budgets, shared process preparation, a transport-independent server builder, a fail-closed native Streamable HTTP transport, and an authoritative tool-metadata catalog. The upstream project remains the source of the original encoding-aware file-tool implementation.
 
-## Current Development Status
+## Current Release Status
 
-R1-R6 are complete. R7 completed the roadmap and contributor-guidance reset; R8 completed conservative extension-independent encoding detection; R9 completed bounded-memory streaming; R10 completed the 2.0 public API cleanup; R11 completed the transport-independent server architecture; R12 approved the Streamable HTTP security design; and R13 implemented and verified native Streamable HTTP. R14 is now active for final 2.0 hardening, packaging, migration review, and release.
+Version `2.0.0` completes the planned 2.x API cleanup, bounded-memory text pipeline, transport-independent server architecture, fail-closed native Streamable HTTP transport, cross-platform CI, reproducible packaging, and migration documentation. The release exposes the same 23-tool catalog through stdio and native Streamable HTTP while preserving process-wide allowed-directory policy and disabled-by-default execution tools.
 
-Development commits may be built and deployed internally, but no intermediate public release is planned. The next public release target is `2.0.0` after every gate in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) passes.
+Release binaries and archives are produced for Windows, Linux, and macOS on amd64 and arm64. Deployment, credential rotation, service restart, and active rollback remain operator-controlled actions documented in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
 Encoding detection is content-based. File extensions are not used to select or bias an encoding. Unicode BOMs and valid UTF-8 are authoritative. BOMless UTF-16 LE/BE is auto-detected only when structural and decoded-text evidence agree. Empty files are treated as assumed UTF-8; non-empty ambiguous input is reported explicitly and requires an `encoding` override in text operations.
 
-The existing semantic-tag release workflow remains available for the final 2.0 release. Release preparation validates the semantic tag against a dated changelog entry before generating binaries and Registry metadata.
+The semantic-tag release workflow validates each release tag against a dated changelog entry before generating binaries, archives, checksums, and Registry metadata.
 
 ## What It Does
 

@@ -6,6 +6,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ## Unreleased
 
+## 2.0.0 - 2026-08-02
+
 ### Added
 
 - Added conservative, extension-independent BOMless UTF-16 LE/BE detection using code-unit and surrogate validation, decoded-text quality metrics, NUL-byte parity, exact round-trip checks, and explicit ambiguity.

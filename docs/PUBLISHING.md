@@ -10,10 +10,10 @@ Git remote.
 - GitHub repository: `https://github.com/zoster81/mcp-file-tools`
 - Primary deployment: ChatGPT Web through the OpenAI Secure MCP Tunnel
 - Implemented MCP transports in the development source: stdio and native stateful Streamable HTTP
-- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; native HTTP has direct end-to-end coverage and remains an internal pre-release capability rather than a published supported deployment
+- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; native Streamable HTTP is a supported 2.0 transport with direct end-to-end coverage and the mandatory controls in [HTTP_SECURITY.md](HTTP_SECURITY.md)
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
 - Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), transport-independent server construction plus lifecycle-aware stdio startup (R11), the approved Streamable HTTP threat model and secure defaults (R12), and native stateful Streamable HTTP with security and equivalence coverage (R13)
-- Active milestone: R14 hardening, CI, packaging, migration review, and 2.0.0 release
+- Active milestone: R14 publication, published-asset verification, operator deployment, and controlled rollback for 2.0.0
 - R14 container baseline: Go 1.26.5 builder, Alpine 3.24.1 runtime, static binary, UID/GID 10001, explicit `/data` root, temporary state under `/tmp`, and `SIGTERM` shutdown
 - R14 CI baseline: the GitHub Test workflow passes on Linux, Windows, and macOS, including the complete race detector and native binary MCP smoke; the Build workflow passes all six supported OS/architecture targets plus the hardened Ubuntu container stdio/direct-TLS HTTP gate
 - R14 local container baseline: the Linux/amd64 image builds from the pinned Dockerfile and passes UID/GID 10001, read-only root filesystem, dropped-capability, `no-new-privileges`, bounded-tmpfs, SDK-driven stdio MCP, direct-TLS HTTP, `401`/`403`/`405`/no-CORS, readiness, and clean `SIGTERM` runtime checks under rootless Podman
@@ -21,15 +21,15 @@ Git remote.
 - R14 Registry baseline: internal manifests generated from both the direct six-target checksums and the reproducible GoReleaser snapshot pass `mcp-publisher 1.7.9 validate` without login or publication
 - R14 rollback baseline: the known-good R10 binary passes exact hash/version and 23-tool stdio checks, and the private launcher filename update is byte-identically reversible; an active rollback still requires a controlled restart
 - Authoritative plan: [ROADMAP.md](ROADMAP.md), HTTP security design in [HTTP_SECURITY.md](HTTP_SECURITY.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
-- Development policy: internal commit builds only until the next public release, `2.0.0`
+- Release policy: semantic tags must match a dated changelog entry; `v2.0.0` is the first public 2.x release
 - Release source: the final fork-owned semantic tag, which must match the dated changelog entry, embedded binary version, and generated Registry version
 - Go module path: `github.com/zoster81/mcp-file-tools`
 
-The fork owns its Go module identity and all internal imports. Clone-and-build is the supported path for internal development commits. No intermediate public release is planned; packaged installations remain on the latest published release until the R14 `2.0.0` gate is complete.
+The fork owns its Go module identity and all internal imports. Clone-and-build remains supported for development commits, while packaged installations use fork-owned semantic releases and their verified assets.
 
 R11 defines one process-wide authorization model for every transport: all connections or future HTTP sessions share the directories configured when the process starts, together with the same tool catalog, limits, execution flags, and errors. Sessions are lifecycle and concurrency units, not per-agent ACLs. Prompt instructions may narrow an agent's intended write scope, but technical isolation requires separate server processes and, for concurrent Git changes, separate checkouts or worktrees. Dynamic client roots remain a stdio-only fallback when no startup directories are configured; HTTP sessions must not mutate process roots.
 
-R12's [HTTP security design](HTTP_SECURITY.md) remains release-blocking through R14. The R13 implementation is fail-closed: loopback by default, bearer-authenticated on every MCP request, exact Host and Origin validation, no CORS, bounded per-request and aggregate body memory, bounded sessions and request resources, redacted logging, and a second explicit execution opt-in. It remains an internal pre-release capability and is not yet part of a published supported release.
+The released native HTTP transport preserves the mandatory [HTTP security design](HTTP_SECURITY.md): loopback by default, bearer authentication on every MCP request, exact Host and Origin validation, no CORS, bounded per-request and aggregate body memory, bounded sessions and request resources, redacted logging, and a second explicit execution opt-in.
 
 ## Fork release flow
 

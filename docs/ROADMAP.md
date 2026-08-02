@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-The project is in internal development. Development commits may be built and deployed locally, but no intermediate public release is planned. The next public release target is `2.0.0`, after the native MCP Streamable HTTP server and all completion gates in this document are finished.
+The `2.0.0` release candidate has completed the planned API, transport, hardening, CI, packaging, and migration scope. R14 remains active through publication, published-asset verification, operator deployment, and controlled rollback.
 
 Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -29,7 +29,7 @@ Current milestone status and completion gates live in this document. Reusable en
 | R11 | COMPLETE | Separate transport bootstrap from the shared MCP server and tool policies. |
 | R12 | COMPLETE | Approve the Streamable HTTP threat model and security design. |
 | R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
-| R14 | ACTIVE | Complete hardening, CI, packaging, migration documentation, and the 2.0.0 release. |
+| R14 | ACTIVE | Publish and verify 2.0.0, then complete operator deployment and controlled rollback. |
 
 ---
 
@@ -308,8 +308,8 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 
 ## Remaining cleanup items
 
-- promote the unreleased changelog to the final `2.0.0` date and run the complete release checklist;
-- validate the actual published release assets and checksums, publish the Registry entry, and verify signatures where available;
+- run the complete release checklist against the dated `2.0.0` release commit;
+- create the fork-owned `v2.0.0` tag, validate the published assets and checksums, publish the Registry entry, and verify signatures where available;
 - deploy the `2.0.0` runtime and complete the controlled active rollback test;
 
 ## Checklist
