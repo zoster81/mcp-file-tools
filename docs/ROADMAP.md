@@ -308,7 +308,6 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 
 ## Remaining cleanup items
 
-- run the complete release checklist against the dated `2.0.0` release commit;
 - create the fork-owned `v2.0.0` tag, validate the published assets and checksums, publish the Registry entry, and verify signatures where available;
 - deploy the `2.0.0` runtime and complete the controlled active rollback test;
 
@@ -334,7 +333,7 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 - [x] Update README, TOOLS, catalog, tunnel/HTTP examples, Smithery metadata, container docs, and publishing notes.
 - [x] Finish the 1.8-to-2.0 migration guide.
 - [x] Remove the optional Claude Code downloader plugin and marketplace metadata rather than carry a second network installer and cache trust boundary into 2.0.
-- [ ] Run the complete release checklist in [PUBLISHING.md](PUBLISHING.md).
+- [x] Run the complete release checklist in [PUBLISHING.md](PUBLISHING.md).
 - [ ] Create and push `v2.0.0` only after all prior gates pass.
 - [ ] Verify release binaries, archives, checksums, signatures where available, and MCP Registry publication.
 - [ ] Deploy the 2.0.0 runtime, execute smoke and rollback tests, and record the final handoff.
