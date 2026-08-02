@@ -308,9 +308,9 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 
 ## Remaining cleanup items
 
-- CI now defines native binary MCP smoke tests for Windows, Linux, and macOS, but those gates must pass on GitHub after the branch is pushed;
-- a local Linux/amd64 rootless Podman build and runtime smoke now passes for non-root execution, hardened stdio, direct-TLS HTTP, security responses, readiness, and graceful shutdown; the equivalent Ubuntu gate must still pass on GitHub after the branch is pushed;
-- final release metadata, Registry validation against published release assets, publication, deployment, and rollback remain outstanding;
+- promote the unreleased changelog to the final `2.0.0` date and run the complete release checklist;
+- validate the actual published release assets and checksums, publish the Registry entry, and verify signatures where available;
+- deploy the `2.0.0` runtime and complete the controlled active rollback test;
 
 ## Checklist
 
@@ -325,8 +325,8 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 - [x] Add bounded fuzzing for detection, decoder chunking, line framing, HTTP parsing, proxy chains, and JSON-RPC inputs.
 - [x] Run deterministic load, resource-accounting, cancellation, and session-cleanup soak tests, including 102,400 admitted/rejected requests and repeated race-detector cycles.
 - [x] Build and runtime-smoke the Linux/amd64 container locally with UID/GID 10001, a read-only root filesystem, dropped capabilities, `no-new-privileges`, bounded temporary storage, SDK-driven stdio MCP, direct-TLS HTTP, negative security responses, health/readiness, and graceful shutdown.
-- [ ] Pass the native binary MCP smoke gate on Windows, Linux, and macOS GitHub runners.
-- [ ] Pass the Ubuntu container gate for non-root execution, hardened stdio, direct-TLS HTTP, security responses, health/readiness, and graceful shutdown.
+- [x] Pass the native binary MCP smoke gate on Windows, Linux, and macOS GitHub runners.
+- [x] Pass the Ubuntu container gate for non-root execution, hardened stdio, direct-TLS HTTP, security responses, health/readiness, and graceful shutdown.
 - [x] Remove the stale GoReleaser Registry TODO and keep Registry publication in the checksum-verified workflow.
 - [x] Normalize archive entry metadata to commit-derived values and verify that two independent GoReleaser snapshots produce identical checksums for all 6 raw binaries and 6 platform archives.
 - [x] Generate internal prerelease manifests from both the direct six-target build and the reproducible GoReleaser snapshot checksums, then pass `mcp-publisher 1.7.9 validate` without login or publication.
