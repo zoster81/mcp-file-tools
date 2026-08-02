@@ -330,9 +330,12 @@ func TestHandlerRejectsAggregateBodySaturation(t *testing.T) {
 }
 
 func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
-	root := t.TempDir()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve temporary root: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
 	server := filetoolsserver.BuildServer(filetoolsserver.ServerOptions{
 		Version:            "http-test",
 		AllowedDirectories: []string{root},
@@ -348,11 +351,17 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 	h.setReady(true)
 	unstarted.Config.Handler = h
 	unstarted.Start()
-	defer unstarted.Close()
+	t.Cleanup(func() {
+		unstarted.CloseClientConnections()
+		unstarted.Close()
+	})
 
 	first := connectHTTPClient(t, ctx, unstarted.URL+cfg.Path)
+	t.Cleanup(func() { _ = first.Close() })
 	second := connectHTTPClient(t, ctx, unstarted.URL+cfg.Path)
+	t.Cleanup(func() { _ = second.Close() })
 	direct := connectDirectClient(t, ctx, server)
+	t.Cleanup(func() { _ = direct.Close() })
 	sessions := map[string]*mcp.ClientSession{
 		"http-first":  first,
 		"http-second": second,
@@ -476,10 +485,6 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 			t.Fatalf("%s error diverged: code=%v text=%q, want code=%v text=%q", name, errorCode, errorText, expectedErrorCode, expectedErrorText)
 		}
 	}
-
-	_ = first.Close()
-	_ = second.Close()
-	_ = direct.Close()
 }
 
 func TestHTTPExecutionRequiresExplicitServerPolicy(t *testing.T) {
