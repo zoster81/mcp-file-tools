@@ -154,21 +154,48 @@ func TestGoReleaserArchiveMetadataIsDeterministic(t *testing.T) {
 	if !strings.Contains(content, "builds_info:") {
 		t.Error(".goreleaser.yml must define builds_info for archive binaries")
 	}
-	if got := strings.Count(content, "mtime: '{{ .CommitDate }}'"); got != 6 {
-		t.Errorf(".goreleaser.yml deterministic mtime count = %d, want 6", got)
+	if got := strings.Count(content, "mtime: '{{ .CommitDate }}'"); got != 7 {
+		t.Errorf(".goreleaser.yml deterministic mtime count = %d, want 7", got)
 	}
-	if got := strings.Count(content, "owner: root"); got != 6 {
-		t.Errorf(".goreleaser.yml deterministic owner count = %d, want 6", got)
+	if got := strings.Count(content, "owner: root"); got != 7 {
+		t.Errorf(".goreleaser.yml deterministic owner count = %d, want 7", got)
 	}
-	if got := strings.Count(content, "group: root"); got != 6 {
-		t.Errorf(".goreleaser.yml deterministic group count = %d, want 6", got)
+	if got := strings.Count(content, "group: root"); got != 7 {
+		t.Errorf(".goreleaser.yml deterministic group count = %d, want 7", got)
 	}
-	if got := strings.Count(content, "mode: 0644"); got != 5 {
-		t.Errorf(".goreleaser.yml document mode count = %d, want 5", got)
+	if got := strings.Count(content, "mode: 0644"); got != 6 {
+		t.Errorf(".goreleaser.yml document mode count = %d, want 6", got)
 	}
 	if got := strings.Count(content, "mode: 0755"); got != 1 {
 		t.Errorf(".goreleaser.yml binary mode count = %d, want 1", got)
 	}
+	assertFileContains(t, root, ".goreleaser.yml", "src: examples/start-openai-tunnel.ps1")
+	assertFileContains(t, root, ".goreleaser.yml", "src: examples/start-streamable-http.ps1")
+}
+
+func TestPublicLauncherExamplesRemainFailClosed(t *testing.T) {
+	root := repositoryRoot(t)
+	stdioExample := filepath.FromSlash("examples/start-openai-tunnel.ps1")
+	assertFileContains(t, root, stdioExample, `$RuntimeApiKey = "REPLACE_WITH_RUNTIME_API_KEY"`)
+	assertFileContains(t, root, stdioExample, `$TunnelId = "tunnel_REPLACE_WITH_ID"`)
+	assertFileContains(t, root, stdioExample, `$TunnelId -notmatch '^tunnel_[0-9a-f]{32}$'`)
+	assertFileContains(t, root, stdioExample, `$AllowedDirectory = $allowedItem.FullName`)
+	assertFileContains(t, root, stdioExample, `--transport=stdio`)
+	assertFileContains(t, root, stdioExample, `$EnableRunScript = $false`)
+	assertFileContains(t, root, stdioExample, `$EnableShell = $false`)
+	assertFileContains(t, root, stdioExample, `"MCP_HTTP_TOKEN"`)
+	assertFileContains(t, root, stdioExample, `"MCP_HTTP_TOKEN_FILE"`)
+	assertFileContains(t, root, stdioExample, `"MCP_HTTP_ENABLE_EXECUTION"`)
+
+	httpExample := filepath.FromSlash("examples/start-streamable-http.ps1")
+	assertFileContains(t, root, httpExample, `$ListenAddress = "127.0.0.1:8765"`)
+	assertFileContains(t, root, httpExample, `$AllowNonLoopback = $false`)
+	assertFileContains(t, root, httpExample, `$EnableHttpExecution = $false`)
+	assertFileContains(t, root, httpExample, `$EnableRunScript = $false`)
+	assertFileContains(t, root, httpExample, `$EnableShell = $false`)
+	assertFileContains(t, root, httpExample, `A non-loopback listener requires TLS or a trusted proxy CIDR.`)
+	assertFileContains(t, root, httpExample, `"CONTROL_PLANE_API_KEY"`)
+	assertFileContains(t, root, httpExample, `"CONTROL_PLANE_TUNNEL_ID"`)
 }
 
 func TestContainerAndSmitheryMetadataMatchTheRuntimeContract(t *testing.T) {
@@ -196,6 +223,32 @@ func TestForkOwnedDownloaderPluginIsRemoved(t *testing.T) {
 		if !os.IsNotExist(err) {
 			t.Errorf("inspect removed plugin path %s: %v", relativePath, err)
 		}
+	}
+}
+
+func TestReleaseWorkflowsRunNativeAndContainerSmokes(t *testing.T) {
+	root := repositoryRoot(t)
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/test.yml"), "TestExternalStdioBinarySmoke")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/release.yml"), "TestExternalStdioBinarySmoke")
+
+	buildWorkflow := filepath.FromSlash(".github/workflows/build.yml")
+	assertFileContains(t, root, buildWorkflow, "container-smoke:")
+	assertFileContains(t, root, buildWorkflow, "MCP_EXTERNAL_SMOKE_EXECUTABLE=docker")
+	assertFileContains(t, root, buildWorkflow, "--transport=streamable-http /data")
+	assertFileContains(t, root, buildWorkflow, `token="$(sudo cat "${workdir}/secrets/token")"`)
+
+	data, err := os.ReadFile(filepath.Join(root, buildWorkflow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	chmodIndex := strings.Index(content, `chmod 0600 "${workdir}/secrets/token" "${workdir}/secrets/key.pem"`)
+	chownIndex := strings.Index(content, `sudo chown -R 10001:10001 "${workdir}/data" "${workdir}/secrets"`)
+	if chmodIndex < 0 || chownIndex < 0 {
+		t.Fatal("container workflow must set secret modes and mapped ownership explicitly")
+	}
+	if chmodIndex > chownIndex {
+		t.Error("container workflow must set secret modes before transferring ownership to UID 10001")
 	}
 }
 

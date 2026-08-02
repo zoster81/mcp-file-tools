@@ -72,6 +72,12 @@ archives:
           group: root
           mode: 0644
           mtime: '{{ .CommitDate }}'
+      - src: examples/start-streamable-http.ps1
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 # Also publish raw binaries for MCP registry (GoReleaser adds .exe automatically for Windows)

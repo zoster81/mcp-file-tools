@@ -113,7 +113,9 @@ This repository has evolved from its original upstream codebase. Compared with t
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
 - a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing;
-- an explicit process configuration and shared server builder separated from transport startup, with a lifecycle-aware stdio runner, signal cancellation, explicit `stdio` transport selection, and equivalence tests across multiple connections to the same process-wide tool and root policy.
+- an explicit process configuration and shared server builder separated from transport startup, with a lifecycle-aware stdio runner, signal cancellation, explicit `stdio` transport selection, and equivalence tests across multiple connections to the same process-wide tool and root policy;
+- native stateful Streamable HTTP with mandatory bearer authentication, exact Host/Origin validation, loopback defaults, bounded sessions and request resources, redacted access logging, and a second execution opt-in;
+- release hardening with pinned cross-platform CI, reproducible GoReleaser archives, checksum-driven Registry publication, a non-root transport-neutral container, migration documentation, and sanitized public launch examples.
 
 See [CHANGELOG.md](CHANGELOG.md) for the maintained list of fork-specific changes.
 
@@ -164,7 +166,7 @@ For unreleased development commits, build from source as shown above.
 
 #### OpenAI Tunnel quick start
 
-A sanitized English example is provided at [`examples/start-openai-tunnel.ps1`](examples/start-openai-tunnel.ps1).
+A sanitized English example is provided at [`examples/start-openai-tunnel.ps1`](examples/start-openai-tunnel.ps1). It is intentionally a single-transport stdio reference; an operator may combine stdio and native HTTP startup in a private launcher outside the repository.
 
 Place these files in the same private working directory:
 
@@ -193,7 +195,7 @@ $TunnelId = "tunnel_REPLACE_WITH_ID"
 $AllowedDirectory = "C:\Path\To\AllowedProject"
 ```
 
-Never commit the edited script. The example keeps `run_script` and `shell` disabled by default.
+The tunnel identifier must be `tunnel_` followed by exactly 32 lowercase hexadecimal characters. Never commit the edited script. The example selects stdio explicitly and keeps `run_script` and `shell` disabled by default.
 
 To enable script execution for supported files located inside an allowed directory, change:
 
@@ -243,7 +245,7 @@ The transport can be selected explicitly with `--transport=stdio` or `MCP_TRANSP
 
 ### Native Streamable HTTP
 
-The native HTTP transport is stateful, bearer-authenticated, and bound to loopback by default. Every session shares the directory arguments supplied when the process starts; HTTP clients cannot add or change roots.
+The native HTTP transport is stateful, bearer-authenticated, and bound to loopback by default. Every session shares the directory arguments supplied when the process starts; HTTP clients cannot add or change roots. The tracked HTTP launcher is a standalone reference even when a private deployment launcher starts both transports.
 
 Create a private token file and start the endpoint from PowerShell:
 

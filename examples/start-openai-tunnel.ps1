@@ -74,8 +74,8 @@
     }
 
     if ($TunnelId -eq "tunnel_REPLACE_WITH_ID" -or
-        $TunnelId -notmatch '^tunnel_[A-Za-z0-9]+$') {
-        throw "Replace the Tunnel ID placeholder with a valid value beginning with tunnel_."
+        $TunnelId -notmatch '^tunnel_[0-9a-f]{32}$') {
+        throw "Replace the Tunnel ID placeholder with tunnel_ followed by 32 lowercase hexadecimal characters."
     }
 
     if ($AllowedDirectory -eq "C:\Path\To\AllowedProject" -or
@@ -87,6 +87,7 @@
     if (($allowedItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
         throw "AllowedDirectory must not be a symbolic link or reparse point: $AllowedDirectory"
     }
+    $AllowedDirectory = $allowedItem.FullName
 
     Assert-FileExists -Path $TunnelClient -Description "OpenAI tunnel client"
     Assert-FileExists -Path $McpServer -Description "mcp-file-tools server"
@@ -95,30 +96,45 @@
     # Forward slashes preserve Windows paths and are accepted by Windows APIs.
     $mcpCommandPath = $McpServer.Replace('\', '/')
     $allowedCommandPath = $AllowedDirectory.Replace('\', '/')
-    $mcpCommand = "$(Quote-McpToken $mcpCommandPath) $(Quote-McpToken $allowedCommandPath)"
+    $mcpCommand = "$(Quote-McpToken $mcpCommandPath) --transport=stdio $(Quote-McpToken $allowedCommandPath)"
+
+    $managedVariables = @(
+        "CONTROL_PLANE_API_KEY",
+        "CONTROL_PLANE_TUNNEL_ID",
+        "MCP_COMMAND",
+        "MCP_ENABLE_RUN_SCRIPT",
+        "MCP_ENABLE_SHELL",
+        "MCP_ENABLE_EXECUTION",
+        "MCP_HTTP_TOKEN",
+        "MCP_HTTP_TOKEN_FILE",
+        "MCP_HTTP_ENABLE_EXECUTION"
+    )
+    $previousEnvironment = @{}
+    foreach ($name in $managedVariables) {
+        $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+    }
 
     $exitCode = 0
 
     try {
-        $env:CONTROL_PLANE_API_KEY = $RuntimeApiKey
-        $env:CONTROL_PLANE_TUNNEL_ID = $TunnelId
-        $env:MCP_COMMAND = $mcpCommand
-
-        if ($EnableRunScript) {
-            $env:MCP_ENABLE_RUN_SCRIPT = "1"
-        }
-        else {
-            Remove-Item Env:MCP_ENABLE_RUN_SCRIPT -ErrorAction SilentlyContinue
-        }
-
-        if ($EnableShell) {
-            $env:MCP_ENABLE_SHELL = "1"
-        }
-        else {
-            Remove-Item Env:MCP_ENABLE_SHELL -ErrorAction SilentlyContinue
-        }
-
-        Remove-Item Env:MCP_ENABLE_EXECUTION -ErrorAction SilentlyContinue
+        [Environment]::SetEnvironmentVariable("CONTROL_PLANE_API_KEY", $RuntimeApiKey, "Process")
+        [Environment]::SetEnvironmentVariable("CONTROL_PLANE_TUNNEL_ID", $TunnelId, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_COMMAND", $mcpCommand, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_ENABLE_EXECUTION", $null, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_TOKEN", $null, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_TOKEN_FILE", $null, "Process")
+        [Environment]::SetEnvironmentVariable("MCP_HTTP_ENABLE_EXECUTION", $null, "Process")
+        [Environment]::SetEnvironmentVariable(
+            "MCP_ENABLE_RUN_SCRIPT",
+            $(if ($EnableRunScript) { "1" } else { $null }),
+            "Process"
+        )
+        [Environment]::SetEnvironmentVariable(
+            "MCP_ENABLE_SHELL",
+            $(if ($EnableShell) { "1" } else { $null }),
+            "Process"
+        )
+        $RuntimeApiKey = $null
 
         Write-Host "Checking tunnel configuration..." -ForegroundColor Cyan
         & $TunnelClient doctor --explain
@@ -146,12 +162,9 @@
         Write-Error $_.Exception.Message -ErrorAction Continue
     }
     finally {
-        Remove-Item Env:CONTROL_PLANE_API_KEY -ErrorAction SilentlyContinue
-        Remove-Item Env:CONTROL_PLANE_TUNNEL_ID -ErrorAction SilentlyContinue
-        Remove-Item Env:MCP_COMMAND -ErrorAction SilentlyContinue
-        Remove-Item Env:MCP_ENABLE_RUN_SCRIPT -ErrorAction SilentlyContinue
-        Remove-Item Env:MCP_ENABLE_SHELL -ErrorAction SilentlyContinue
-        Remove-Item Env:MCP_ENABLE_EXECUTION -ErrorAction SilentlyContinue
+        foreach ($name in $managedVariables) {
+            [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], "Process")
+        }
     }
 
     exit $exitCode

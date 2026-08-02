@@ -104,8 +104,15 @@
     if (-not $AllowNonLoopback -and $ListenAddress -notmatch '^(127\.0\.0\.1|\[::1\]|localhost):\d+$') {
         throw "A non-loopback listener requires AllowNonLoopback = `$true."
     }
+    if ($AllowNonLoopback -and
+        $TlsCertificateFile -eq "" -and
+        [string]::IsNullOrWhiteSpace($TrustedProxyCidrs)) {
+        throw "A non-loopback listener requires TLS or a trusted proxy CIDR."
+    }
 
     $managedVariables = @(
+        "CONTROL_PLANE_API_KEY",
+        "CONTROL_PLANE_TUNNEL_ID",
         "MCP_TRANSPORT",
         "MCP_HTTP_ADDR",
         "MCP_HTTP_PATH",
@@ -128,6 +135,8 @@
     }
 
     try {
+        [Environment]::SetEnvironmentVariable("CONTROL_PLANE_API_KEY", $null, "Process")
+        [Environment]::SetEnvironmentVariable("CONTROL_PLANE_TUNNEL_ID", $null, "Process")
         [Environment]::SetEnvironmentVariable("MCP_TRANSPORT", "streamable-http", "Process")
         [Environment]::SetEnvironmentVariable("MCP_HTTP_ADDR", $ListenAddress, "Process")
         [Environment]::SetEnvironmentVariable("MCP_HTTP_PATH", $EndpointPath, "Process")

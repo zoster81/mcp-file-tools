@@ -51,8 +51,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added `streamable-http` transport selection while preserving stdio as the default and retaining one shared `BuildServer` registration and process-wide root policy.
 - Required a second `MCP_HTTP_ENABLE_EXECUTION` opt-in before existing execution flags can expose `run_script` or `shell` through HTTP.
 - Removed HTTP token-source variables from the process environment after startup configuration is snapshotted so optional child processes cannot inherit bearer credentials.
-- Made Build and Test workflows run for documentation and catalog changes, pinned release actions to point versions, and added bounded job timeouts plus deterministic artifact retention.
-- Made GoReleaser outputs reproducible with `-trimpath` and commit timestamps, emitted one platform-appropriate archive per target, and retained the checksum-verified Registry workflow as the sole publication path.
+- Made Build and Test workflows run for documentation and catalog changes, pinned release actions to point versions, updated every workflow to `actions/setup-go@v7`, added native binary MCP smoke tests on Linux, Windows, and macOS, and added an Ubuntu container gate covering non-root execution, hardened stdio, direct-TLS HTTP security responses, and graceful shutdown.
+- Made GoReleaser outputs reproducible with `-trimpath` and commit timestamps, emitted one platform-appropriate archive per target, bundled both sanitized Windows launcher examples, and retained the checksum-verified Registry workflow as the sole publication path.
 - Pinned the Registry publisher workflow to the verified MCP Publisher 1.7.9 Linux amd64 artifact.
 - Changed release-version verification to require a semantic tag with a matching dated changelog entry.
 
@@ -69,6 +69,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Bound asynchronous update checks to the server lifecycle so shutdown cancellation cannot leave a detached update-check context running.
 - Prevented oversized chunked HTTP bodies from reaching unbounded SDK decoding, prevented aggregate concurrent body reservations from exceeding the configured budget, and aligned external session accounting with the SDK by pausing idle expiry for active POST requests while allowing SSE-only sessions to expire without keepalive traffic.
 - Made GoReleaser archives byte-reproducible by normalizing binary and bundled-document owner, group, mode, and modification time to commit-derived values; two independent snapshots now produce identical checksums for all six raw binaries and six platform archives.
+- Hardened the public Windows launch examples with exact tunnel-ID validation, canonical allowed-directory handling, explicit stdio selection, conservative environment restoration, ambient cross-transport credential clearing, and fail-fast non-loopback HTTP TLS/proxy checks.
 
 ## 1.8.0 - 2026-07-25
 

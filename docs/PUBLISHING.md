@@ -10,12 +10,13 @@ Git remote.
 - GitHub repository: `https://github.com/zoster81/mcp-file-tools`
 - Primary deployment: ChatGPT Web through the OpenAI Secure MCP Tunnel
 - Implemented MCP transports in the development source: stdio and native stateful Streamable HTTP
-- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; native HTTP has direct end-to-end coverage and remains in internal pre-release validation rather than active tunnel deployment
+- Primary validated OpenAI Secure MCP Tunnel deployment: stdio; native HTTP has direct end-to-end coverage and remains an internal pre-release capability rather than a published supported deployment
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
 - Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), transport-independent server construction plus lifecycle-aware stdio startup (R11), the approved Streamable HTTP threat model and secure defaults (R12), and native stateful Streamable HTTP with security and equivalence coverage (R13)
 - Active milestone: R14 hardening, CI, packaging, migration review, and 2.0.0 release
 - R14 container baseline: Go 1.26.5 builder, Alpine 3.24.1 runtime, static binary, UID/GID 10001, explicit `/data` root, temporary state under `/tmp`, and `SIGTERM` shutdown
-- R14 CI baseline: documentation-sensitive tests on Linux, Windows, and macOS plus independent builds for all six supported OS/architecture targets
+- R14 CI baseline: documentation-sensitive tests on Linux, Windows, and macOS plus independent builds for all six supported OS/architecture targets; native binary MCP smoke and hardened container stdio/direct-TLS HTTP gates are defined and await their first successful GitHub run after push
+- R14 local container baseline: the Linux/amd64 image builds from the pinned Dockerfile and passes UID/GID 10001, read-only root filesystem, dropped-capability, `no-new-privileges`, bounded-tmpfs, SDK-driven stdio MCP, direct-TLS HTTP, `401`/`403`/`405`/no-CORS, readiness, and clean `SIGTERM` runtime checks under rootless Podman
 - R14 GoReleaser baseline: archive entry owner, group, mode, and modification time are normalized to commit-derived values; two independent snapshots produce identical checksums for all six raw binaries and six platform archives
 - R14 Registry baseline: internal manifests generated from both the direct six-target checksums and the reproducible GoReleaser snapshot pass `mcp-publisher 1.7.9 validate` without login or publication
 - R14 rollback baseline: the known-good R10 binary passes exact hash/version and 23-tool stdio checks, and the private launcher filename update is byte-identically reversible; an active rollback still requires a controlled restart
@@ -28,7 +29,7 @@ The fork owns its Go module identity and all internal imports. Clone-and-build i
 
 R11 defines one process-wide authorization model for every transport: all connections or future HTTP sessions share the directories configured when the process starts, together with the same tool catalog, limits, execution flags, and errors. Sessions are lifecycle and concurrency units, not per-agent ACLs. Prompt instructions may narrow an agent's intended write scope, but technical isolation requires separate server processes and, for concurrent Git changes, separate checkouts or worktrees. Dynamic client roots remain a stdio-only fallback when no startup directories are configured; HTTP sessions must not mutate process roots.
 
-R12's [HTTP security design](HTTP_SECURITY.md) remains release-blocking through R14. The R13 implementation is fail-closed: loopback by default, bearer-authenticated on every MCP request, exact Host and Origin validation, no CORS, bounded per-request and aggregate body memory, bounded sessions and request resources, redacted logging, and a second explicit execution opt-in. It remains an internal pre-release capability and has not been published or deployed.
+R12's [HTTP security design](HTTP_SECURITY.md) remains release-blocking through R14. The R13 implementation is fail-closed: loopback by default, bearer-authenticated on every MCP request, exact Host and Origin validation, no CORS, bounded per-request and aggregate body memory, bounded sessions and request resources, redacted logging, and a second explicit execution opt-in. It remains an internal pre-release capability and is not yet part of a published supported release.
 
 ## Fork release flow
 
@@ -59,25 +60,39 @@ This flow is reserved for the R14 `2.0.0` release gate. Do not create a tag or p
    - raw binaries for all six supported OS/architecture targets;
    - `checksums.txt`;
    - `README.md`, `TOOLS.md`, `CHANGELOG.md`, `LICENSE`;
-   - `examples/start-openai-tunnel.ps1`.
+   - `examples/start-openai-tunnel.ps1`;
+   - `examples/start-streamable-http.ps1`.
 9. Verify the release asset names and SHA-256 values before announcing it.
 10. `.github/workflows/release.yml` invokes the reusable `.github/workflows/publish-registry.yml`, which generates and publishes the fork-owned `server.json` from those verified assets.
 
 The fork-owned Claude Code downloader plugin is removed for 2.0. This avoids a second release downloader, cache, checksum parser, and platform-mapping trust boundary. Claude Code users can configure the published binary directly as a normal stdio MCP server.
 
-## OpenAI Tunnel example
+## Public launcher examples
 
-`examples/start-openai-tunnel.ps1` is the public quick-start launcher. It must:
+The tracked launchers are intentionally separate, single-transport reference examples. Operators may combine them in a private deployment launcher, but private credentials and machine-specific orchestration must remain outside the repository.
+
+`examples/start-openai-tunnel.ps1` is the public stdio-through-tunnel quick start. It must:
 
 - remain in English;
 - contain placeholders only;
 - never contain a real Runtime API key or Tunnel ID;
+- require the exact `tunnel_` plus 32 lowercase hexadecimal identifier format;
+- select `--transport=stdio` explicitly;
 - keep `run_script` and `shell` disabled by default;
-- validate the tunnel client, MCP binary, and allowed directory;
+- validate the tunnel client, MCP binary, and canonical allowed directory;
 - run `tunnel-client doctor --explain` before starting the daemon;
-- remove process-level credential variables when it exits.
+- restore all managed process-level environment variables when it exits.
 
-Real credentials belong in a private copy outside the Git checkout.
+`examples/start-streamable-http.ps1` is the standalone native HTTP reference. It must:
+
+- bind to loopback by default and require explicit non-loopback opt-in;
+- require TLS or an explicitly trusted proxy CIDR for non-loopback use;
+- load the bearer token from a regular private file rather than a command-line argument;
+- keep both execution authorization layers disabled by default;
+- clear unrelated control-plane credentials from the server child environment;
+- restore all managed process-level environment variables when it exits.
+
+Real credentials belong in private copies outside the Git checkout.
 
 ## MCP Registry status
 

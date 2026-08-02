@@ -59,6 +59,25 @@ jobs:
       - name: Test release scripts
         run: node --test scripts/generate-server-json.test.js scripts/verify-release-version.test.js
 
+      - name: Build and smoke-test native binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="${PWD}/mcp-file-tools-smoke"
+          if [[ "${RUNNER_OS}" == "Windows" ]]; then
+            binary="${binary}.exe"
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          go build -trimpath \
+            -ldflags="-s -w -X main.version=${version} -X github.com/zoster81/mcp-file-tools/filetoolsserver.Version=${version}" \
+            -o "${binary}" \
+            ./cmd/mcp-file-tools
+          export MCP_EXTERNAL_SMOKE_EXECUTABLE="${binary}"
+          export MCP_EXTERNAL_SMOKE_ARGS_JSON='["--transport=stdio","{TEMP_ROOT}"]'
+          export MCP_EXTERNAL_SMOKE_EXPECTED_VERSION="${version}"
+          export MCP_EXTERNAL_SMOKE_EXPECTED_ROOT='{TEMP_ROOT}'
+          go test ./cmd/mcp-file-tools -run '^TestExternalStdioBinarySmoke$' -count=1 -v
+
   release:
     needs: test
     runs-on: ubuntu-latest
