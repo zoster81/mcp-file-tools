@@ -32,7 +32,11 @@ func TestHandlerAllowsConfiguredDirectoryAliasButRejectsExternalAlias(t *testing
 		t.Fatalf("write through configured directory alias failed: %v", result.Content)
 	}
 
-	canonicalPath := filepath.Join(realRoot, "canonical.txt")
+	allowedDirs := h.GetAllowedDirectories()
+	if len(allowedDirs) != 1 {
+		t.Fatalf("allowed directories = %v, want one resolved root", allowedDirs)
+	}
+	canonicalPath := filepath.Join(allowedDirs[0], "canonical.txt")
 	result, _, err = h.HandleWriteFile(context.Background(), nil, WriteFileInput{
 		Path:    canonicalPath,
 		Content: "canonical",
