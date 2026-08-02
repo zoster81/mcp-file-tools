@@ -121,7 +121,7 @@ The repository pins the release-validation toolchain instead of resolving
 floating `latest` versions during CI:
 
 - actionlint 1.7.12 and ShellCheck 0.11.0 for GitHub Actions workflows;
-- actions/checkout 6.0.2, actions/setup-go 6.4.0, and actions/upload-artifact 7.0.1;
+- actions/checkout 6.0.2, actions/setup-go 7, and actions/upload-artifact 7.0.1;
 - Staticcheck v0.7.0 and govulncheck v1.1.4 for Go analysis;
 - GoReleaser action 7.2.1 with GoReleaser v2.17.0 for release generation;
 - MCP Publisher v1.7.9 for registry validation and publication.
