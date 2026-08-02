@@ -389,6 +389,40 @@ func TestValidatePath_Symlinks(t *testing.T) {
 	}
 }
 
+func TestValidatePathWithAllowedDirectoriesPreservesConfiguredAliasBoundary(t *testing.T) {
+	parent := t.TempDir()
+	realRoot := filepath.Join(parent, "real-root")
+	if err := os.Mkdir(realRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configuredAlias := filepath.Join(parent, "configured-alias")
+	externalAlias := filepath.Join(parent, "external-alias")
+	if err := os.Symlink(realRoot, configuredAlias); err != nil {
+		t.Skipf("directory symlink creation is unavailable: %v", err)
+	}
+	if err := os.Symlink(realRoot, externalAlias); err != nil {
+		t.Skipf("second directory symlink creation is unavailable: %v", err)
+	}
+
+	set, err := NormalizeAllowedDirectorySet([]string{configuredAlias})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowedPath := filepath.Join(configuredAlias, "allowed.txt")
+	validated, err := ValidatePathWithAllowedDirectories(allowedPath, set.Requested, set.Resolved)
+	if err != nil {
+		t.Fatalf("configured alias was rejected: %v", err)
+	}
+	if filepath.Clean(validated) != filepath.Clean(allowedPath) {
+		t.Fatalf("validated missing path = %q, want requested spelling %q", validated, allowedPath)
+	}
+
+	externalPath := filepath.Join(externalAlias, "denied.txt")
+	if _, err := ValidatePathWithAllowedDirectories(externalPath, set.Requested, set.Resolved); !errors.Is(err, ErrPathDenied) {
+		t.Fatalf("external alias error = %v, want ErrPathDenied", err)
+	}
+}
+
 func TestValidatePath_PathTraversal(t *testing.T) {
 	tempDir := t.TempDir()
 	allowedDir := filepath.Join(tempDir, "allowed")

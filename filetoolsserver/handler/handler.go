@@ -16,11 +16,13 @@ const (
 
 // Handler handles all file tool operations
 type Handler struct {
-	config          *config.Config
-	executionPolicy *ExecutionPolicy
-	configuredDirs  []string // immutable process-wide baseline; always allowed
-	allowedDirs     []string
-	mu              sync.RWMutex
+	config                  *config.Config
+	executionPolicy         *ExecutionPolicy
+	configuredRequestedDirs []string // immutable lexical baseline; always allowed
+	configuredDirs          []string // immutable resolved baseline; always allowed
+	allowedRequestedDirs    []string
+	allowedDirs             []string
+	mu                      sync.RWMutex
 }
 
 // Option is a functional option for configuring Handler
@@ -46,14 +48,16 @@ func WithExecutionPolicy(policy ExecutionPolicy) Option {
 // NewHandler creates a new Handler with allowed directories and optional configuration.
 // If no config is provided via WithConfig, default configuration is used.
 func NewHandler(allowedDirs []string, opts ...Option) *Handler {
-	// Keep both the immutable process baseline and active roots in one canonical
-	// representation. This prevents Windows 8.3 aliases from diverging from the
-	// long paths returned by final-path resolution during later validations.
-	configuredDirs := normalizeAllowedDirectories(allowedDirs)
+	// Retain the configured spelling for lexical containment while exposing and
+	// traversing through the resolved representation. This preserves legitimate
+	// directory aliases without allowing an external link to become an entry point.
+	configuredRequestedDirs, configuredDirs := normalizeAllowedDirectorySets(allowedDirs)
 
 	h := &Handler{
-		configuredDirs: configuredDirs,
-		allowedDirs:    append([]string(nil), configuredDirs...),
+		configuredRequestedDirs: configuredRequestedDirs,
+		configuredDirs:          configuredDirs,
+		allowedRequestedDirs:    mergeUniqueDirectories(configuredRequestedDirs, configuredDirs),
+		allowedDirs:             append([]string(nil), configuredDirs...),
 	}
 
 	for _, opt := range opts {
@@ -84,7 +88,9 @@ func (h *Handler) ResolvedAllowedDirs() []string {
 func (h *Handler) UpdateAllowedDirectories(newDirs []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.allowedDirs = normalizeAllowedDirectories(newDirs)
+	requested, resolved := normalizeAllowedDirectorySets(newDirs)
+	h.allowedRequestedDirs = mergeUniqueDirectories(requested, resolved)
+	h.allowedDirs = resolved
 }
 
 // HasConfiguredDirectories reports whether this process started with an
@@ -101,11 +107,50 @@ func (h *Handler) MergeAllowedDirectories(newDirs []string) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	normalizedNewDirs := normalizeAllowedDirectories(newDirs)
-	seen := make(map[string]struct{}, len(h.configuredDirs)+len(normalizedNewDirs))
-	merged := make([]string, 0, len(h.configuredDirs)+len(normalizedNewDirs))
-	for _, dirs := range [][]string{h.configuredDirs, normalizedNewDirs} {
-		for _, dir := range dirs {
+	normalizedRequestedDirs, normalizedNewDirs := normalizeAllowedDirectorySets(newDirs)
+	h.allowedRequestedDirs = mergeUniqueDirectories(
+		h.configuredRequestedDirs,
+		h.configuredDirs,
+		normalizedRequestedDirs,
+		normalizedNewDirs,
+	)
+	h.allowedDirs = mergeUniqueDirectories(h.configuredDirs, normalizedNewDirs)
+
+	result := make([]string, len(h.allowedDirs))
+	copy(result, h.allowedDirs)
+	return result
+}
+
+func normalizeAllowedDirectories(dirs []string) []string {
+	_, resolved := normalizeAllowedDirectorySets(dirs)
+	return resolved
+}
+
+func normalizeAllowedDirectorySets(dirs []string) (requested, resolved []string) {
+	requested = make([]string, 0, len(dirs))
+	resolved = make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		set, err := security.NormalizeAllowedDirectorySet([]string{dir})
+		if err == nil && len(set.Requested) == 1 && len(set.Resolved) == 1 {
+			requested = append(requested, set.Requested[0])
+			resolved = append(resolved, set.Resolved[0])
+			continue
+		}
+		requested = append(requested, dir)
+		resolved = append(resolved, dir)
+	}
+	return requested, resolved
+}
+
+func mergeUniqueDirectories(groups ...[]string) []string {
+	total := 0
+	for _, group := range groups {
+		total += len(group)
+	}
+	seen := make(map[string]struct{}, total)
+	merged := make([]string, 0, total)
+	for _, group := range groups {
+		for _, dir := range group {
 			if _, ok := seen[dir]; ok {
 				continue
 			}
@@ -113,31 +158,14 @@ func (h *Handler) MergeAllowedDirectories(newDirs []string) []string {
 			merged = append(merged, dir)
 		}
 	}
-	h.allowedDirs = merged
-
-	result := make([]string, len(merged))
-	copy(result, merged)
-	return result
-}
-
-func normalizeAllowedDirectories(dirs []string) []string {
-	normalized := make([]string, 0, len(dirs))
-	for _, dir := range dirs {
-		current, err := security.NormalizeAllowedDirs([]string{dir})
-		if err == nil && len(current) == 1 {
-			normalized = append(normalized, current[0])
-			continue
-		}
-		normalized = append(normalized, dir)
-	}
-	return normalized
+	return merged
 }
 
 // validatePath validates a path against allowed directories
 func (h *Handler) validatePath(path string) (string, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return security.ValidatePath(path, h.allowedDirs)
+	return security.ValidatePathWithAllowedDirectories(path, h.allowedRequestedDirs, h.allowedDirs)
 }
 
 // getFileMode returns the file's current permissions, or DefaultFileMode if file doesn't exist.

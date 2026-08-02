@@ -1,6 +1,8 @@
 package filetoolsserver
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -115,9 +117,10 @@ func TestFileURIToPath(t *testing.T) {
 		name string
 		uri  string
 		want string
-		skip string // GOOS to skip on
+		only string
+		skip string
 	}{
-		{name: "Windows drive letter", uri: "file:///C:/Users/test", want: "C:/Users/test", skip: "linux"},
+		{name: "Windows drive letter", uri: "file:///C:/Users/test", want: "C:/Users/test", only: "windows"},
 		{name: "Unix absolute path", uri: "file:///home/user/project", want: "/home/user/project", skip: "windows"},
 		{name: "not a file URI", uri: "/some/path", want: "/some/path"},
 		{name: "empty string", uri: "", want: ""},
@@ -125,6 +128,9 @@ func TestFileURIToPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.only != "" && tt.only != runtime.GOOS {
+				t.Skipf("requires %s", tt.only)
+			}
 			if tt.skip == runtime.GOOS {
 				t.Skipf("skipping on %s", runtime.GOOS)
 			}
@@ -133,6 +139,31 @@ func TestFileURIToPath(t *testing.T) {
 				t.Errorf("fileURIToPath(%q) = %q, want %q", tt.uri, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestUpdateAllowedDirectoriesFromRootsPreservesDirectoryAlias(t *testing.T) {
+	parent := t.TempDir()
+	realRoot := filepath.Join(parent, "real-root")
+	if err := os.Mkdir(realRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(parent, "root-alias")
+	if err := os.Symlink(realRoot, alias); err != nil {
+		t.Skipf("directory symlink creation is unavailable: %v", err)
+	}
+
+	h := handler.NewHandler(nil)
+	updateAllowedDirectoriesFromRoots(h, []*mcp.Root{{URI: "file://" + filepath.ToSlash(alias)}})
+	result, _, err := h.HandleWriteFile(context.Background(), nil, handler.WriteFileInput{
+		Path:    filepath.Join(alias, "dynamic-root.txt"),
+		Content: "dynamic",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("write through dynamic root alias failed: %v", result.Content)
 	}
 }
 

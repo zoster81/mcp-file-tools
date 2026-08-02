@@ -103,7 +103,10 @@ func updateAllowedDirectoriesFromRoots(h *handler.Handler, roots []*mcp.Root) {
 		}
 
 		if len(normalized) > 0 {
-			validatedDirs = append(validatedDirs, normalized[0])
+			// Keep the client-provided absolute spelling so lexical containment
+			// remains valid for platform aliases such as /var -> /private/var.
+			// Handler normalization separately retains the resolved destination.
+			validatedDirs = append(validatedDirs, rootPath)
 		}
 	}
 

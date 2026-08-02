@@ -14,18 +14,22 @@ func TestHandleCopyFile_Success(t *testing.T) {
 
 	src := filepath.Join(tempDir, "source.txt")
 	dst := filepath.Join(tempDir, "dest.txt")
-	os.WriteFile(src, []byte("content"), 0644)
+	if err := os.WriteFile(src, []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Set a specific mod time on source to verify preservation
 	fixedTime := time.Date(2020, 6, 15, 12, 0, 0, 0, time.UTC)
-	os.Chtimes(src, fixedTime, fixedTime)
+	if err := os.Chtimes(src, fixedTime, fixedTime); err != nil {
+		t.Fatal(err)
+	}
 
 	result, _, err := h.HandleCopyFile(context.Background(), nil, CopyFileInput{Source: src, Destination: dst})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.IsError {
-		t.Error("expected success")
+		t.Fatalf("expected success, got %v", result.Content)
 	}
 
 	if _, err := os.Stat(src); err != nil {
@@ -34,14 +38,17 @@ func TestHandleCopyFile_Success(t *testing.T) {
 
 	content, err := os.ReadFile(dst)
 	if err != nil {
-		t.Error("destination should exist")
+		t.Fatalf("destination should exist: %v", err)
 	}
 	if string(content) != "content" {
 		t.Errorf("wrong content: %s", content)
 	}
 
 	// Verify mod time is preserved
-	dstInfo, _ := os.Stat(dst)
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("stat destination: %v", err)
+	}
 	if !dstInfo.ModTime().Equal(fixedTime) {
 		t.Errorf("mod time not preserved: got %v, want %v", dstInfo.ModTime(), fixedTime)
 	}

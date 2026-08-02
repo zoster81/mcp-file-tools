@@ -10,6 +10,15 @@ import (
 	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
+// AllowedDirectorySet keeps both the requested spelling of each configured
+// root and its fully resolved destination. Validation requires containment in
+// both views so legitimate aliases remain usable without allowing an external
+// symlink or junction to become an alternate entry point.
+type AllowedDirectorySet struct {
+	Requested []string
+	Resolved  []string
+}
+
 func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) bool {
 	if absolutePath == "" || len(allowedDirs) == 0 {
 		return false
@@ -47,12 +56,18 @@ func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) b
 }
 
 // ValidatePath resolves a path and ensures it's within allowed directories.
-func ValidatePath(requestedPath string, allowedDirs []string) (validated string, err error) {
+func ValidatePath(requestedPath string, allowedDirs []string) (string, error) {
+	return ValidatePathWithAllowedDirectories(requestedPath, allowedDirs, ResolveAllowedDirs(allowedDirs))
+}
+
+// ValidatePathWithAllowedDirectories validates the requested spelling against
+// requestedAllowedDirs and the resolved destination against resolvedAllowedDirs.
+func ValidatePathWithAllowedDirectories(requestedPath string, requestedAllowedDirs, resolvedAllowedDirs []string) (validated string, err error) {
 	defer func() {
 		err = operation.WrapFilesystem("validate_path", requestedPath, err)
 	}()
 
-	if len(allowedDirs) == 0 {
+	if len(requestedAllowedDirs) == 0 {
 		return "", ErrNoAllowedDirs
 	}
 
@@ -71,16 +86,8 @@ func ValidatePath(requestedPath string, allowedDirs []string) (validated string,
 
 	normalized := normalizePath(absolute)
 
-	if !IsPathWithinAllowedDirectories(normalized, allowedDirs) {
+	if !IsPathWithinAllowedDirectories(normalized, requestedAllowedDirs) {
 		return "", fmt.Errorf("%w: %s", ErrPathDenied, absolute)
-	}
-
-	resolvedAllowedDirs := make([]string, 0, len(allowedDirs))
-	for _, dir := range allowedDirs {
-		resolvedDir, _, err := resolvePathAllowMissing(dir)
-		if err == nil {
-			resolvedAllowedDirs = append(resolvedAllowedDirs, normalizePath(resolvedDir))
-		}
 	}
 
 	resolvedPath, exists, err := resolvePathAllowMissing(absolute)
@@ -218,35 +225,47 @@ func ExpandHome(path string) string {
 	return path
 }
 
-func NormalizeAllowedDirs(dirs []string) (normalized []string, err error) {
+func NormalizeAllowedDirs(dirs []string) ([]string, error) {
+	set, err := NormalizeAllowedDirectorySet(dirs)
+	if err != nil {
+		return nil, err
+	}
+	return set.Resolved, nil
+}
+
+// NormalizeAllowedDirectorySet validates configured roots while retaining both
+// their normalized requested spelling and fully resolved destination.
+func NormalizeAllowedDirectorySet(dirs []string) (set AllowedDirectorySet, err error) {
 	defer func() {
 		err = operation.WrapFilesystem("normalize_allowed_directories", "", err)
 	}()
 
-	normalized = make([]string, 0, len(dirs))
+	set.Requested = make([]string, 0, len(dirs))
+	set.Resolved = make([]string, 0, len(dirs))
 	for _, dir := range dirs {
 		expanded := ExpandHome(dir)
 
 		absolute, err := filepath.Abs(expanded)
 		if err != nil {
-			return nil, fmt.Errorf("invalid directory %s: %w", dir, err)
+			return AllowedDirectorySet{}, fmt.Errorf("invalid directory %s: %w", dir, err)
 		}
 
 		resolved, exists, err := resolvePathAllowMissing(absolute)
 		if err != nil {
-			return nil, fmt.Errorf("cannot resolve directory %s: %w", dir, err)
+			return AllowedDirectorySet{}, fmt.Errorf("cannot resolve directory %s: %w", dir, err)
 		}
 		if exists {
 			info, err := os.Stat(resolved)
 			if err != nil {
-				return nil, fmt.Errorf("cannot stat directory %s: %w", resolved, err)
+				return AllowedDirectorySet{}, fmt.Errorf("cannot stat directory %s: %w", resolved, err)
 			}
 			if !info.IsDir() {
-				return nil, fmt.Errorf("%w: %s", ErrNotDirectory, resolved)
+				return AllowedDirectorySet{}, fmt.Errorf("%w: %s", ErrNotDirectory, resolved)
 			}
 		}
 
-		normalized = append(normalized, normalizePath(resolved))
+		set.Requested = append(set.Requested, normalizePath(absolute))
+		set.Resolved = append(set.Resolved, normalizePath(resolved))
 	}
-	return normalized, nil
+	return set, nil
 }
