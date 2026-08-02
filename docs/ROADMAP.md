@@ -29,7 +29,7 @@ Current milestone status and completion gates live in this document. Reusable en
 | R11 | COMPLETE | Separate transport bootstrap from the shared MCP server and tool policies. |
 | R12 | COMPLETE | Approve the Streamable HTTP threat model and security design. |
 | R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
-| R14 | ACTIVE | Publish and verify 2.0.0, then complete operator deployment and controlled rollback. |
+| R14 | ACTIVE | Complete operator deployment and controlled rollback after the verified 2.0.0 publication. |
 
 ---
 
@@ -308,7 +308,6 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 
 ## Remaining cleanup items
 
-- create the fork-owned `v2.0.0` tag, validate the published assets and checksums, publish the Registry entry, and verify signatures where available;
 - deploy the `2.0.0` runtime and complete the controlled active rollback test;
 
 ## Checklist
@@ -334,9 +333,15 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 - [x] Finish the 1.8-to-2.0 migration guide.
 - [x] Remove the optional Claude Code downloader plugin and marketplace metadata rather than carry a second network installer and cache trust boundary into 2.0.
 - [x] Run the complete release checklist in [PUBLISHING.md](PUBLISHING.md).
-- [ ] Create and push `v2.0.0` only after all prior gates pass.
-- [ ] Verify release binaries, archives, checksums, signatures where available, and MCP Registry publication.
+- [x] Create and push `v2.0.0` only after all prior gates pass.
+- [x] Verify release binaries, archives, checksums, signatures where available, and MCP Registry publication.
 - [ ] Deploy the 2.0.0 runtime, execute smoke and rollback tests, and record the final handoff.
+
+## Publication record
+
+Published on 2026-08-02. Fork tag `v2.0.0` resolves to commit `1530fbb1eab529a1ef7236b4b3df8ab84a9a0d1d`. The tag workflow passed the complete Linux, Windows, and macOS test matrix, produced six raw binaries, six deterministic platform archives, and `checksums.txt`, and published `io.github.zoster81/mcp-file-tools` version `2.0.0` to the MCP Registry through GitHub OIDC. All 12 published binary/archive checksums were independently verified against the release checksum file. No separate signature assets were emitted by the configured release pipeline.
+
+Operator deployment remains pending: the private launcher references the verified Windows amd64 2.0.0 asset, but the active stdio tunnel and native HTTP processes have not been restarted and still use the prior internal binary.
 
 ## Completion gate
 

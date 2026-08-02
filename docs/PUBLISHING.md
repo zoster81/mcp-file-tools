@@ -13,12 +13,13 @@ Git remote.
 - Primary validated OpenAI Secure MCP Tunnel deployment: stdio; native Streamable HTTP is a supported 2.0 transport with direct end-to-end coverage and the mandatory controls in [HTTP_SECURITY.md](HTTP_SECURITY.md)
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
 - Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), transport-independent server construction plus lifecycle-aware stdio startup (R11), the approved Streamable HTTP threat model and secure defaults (R12), and native stateful Streamable HTTP with security and equivalence coverage (R13)
-- Active milestone: R14 publication, published-asset verification, operator deployment, and controlled rollback for 2.0.0
+- Active milestone: R14 operator deployment and controlled rollback for the published 2.0.0 release
 - R14 container baseline: Go 1.26.5 builder, Alpine 3.24.1 runtime, static binary, UID/GID 10001, explicit `/data` root, temporary state under `/tmp`, and `SIGTERM` shutdown
 - R14 CI baseline: the GitHub Test workflow passes on Linux, Windows, and macOS, including the complete race detector and native binary MCP smoke; the Build workflow passes all six supported OS/architecture targets plus the hardened Ubuntu container stdio/direct-TLS HTTP gate
 - R14 local container baseline: the Linux/amd64 image builds from the pinned Dockerfile and passes UID/GID 10001, read-only root filesystem, dropped-capability, `no-new-privileges`, bounded-tmpfs, SDK-driven stdio MCP, direct-TLS HTTP, `401`/`403`/`405`/no-CORS, readiness, and clean `SIGTERM` runtime checks under rootless Podman
 - R14 GoReleaser baseline: archive entry owner, group, mode, and modification time are normalized to commit-derived values; two independent snapshots produce identical checksums for all six raw binaries and six platform archives
-- R14 Registry baseline: internal manifests generated from both the direct six-target checksums and the reproducible GoReleaser snapshot pass `mcp-publisher 1.7.9 validate` without login or publication
+- R14 release baseline: fork tag `v2.0.0` points to commit `1530fbb1eab529a1ef7236b4b3df8ab84a9a0d1d`; the release workflow passed on Linux, Windows, and macOS, published all six raw binaries, six archives, and `checksums.txt`, and completed MCP Registry publication
+- R14 Registry baseline: the published `io.github.zoster81/mcp-file-tools` version is `2.0.0`; the release-specific manifest contains 6 packages and 23 tools and was published through GitHub OIDC with MCP Publisher 1.7.9
 - R14 rollback baseline: the known-good R10 binary passes exact hash/version and 23-tool stdio checks, and the private launcher filename update is byte-identically reversible; an active rollback still requires a controlled restart
 - Authoritative plan: [ROADMAP.md](ROADMAP.md), HTTP security design in [HTTP_SECURITY.md](HTTP_SECURITY.md), migration guide in [MIGRATION_2.0.md](MIGRATION_2.0.md), and reusable gates in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md)
 - Release policy: semantic tags must match a dated changelog entry; `v2.0.0` is the first public 2.x release
@@ -100,7 +101,7 @@ Real credentials belong in private copies outside the Git checkout.
 
 `.github/workflows/publish-registry.yml` runs only in `zoster81/mcp-file-tools`. After a fork release is published, it downloads that release's `checksums.txt`; `scripts/generate-server-json.js` injects the catalog's Registry-facing name/description projection, exact version, fork download URLs, and SHA-256 values into a temporary `server.json`. The generator rejects a duplicated template catalog, invalid or duplicate catalog tools, and missing or unexpected MCP binaries before GitHub OIDC authentication.
 
-The target registry identity is `io.github.zoster81/mcp-file-tools`. Internal prerelease manifests generated from the verified direct-build checksum set and the reproducible GoReleaser snapshot checksum set both passed `mcp-publisher 1.7.9 validate` without authentication or publication. Final Registry validation remains dependent on a real fork release with all six platform binaries and `checksums.txt`; inherited tags alone are insufficient.
+The registry identity is `io.github.zoster81/mcp-file-tools`. Version `2.0.0` was generated from the fork-owned release's `checksums.txt`, validated with MCP Publisher 1.7.9, authenticated through GitHub OIDC, and published with all six platform packages and the authoritative 23-tool projection. The inherited upstream `v2.0.0` tag was not used; the fork-owned tag resolves to the release commit recorded above.
 
 ## Upstream integrations
 
