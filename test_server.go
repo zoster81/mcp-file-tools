@@ -80,6 +80,20 @@ func main() {
 	r11, o11, _ := h.HandleFingerprintPaths(ctx, nil, handler.FingerprintPathsInput{Paths: []string{tempDir}, IncludeEntries: true})
 	check("fingerprint_paths", !r11.IsError && len(o11.Fingerprint) == 64 && o11.FileCount >= 3 && o11.DirectoryCount >= 2 && len(o11.Entries) > 0)
 
+	rPackageFingerprint, oPackageFingerprint, _ := h.HandleFingerprintPaths(ctx, nil, handler.FingerprintPathsInput{Paths: []string{testFile}})
+	rPackage, oPackage, _ := h.HandlePatchPackage(ctx, nil, handler.PatchPackageInput{
+		Action: "dryRun",
+		Manifest: handler.PatchPackageManifest{
+			FormatVersion: handler.PatchPackageFormatV1, FingerprintAlgorithm: "sha256", FingerprintMode: "content-v1",
+			Targets: []handler.PatchPackageTarget{{
+				Path: testFile, ExpectedFingerprint: oPackageFingerprint.Fingerprint,
+				Edits: []handler.EditOperation{{OldText: "Hello!", NewText: "Hello package!"}},
+			}},
+		},
+	})
+	packageData, _ := os.ReadFile(testFile)
+	check("patch_package (dryRun)", !rPackageFingerprint.IsError && !rPackage.IsError && oPackage.TargetCount == 1 && oPackage.ChangedCount == 1 && string(packageData) == "Hello!")
+
 	rPreview, oPreview, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{
 		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello!", NewText: "Hello preview!"}},
 	})

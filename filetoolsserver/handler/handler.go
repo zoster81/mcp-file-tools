@@ -18,15 +18,16 @@ const (
 
 // Handler handles all file tool operations
 type Handler struct {
-	config                  *config.Config
-	executionPolicy         *ExecutionPolicy
-	configuredRequestedDirs []string // immutable lexical baseline; always allowed
-	configuredDirs          []string // immutable resolved baseline; always allowed
-	allowedRequestedDirs    []string
-	allowedDirs             []string
-	editPreviews            *editPreviewStore
-	replaceFile             func(string, []byte, filesystem.ReplaceOptions) error
-	mu                      sync.RWMutex
+	config                   *config.Config
+	executionPolicy          *ExecutionPolicy
+	configuredRequestedDirs  []string // immutable lexical baseline; always allowed
+	configuredDirs           []string // immutable resolved baseline; always allowed
+	allowedRequestedDirs     []string
+	allowedDirs              []string
+	editPreviews             *editPreviewStore
+	replaceFile              func(string, []byte, filesystem.ReplaceOptions) error
+	patchPackageAfterPrepare func() error
+	mu                       sync.RWMutex
 }
 
 // Option is a functional option for configuring Handler

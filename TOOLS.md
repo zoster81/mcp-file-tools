@@ -1,6 +1,6 @@
 # Tools Reference
 
-The authoritative 24-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
+The authoritative 25-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
 
 ## Guided Prompts
 
@@ -225,6 +225,94 @@ The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `
 ```
 
 A successful apply omits `previewId` so the consumed capability is not re-emitted. `applied: true` means the prepared action completed successfully; `changed` distinguishes a committed byte change from a successful logical no-op. `readOnlyCleared` appears only when the approved commit cleared that flag.
+
+### patch_package
+
+Validate or dry-run a strict versioned package of coordinated edits to existing regular files. The initial R16 implementation supports `inspect` and `dryRun` only; neither action writes files, stages commits, creates backups, or returns a rollback point. Package `apply` and `verify` remain pending.
+
+The input and every nested manifest object reject unknown JSON fields. `formatVersion` must be `patch-package-v1`, `fingerprintAlgorithm` must be `sha256`, and `fingerprintMode` must be `content-v1`. Targets remain in manifest order and must use unique normalized paths that resolve to distinct filesystem objects; duplicate spellings, symlink aliases, junction aliases, and hard links are rejected.
+
+Each target declares:
+
+- one existing regular-file `path` inside an allowed root;
+- the exact current `expectedFingerprint` from `fingerprint_paths` or another `content-v1` result;
+- optional `expectedResultFingerprint` for the prepared bytes;
+- exactly one of `edits` or one strict single-file unified `patch`;
+- optional `encoding` and `forceWritable`, with the same semantics as `edit_file`.
+
+`inspect` validates the manifest, limits, paths, file types, aliases, edit shapes, fuzzy thresholds, and patch structure without reading target contents. `dryRun` additionally retains one bounded stable file-identity reference per target, obtains a coherent package-wide pre-state, verifies every declared precondition, prepares every result through the shared encoding/BOM/line-ending-aware edit pipeline, and performs final identity plus package-wide fingerprint verification before success. It returns ordered per-target diffs and metadata plus `patch-package-aggregate-v1` before/after fingerprints. Any stale target, changed target, ambiguous edit, unrepresentable output, alias, cancellation, or incomplete verification fails the complete dry run; no target is modified.
+
+**Limits:**
+
+- `MCP_MAX_BATCH_FILES` bounds target count;
+- `MCP_MAX_FILE_BYTES` bounds every source, patch, and prepared file; each target accepts at most 1000 edit operations;
+- `MCP_MAX_PATCH_PACKAGE_BYTES` bounds the semantic JSON manifest (default `16777216`);
+- `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES` bounds aggregate retained prepared bytes, diffs, paths, and metadata (default `67108864`);
+- `MCP_MAX_OUTPUT_BYTES` bounds combined structured and text output.
+
+**Dry-run example:**
+
+```json
+{
+  "action": "dryRun",
+  "manifest": {
+    "formatVersion": "patch-package-v1",
+    "label": "Rename two helpers",
+    "fingerprintAlgorithm": "sha256",
+    "fingerprintMode": "content-v1",
+    "targets": [
+      {
+        "path": "/project/a.go",
+        "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "edits": [
+          {
+            "oldText": "func oldA()",
+            "newText": "func newA()"
+          }
+        ]
+      },
+      {
+        "path": "/project/b.go",
+        "expectedFingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "patch": "--- a/b.go\n+++ b/b.go\n@@ -1 +1 @@\n-old\n+new\n"
+      }
+    ]
+  }
+}
+```
+
+**Response shape:**
+
+```json
+{
+  "action": "dryRun",
+  "formatVersion": "patch-package-v1",
+  "label": "Rename two helpers",
+  "fingerprintAlgorithm": "sha256",
+  "fingerprintMode": "content-v1",
+  "aggregateMode": "patch-package-aggregate-v1",
+  "aggregateBeforeFingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "aggregateAfterFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "targetCount": 2,
+  "changedCount": 2,
+  "unchangedCount": 0,
+  "results": [
+    {
+      "index": 0,
+      "path": "/project/a.go",
+      "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actualFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resultFingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "diff": "...",
+      "encoding": "utf-8",
+      "lineEndingStyle": "lf",
+      "changed": true
+    }
+  ]
+}
+```
+
+The aggregate fingerprint binds manifest order, Unicode-NFC slash-normalized declared paths, and the ordered per-target `content-v1` fingerprints. It is package evidence, not a claim that a future multi-file apply can be atomic.
 
 ## Directory Operations
 

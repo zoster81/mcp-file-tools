@@ -377,7 +377,7 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s list tools: %v", name, err)
 		}
-		if len(tools.Tools) != 24 {
+		if len(tools.Tools) != 25 {
 			t.Fatalf("%s tool count = %d", name, len(tools.Tools))
 		}
 		serializedTools := marshalJSON(t, tools.Tools)
@@ -499,6 +499,52 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		} else if serializedFingerprint != expectedFingerprint {
 			t.Fatalf("%s fingerprint result diverged: %s != %s", name, serializedFingerprint, expectedFingerprint)
 		}
+	}
+	var fingerprintOutput struct {
+		Fingerprint string `json:"fingerprint"`
+	}
+	if err := json.Unmarshal([]byte(expectedFingerprint), &fingerprintOutput); err != nil {
+		t.Fatal(err)
+	}
+	packageOriginal, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expectedPatchPackage string
+	for name, session := range map[string]*mcp.ClientSession{"http": first, "direct": direct} {
+		packageResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "patch_package",
+			Arguments: map[string]any{
+				"action": "dryRun",
+				"manifest": map[string]any{
+					"formatVersion":        "patch-package-v1",
+					"fingerprintAlgorithm": "sha256",
+					"fingerprintMode":      "content-v1",
+					"targets": []map[string]any{{
+						"path":                path,
+						"expectedFingerprint": fingerprintOutput.Fingerprint,
+						"encoding":            "cp1251",
+						"edits":               []map[string]any{{"oldText": "Привет", "newText": "Здравствуйте"}},
+					}},
+				},
+			},
+		})
+		if err != nil || packageResult.IsError {
+			t.Fatalf("%s patch package result = %#v err=%v", name, packageResult, err)
+		}
+		serializedPackage := marshalJSON(t, packageResult.StructuredContent)
+		if expectedPatchPackage == "" {
+			expectedPatchPackage = serializedPackage
+		} else if serializedPackage != expectedPatchPackage {
+			t.Fatalf("%s patch package result diverged: %s != %s", name, serializedPackage, expectedPatchPackage)
+		}
+	}
+	readAfterPackage, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(readAfterPackage, packageOriginal) {
+		t.Fatal("patch package dryRun changed the CP1251 fixture")
 	}
 
 	previewPath := filepath.Join(root, "preview.txt")

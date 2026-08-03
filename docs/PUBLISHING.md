@@ -8,14 +8,14 @@ Git remote.
 ## Current state
 
 - GitHub repository: `https://github.com/zoster81/mcp-file-tools`
-- Supported transports: stdio and native stateful Streamable HTTP, constructed from one shared server and 24-tool catalog
+- Supported transports: stdio and native stateful Streamable HTTP, constructed from one shared server and 25-tool unreleased source catalog
 - Validated stdio deployment: client-managed local process and ChatGPT Web through the OpenAI Secure MCP Tunnel
 - Validated HTTP deployment: persistent authenticated loopback service; non-loopback deployments require the TLS or trusted-proxy controls in [HTTP_SECURITY.md](HTTP_SECURITY.md)
 - Fork update checker: `zoster81/mcp-file-tools` GitHub Releases
 - Completed foundations: shared text-document core (R1), secure filesystem walker (R2), durable atomic mutation layer (R3), typed operation errors (R4), bounded ordered concurrency (R5), shared execution preparation plus authoritative tool metadata (R6), conservative extension-independent encoding detection (R8), bounded-memory streaming (R9), public API compatibility cleanup with a 23-tool catalog (R10), transport-independent server construction plus lifecycle-aware stdio startup (R11), the approved Streamable HTTP threat model and secure defaults (R12), and native stateful Streamable HTTP with security and equivalence coverage (R13)
 - Completed milestone: R14 hardening, 2.0.0 publication, dual-transport deployment, active rollback, restoration, and final handoff
 - Completed milestone: R15 attributed agent-ergonomics and project-aware workflow improvements, preserving the existing 23-tool catalog and adding three transport-independent prompts; the implementation remains unreleased and undeployed
-- Active milestone: R16 verified change workflows; deterministic `fingerprint_paths` and bounded one-shot `edit_file` preview/apply are implemented in the unreleased 24-tool source catalog without changing the published 2.0.0 baseline
+- Active milestone: R16 verified change workflows; deterministic `fingerprint_paths`, bounded one-shot `edit_file` preview/apply, and strict `patch_package` inspect/dry-run are implemented in the unreleased 25-tool source catalog without changing the published 2.0.0 baseline
 - R14 container baseline: Go 1.26.5 builder, Alpine 3.24.1 runtime, static binary, UID/GID 10001, explicit `/data` root, temporary state under `/tmp`, and `SIGTERM` shutdown
 - R14 CI baseline: the GitHub Test workflow passes on Linux, Windows, and macOS, including the complete race detector and native binary MCP smoke; the Build workflow passes all six supported OS/architecture targets plus the hardened Ubuntu container stdio/direct-TLS HTTP gate
 - R14 local container baseline: the Linux/amd64 image builds from the pinned Dockerfile and passes UID/GID 10001, read-only root filesystem, dropped-capability, `no-new-privileges`, bounded-tmpfs, SDK-driven stdio MCP, direct-TLS HTTP, `401`/`403`/`405`/no-CORS, readiness, and clean `SIGTERM` runtime checks under rootless Podman

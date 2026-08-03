@@ -72,6 +72,21 @@ func FingerprintRegularFileData(data []byte) string {
 	return fingerprintRegularFileAggregate(int64(len(data)), sha256.Sum256(data))
 }
 
+// FingerprintRegularFileContentDigest converts a regular file's byte length and
+// raw SHA-256 content digest into the same content-v1 fingerprint used elsewhere.
+func FingerprintRegularFileContentDigest(size int64, contentSHA256 string) (string, error) {
+	if size < 0 {
+		return "", operation.New(operation.KindInvalidInput, "fingerprint size must not be negative")
+	}
+	decoded, err := hex.DecodeString(contentSHA256)
+	if err != nil || len(decoded) != sha256.Size {
+		return "", operation.New(operation.KindInvalidInput, "content digest must be 64 hexadecimal characters")
+	}
+	var digest [sha256.Size]byte
+	copy(digest[:], decoded)
+	return fingerprintRegularFileAggregate(size, digest), nil
+}
+
 func fingerprintRegularFileAggregate(size int64, digest [sha256.Size]byte) string {
 	aggregate := sha256.New()
 	writeFingerprintHeader(aggregate, 1, true)

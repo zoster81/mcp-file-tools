@@ -11,7 +11,7 @@ AI clients see `Настройки` — not `????` or `Íàñòðîéêè`.
 
 Secure, encoding-aware MCP filesystem service with two first-class transports: local **stdio** and native stateful **MCP Streamable HTTP**. It detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
 
-- **24 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
+- **25 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
 - **Agent-oriented repository workflows** — optional read line numbers, paged/multi-mode grep, `.gitignore` traversal, bounded sorting, batch conversion previews, approval-bound one-shot edits, strict patches, and ambiguity-safe fuzzy matching.
 - **24 registered encodings** — Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030, and other legacy text formats.
 - **Fail-closed HTTP service** — bearer authentication on every MCP request, loopback defaults, exact Host/Origin checks, bounded sessions and request resources, no CORS, and explicit TLS/proxy requirements for non-loopback exposure.
@@ -29,13 +29,13 @@ This repository began as a deployment-oriented fork for ChatGPT Web, but version
 | stdio | Local MCP clients and secure tunnel bridges | Client configuration and operating-system process boundary | Startup directories are authoritative; dynamic roots are a compatibility fallback only when startup roots are empty |
 | stateful Streamable HTTP | Persistent localhost services, containers, trusted proxies, and explicitly secured remote services | Bearer token on every MCP request; loopback by default; TLS or a trusted proxy boundary for non-loopback listeners | Startup directories are immutable and shared by every session; HTTP client roots are disabled |
 
-Both transports use the same `BuildServer` path and expose the same 24 tools, 3 prompts, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
+Both transports use the same `BuildServer` path and expose the same 25 tools, 3 prompts, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
 
 The OpenAI Secure MCP Tunnel remains a supported stdio deployment option, not the identity or only use case of the project. The fork does not require Claude Code, Codex, ChatGPT, or another specific MCP host. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; any compatible client can invoke the released binary directly or connect to its HTTP endpoint.
 
 ### Process-wide directory and session model
 
-Allowed directories are a **process-wide authorization boundary**. Every MCP connection or future HTTP session attached to one server process sees the same configured directory set and the same 24 tools, limits, execution flags, and error behavior. A session represents an independent protocol connection with its own requests, cancellation, and lifecycle; it is not a per-agent filesystem role or sandbox.
+Allowed directories are a **process-wide authorization boundary**. Every MCP connection or future HTTP session attached to one server process sees the same configured directory set and the same 25 tools, limits, execution flags, and error behavior. A session represents an independent protocol connection with its own requests, cancellation, and lifecycle; it is not a per-agent filesystem role or sandbox.
 
 This deliberately supports deployments where several agents work on different projects under one allowed drive or workspace, read shared documentation or libraries, and follow prompt-level rules about where each agent may write. The server does not enforce those per-agent read/write conventions. When technical isolation is required, run separate server processes with narrower allowed directories and, for concurrent Git work, separate checkouts or worktrees.
 
@@ -57,17 +57,18 @@ The semantic-tag release workflow validates each release tag against a dated cha
 
 R15 is implemented and verified but remains unreleased and undeployed. It adds backward-compatible optional fields to the existing 23-tool catalog plus three transport-independent prompts: `audit_encodings`, `fix_mojibake`, and `migrate_to_utf8`. Recursive read/search workflows respect nested `.gitignore` rules by default, while mutation additions retain the existing full-document size limits, encoding/BOM-aware pipeline, durable staging, and concurrent-change checks.
 
-R16 phases 1 and 2 are implemented in source. The read-only `fingerprint_paths` tool brings the current catalog to 24 tools with deterministic streamed SHA-256 state evidence. `edit_file` now also supports bounded one-shot `preview`/`apply`: a preview retains the exact prepared bytes in a process-local expiring cache, returns pre/post fingerprints and a 256-bit capability, and consumes that capability on every apply attempt. Direct editing remains the default when `action` is omitted.
+R16 phases 1–3 are implemented in source. `fingerprint_paths` provides deterministic streamed SHA-256 state evidence, `edit_file` adds bounded one-shot `preview`/`apply`, and the new `patch_package` tool brings the current catalog to 25 tools with strict `patch-package-v1` `inspect` and `dryRun` workflows. A package validates a bounded ordered set of existing regular files, rejects aliases, checks declared content fingerprints, prepares encoding/BOM/line-ending-preserving results, and returns per-target diffs plus aggregate pre/post fingerprints without writing or creating backups. Package apply and verify remain pending.
 
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
 ## What It Does
 
-Provides 24 tools for file operations, encoding conversion, state verification, update checks, and optional local execution, plus 3 guided prompts:
+Provides 25 tools for file operations, encoding conversion, state verification, update checks, and optional local execution, plus 3 guided prompts:
 - [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line/output memory and optional absolute line numbers
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
 - [`edit_file`](TOOLS.md#edit_file) - Direct edits or bounded one-shot preview/apply with exact/flexible/fuzzy operations and strict unified patches
+- [`patch_package`](TOOLS.md#patch_package) - Inspect or dry-run bounded declared multi-file edits with exact fingerprints and aggregate evidence
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with filtering and deterministic name/mtime/size sorting
@@ -120,6 +121,7 @@ This repository has evolved from its original upstream codebase. Compared with t
 - a deterministic, cancellation-aware secure walker shared by `tree`, `search_files`, `grep_text_files`, and `fingerprint_paths`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
 - a bounded process-local edit preview cache with 256-bit one-shot capabilities, exact prepared bytes, target/result fingerprints, deterministic expiry/eviction, stable file-identity checks, replay prevention, and no persistent backup side effect;
+- a strict `patch-package-v1` inspect/dry-run workflow for bounded ordered existing-file edits, with unknown-field rejection, alias and hard-link detection, shared encoding-aware preparation, coherent pre/post fingerprints, and no mutation or backup side effect;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
 - a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing;
@@ -391,7 +393,9 @@ The server can be configured via environment variables:
 | `MCP_MAX_EDIT_PREVIEWS` | Maximum live one-shot `edit_file` previews retained by one server process. | `128` |
 | `MCP_MAX_EDIT_PREVIEW_BYTES` | Aggregate dynamic bytes retained by live edit previews; independent of normal result output. | `67108864` |
 | `MCP_EDIT_PREVIEW_TTL_SECONDS` | Lifetime of one edit preview before lazy expiration and handle cleanup. | `900` |
-| `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, fingerprint details, edit responses, and inconsistent-line output budget. | `67108864` |
+| `MCP_MAX_PATCH_PACKAGE_BYTES` | Maximum encoded semantic size of one `patch-package-v1` manifest. | `16777216` |
+| `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES` | Aggregate retained prepared bytes, diffs, paths, and metadata during one package dry run. | `67108864` |
+| `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, fingerprint details, edit/package responses, and inconsistent-line output budget. | `67108864` |
 | `MCP_MAX_SESSIONS` | Maximum live native Streamable HTTP sessions. | `128` |
 | `MCP_MEMORY_THRESHOLD` | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`; specific variables take precedence. | unset |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |

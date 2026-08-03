@@ -42,6 +42,12 @@ func TestLoad_DefaultLimits(t *testing.T) {
 	if cfg.Limits.EditPreviewTTLSeconds != DefaultEditPreviewTTLSeconds {
 		t.Fatalf("EditPreviewTTLSeconds = %d, want %d", cfg.Limits.EditPreviewTTLSeconds, DefaultEditPreviewTTLSeconds)
 	}
+	if cfg.Limits.MaxPatchPackageBytes != DefaultMaxPatchPackageBytes {
+		t.Fatalf("MaxPatchPackageBytes = %d, want %d", cfg.Limits.MaxPatchPackageBytes, DefaultMaxPatchPackageBytes)
+	}
+	if cfg.Limits.MaxPatchPackagePreparedBytes != DefaultMaxPatchPackagePreparedBytes {
+		t.Fatalf("MaxPatchPackagePreparedBytes = %d, want %d", cfg.Limits.MaxPatchPackagePreparedBytes, DefaultMaxPatchPackagePreparedBytes)
+	}
 	if cfg.Limits.MaxSessions != DefaultMaxSessions {
 		t.Fatalf("MaxSessions = %d, want %d", cfg.Limits.MaxSessions, DefaultMaxSessions)
 	}
@@ -61,7 +67,9 @@ func TestLoad_SpecificLimitsOverrideLegacyThreshold(t *testing.T) {
 	t.Setenv(EnvMaxEditPreviews, "10")
 	t.Setenv(EnvMaxEditPreviewBytes, "11000")
 	t.Setenv(EnvEditPreviewTTLSeconds, "12")
-	t.Setenv(EnvMaxSessions, "13")
+	t.Setenv(EnvMaxPatchPackageBytes, "13000")
+	t.Setenv(EnvMaxPatchPackagePreparedBytes, "14000")
+	t.Setenv(EnvMaxSessions, "15")
 
 	cfg := Load()
 	if cfg.Limits.MaxFileBytes != 2000 || cfg.Limits.MaxOutputBytes != 3000 ||
@@ -69,7 +77,8 @@ func TestLoad_SpecificLimitsOverrideLegacyThreshold(t *testing.T) {
 		cfg.Limits.MaxBatchFiles != 6 || cfg.Limits.MaxMatches != 7 ||
 		cfg.Limits.MaxFingerprintEntries != 8 || cfg.Limits.MaxFingerprintEntryDetails != 9 ||
 		cfg.Limits.MaxEditPreviews != 10 || cfg.Limits.MaxEditPreviewBytes != 11000 ||
-		cfg.Limits.EditPreviewTTLSeconds != 12 || cfg.Limits.MaxSessions != 13 {
+		cfg.Limits.EditPreviewTTLSeconds != 12 || cfg.Limits.MaxPatchPackageBytes != 13000 ||
+		cfg.Limits.MaxPatchPackagePreparedBytes != 14000 || cfg.Limits.MaxSessions != 15 {
 		t.Fatalf("unexpected limits: %#v", cfg.Limits)
 	}
 }
@@ -90,7 +99,8 @@ func clearLimitEnvironment(t *testing.T) {
 		EnvMemoryThreshold, EnvMaxFileBytes, EnvMaxDecodedCharacters, EnvMaxLineBytes,
 		EnvMaxBatchFiles, EnvMaxMatches, EnvMaxOutputBytes, EnvMaxFingerprintEntries,
 		EnvMaxFingerprintEntryDetails, EnvMaxEditPreviews, EnvMaxEditPreviewBytes,
-		EnvEditPreviewTTLSeconds, EnvMaxSessions,
+		EnvEditPreviewTTLSeconds, EnvMaxPatchPackageBytes, EnvMaxPatchPackagePreparedBytes,
+		EnvMaxSessions,
 	} {
 		original, existed := os.LookupEnv(name)
 		if err := os.Unsetenv(name); err != nil {

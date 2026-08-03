@@ -1,5 +1,5 @@
 # Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
-# Encoding-aware filesystem MCP server with 24 tools, secure traversal,
+# Encoding-aware filesystem MCP server with 25 tools, secure traversal,
 # durable mutations, typed errors, and content-based support for 24 encodings.
 
 runtime: container

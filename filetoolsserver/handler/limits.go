@@ -79,6 +79,20 @@ func (h *Handler) editPreviewTTLSeconds() int {
 	return config.DefaultEditPreviewTTLSeconds
 }
 
+func (h *Handler) maxPatchPackageBytes() int64 {
+	if h != nil && h.config != nil && h.config.Limits.MaxPatchPackageBytes > 0 {
+		return h.config.Limits.MaxPatchPackageBytes
+	}
+	return config.DefaultMaxPatchPackageBytes
+}
+
+func (h *Handler) maxPatchPackagePreparedBytes() int64 {
+	if h != nil && h.config != nil && h.config.Limits.MaxPatchPackagePreparedBytes > 0 {
+		return h.config.Limits.MaxPatchPackagePreparedBytes
+	}
+	return config.DefaultMaxPatchPackagePreparedBytes
+}
+
 func clampBudgetToInt(budget int64) int {
 	maxInt := int64(^uint(0) >> 1)
 	if budget > maxInt {

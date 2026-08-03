@@ -21,21 +21,29 @@ type patchHunk struct {
 }
 
 func applyUnifiedPatch(content, patchText, targetPath string, maxBytes int64) (string, error) {
+	hunks, err := parseUnifiedPatch(patchText, targetPath, maxBytes)
+	if err != nil {
+		return "", err
+	}
+	return applyPatchHunks(content, hunks)
+}
+
+func parseUnifiedPatch(patchText, targetPath string, maxBytes int64) ([]patchHunk, error) {
 	if strings.TrimSpace(patchText) == "" {
-		return "", fmt.Errorf("patch is empty")
+		return nil, fmt.Errorf("patch is empty")
 	}
 	if int64(len(patchText)) > maxBytes {
-		return "", fmt.Errorf("patch exceeds the %d-byte file edit limit", maxBytes)
+		return nil, fmt.Errorf("patch exceeds the %d-byte file edit limit", maxBytes)
 	}
 	lines := strings.Split(ConvertLineEndings(patchText, LineEndingLF), "\n")
 	if len(lines) < 3 || !strings.HasPrefix(lines[0], "--- ") || !strings.HasPrefix(lines[1], "+++ ") {
-		return "", fmt.Errorf("patch must start with one ---/+++ file header pair")
+		return nil, fmt.Errorf("patch must start with one ---/+++ file header pair")
 	}
 	if err := validatePatchHeaderPath(strings.TrimSpace(strings.TrimPrefix(lines[0], "--- ")), targetPath); err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := validatePatchHeaderPath(strings.TrimSpace(strings.TrimPrefix(lines[1], "+++ ")), targetPath); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	hunks := make([]patchHunk, 0)
@@ -45,11 +53,11 @@ func applyUnifiedPatch(content, patchText, targetPath string, maxBytes int64) (s
 			continue
 		}
 		if strings.HasPrefix(lines[index], "--- ") || strings.HasPrefix(lines[index], "+++ ") {
-			return "", fmt.Errorf("multi-file patches are not supported")
+			return nil, fmt.Errorf("multi-file patches are not supported")
 		}
 		match := unifiedHunkHeader.FindStringSubmatch(lines[index])
 		if match == nil {
-			return "", fmt.Errorf("invalid hunk header at patch line %d", index+1)
+			return nil, fmt.Errorf("invalid hunk header at patch line %d", index+1)
 		}
 		hunk := patchHunk{
 			oldStart: mustPatchInt(match[1]),
@@ -62,16 +70,16 @@ func applyUnifiedPatch(content, patchText, targetPath string, maxBytes int64) (s
 		for index < len(lines) && unifiedHunkHeader.FindStringSubmatch(lines[index]) == nil {
 			line := lines[index]
 			if strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
-				return "", fmt.Errorf("multi-file patches are not supported")
+				return nil, fmt.Errorf("multi-file patches are not supported")
 			}
 			if line == `\ No newline at end of file` {
-				return "", fmt.Errorf("patches with no-newline markers are not supported")
+				return nil, fmt.Errorf("patches with no-newline markers are not supported")
 			}
 			if line == "" && index == len(lines)-1 {
 				break
 			}
 			if line == "" {
-				return "", fmt.Errorf("patch body line %d lacks a prefix", index+1)
+				return nil, fmt.Errorf("patch body line %d lacks a prefix", index+1)
 			}
 			switch line[0] {
 			case ' ':
@@ -82,23 +90,23 @@ func applyUnifiedPatch(content, patchText, targetPath string, maxBytes int64) (s
 			case '+':
 				newSeen++
 			default:
-				return "", fmt.Errorf("invalid patch line prefix at line %d", index+1)
+				return nil, fmt.Errorf("invalid patch line prefix at line %d", index+1)
 			}
 			hunk.lines = append(hunk.lines, line)
 			index++
 		}
 		if oldSeen != hunk.oldCount || newSeen != hunk.newCount {
-			return "", fmt.Errorf("hunk count mismatch: header declares -%d +%d, body has -%d +%d", hunk.oldCount, hunk.newCount, oldSeen, newSeen)
+			return nil, fmt.Errorf("hunk count mismatch: header declares -%d +%d, body has -%d +%d", hunk.oldCount, hunk.newCount, oldSeen, newSeen)
 		}
 		hunks = append(hunks, hunk)
 		if len(hunks) > maxPatchHunks {
-			return "", fmt.Errorf("patch contains more than %d hunks", maxPatchHunks)
+			return nil, fmt.Errorf("patch contains more than %d hunks", maxPatchHunks)
 		}
 	}
 	if len(hunks) == 0 {
-		return "", fmt.Errorf("patch contains no hunks")
+		return nil, fmt.Errorf("patch contains no hunks")
 	}
-	return applyPatchHunks(content, hunks)
+	return hunks, nil
 }
 
 func validatePatchHeaderPath(header, targetPath string) error {

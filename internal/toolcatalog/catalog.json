@@ -194,6 +194,16 @@
       }
     },
     {
+      "name": "patch_package",
+      "title": "Patch Package",
+      "description": "Validate or dry-run one strict patch-package-v1 manifest for a bounded ordered set of existing regular files. inspect validates version, algorithms, paths, aliases, limits, and exactly one edits-or-patch form per target without reading file contents. dryRun verifies every declared content-v1 precondition, prepares each encoding/BOM/line-ending-preserving result through the shared edit pipeline, returns bounded per-target diffs plus aggregate pre/post fingerprints, then verifies that all targets remained unchanged. Neither initial action writes files or creates backups. MCP_MAX_BATCH_FILES, MCP_MAX_FILE_BYTES, MCP_MAX_PATCH_PACKAGE_BYTES, MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES, and MCP_MAX_OUTPUT_BYTES bound work and output. Parameters: action=inspect|dryRun, manifest.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "convert_encoding",
       "title": "Convert Encoding",
       "description": "Convert one path or a bounded paths batch through the shared decoder and durable staging while preserving decoded text and line endings. dryRun previews changes and reports unrepresentable runes with line/column locations without writing. Batch results are per-file and may succeed partially; byte-identical outputs skip writes/backups. backup=true remains transactional per changed file. Parameters: path or paths, from, to, backup, bom=auto|always|never|preserve, dryRun.",

@@ -17,10 +17,12 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added `MCP_MAX_FINGERPRINT_ENTRIES` and `MCP_MAX_FINGERPRINT_ENTRY_DETAILS` to bound fingerprint traversal and returned detail records independently.
 - Added bounded one-shot `edit_file` preview/apply with 256-bit process-local capabilities, exact retained result bytes, target/result fingerprints, deterministic expiry/eviction, stable file-identity checks, replay prevention, cross-session transport use, and no persistent backup side effect.
 - Added `MCP_MAX_EDIT_PREVIEWS`, `MCP_MAX_EDIT_PREVIEW_BYTES`, and `MCP_EDIT_PREVIEW_TTL_SECONDS` to bound preview count, dynamic retained bytes, and lifetime independently.
+- Added the strict `patch_package` tool with versioned `patch-package-v1` manifests, unknown-field rejection, ordered existing-file targets, hard-link/alias rejection, `inspect` and non-mutating `dryRun` actions, declared pre/post fingerprints, shared encoding-aware preparation, final package-wide state verification, and aggregate before/after evidence.
+- Added `MCP_MAX_PATCH_PACKAGE_BYTES` and `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES` to bound semantic package input and aggregate prepared state independently.
 
 ### Changed
 
-- Expanded the current unreleased source catalog from 23 to 24 tools while preserving identical stdio and Streamable HTTP schemas and behavior.
+- Expanded the current unreleased source catalog from 23 to 25 tools while preserving identical stdio and Streamable HTTP schemas and behavior.
 - Extended `edit_file` additively with `action=direct|preview|apply` and structured approval metadata while preserving omitted-action direct editing.
 - Credited the original project for the R15 feature set and implementation approaches reviewed, documenting the work as reciprocal exchange of functionality and techniques; the resulting code is reworked for this fork's secure walker, bounded-memory pipeline, durable mutation layer, stable 23-tool catalog, and dual-transport architecture rather than mechanically synchronized.
 - Reframed the project documentation around its independent dual-transport product scope: stdio and native stateful Streamable HTTP now have equal prominence, while the OpenAI Secure MCP Tunnel is documented as one supported stdio deployment rather than the project's sole identity.

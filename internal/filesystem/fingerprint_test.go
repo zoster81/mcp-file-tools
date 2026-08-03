@@ -2,6 +2,8 @@ package filesystem
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,6 +15,29 @@ import (
 	"github.com/zoster81/mcp-file-tools/internal/operation"
 	"golang.org/x/text/unicode/norm"
 )
+
+func TestFingerprintRegularFileContentDigestMatchesDataFingerprint(t *testing.T) {
+	data := []byte("alpha\x00beta\n")
+	digest := sha256.Sum256(data)
+	fromDigest, err := FingerprintRegularFileContentDigest(int64(len(data)), hex.EncodeToString(digest[:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromDigest != FingerprintRegularFileData(data) {
+		t.Fatalf("digest-derived fingerprint = %s, data fingerprint = %s", fromDigest, FingerprintRegularFileData(data))
+	}
+	for _, test := range []struct {
+		size   int64
+		digest string
+	}{
+		{size: -1, digest: hex.EncodeToString(digest[:])},
+		{size: int64(len(data)), digest: "invalid"},
+	} {
+		if _, err := FingerprintRegularFileContentDigest(test.size, test.digest); operation.KindOf(err) != operation.KindInvalidInput {
+			t.Fatalf("FingerprintRegularFileContentDigest(%d, %q) error=%v kind=%s", test.size, test.digest, err, operation.KindOf(err))
+		}
+	}
+}
 
 func TestFingerprintPathsStableAcrossRootsAndMetadata(t *testing.T) {
 	parent := t.TempDir()

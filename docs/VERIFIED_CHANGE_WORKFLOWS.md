@@ -1,6 +1,6 @@
 # Verified Change Workflows
 
-This document is the approved design baseline for R16. It defines the intended behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1 and 2 are implemented in source: deterministic fingerprints and bounded one-shot `edit_file` preview/apply are complete, while patch packages and structured verification remain pending.
+This document is the approved design baseline for R16. It defines the intended behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1–3 are implemented in source: deterministic fingerprints, bounded one-shot `edit_file` preview/apply, and strict `patch-package-v1` inspect/dry-run are complete, while package apply/verify and structured verification remain pending.
 
 Persistent backup storage and user-managed change review are approved in principle but remain outside the initial R16 implementation until a separate retention and lifecycle design is approved.
 
@@ -31,7 +31,7 @@ The initial R16 scope does not include:
 All R16 operations must:
 
 - use the existing allowed-root, symlink, junction, reparse-point, and missing-ancestor validation;
-- preserve all existing tools; the explicitly reviewed R16 schema change adds the read-only `fingerprint_paths` tool as the 24th source-catalog entry;
+- preserve all existing tools; the reviewed R16 additions currently expose `fingerprint_paths` and `patch_package`, bringing the unreleased source catalog to 25 tools while the published 2.0.0 baseline remains 23;
 - expose identical schemas and behavior through stdio and stateful Streamable HTTP;
 - use stable typed error codes and bounded diagnostic output;
 - reject oversized input before expensive parsing, hashing, diffing, or staging;
@@ -118,26 +118,29 @@ A patch package coordinates preconditions and verification for several existing 
 
 ### Initial package format
 
-Use a versioned JSON manifest with:
+The implemented `patch-package-v1` JSON manifest contains:
 
-- package format version;
-- an optional caller label that is not trusted as an identifier;
-- a bounded ordered list of target operations;
-- one unique normalized target path per operation;
-- the expected pre-edit fingerprint for every target;
-- exactly one supported existing-file edit form per target;
-- optional expected post-edit fingerprints.
+- `formatVersion: "patch-package-v1"`;
+- optional `label`, bounded to 256 bytes and never trusted as an identifier;
+- `fingerprintAlgorithm: "sha256"` and `fingerprintMode: "content-v1"`;
+- a bounded ordered `targets` array;
+- one unique Unicode-NFC slash-normalized declared path per target;
+- required `expectedFingerprint` and optional `expectedResultFingerprint`;
+- exactly one of `edits` or one strict single-file unified `patch`;
+- optional `encoding` and `forceWritable` with `edit_file` semantics.
 
-The initial version must reject file creation, deletion, movement, renaming, `/dev/null` patches, duplicate resolved targets, overlapping aliases, external links, unbounded embedded data, and unknown manifest fields where ambiguity would be unsafe.
+The input and every nested manifest object reject unknown JSON fields. The current implementation rejects creation, deletion, movement, renaming, `/dev/null` patches, duplicate spellings, duplicate resolved targets, symlink/junction aliases, hard-link aliases, external links, unsupported versions or algorithms, unbounded edit arrays, and oversized embedded data.
 
 ### Actions
 
-- `inspect`: validate package structure, limits, paths, duplicate targets, and declared algorithms without preparing mutations.
-- `dryRun`: resolve and fingerprint every target, prepare every result, and return bounded per-file diffs plus aggregate pre/post fingerprints. No source file is changed.
-- `apply`: consume the exact dry-run package preview, revalidate every precondition, stage all outputs, then commit in deterministic manifest order.
-- `verify`: compare current target fingerprints with the package's expected post-state and return per-file plus aggregate results.
+- `inspect` **implemented**: validate structure, semantic input size, target count, paths, existing regular-file types, duplicate or aliased targets, edit shapes, fuzzy thresholds, strict patch structure, and declared algorithms without reading target contents.
+- `dryRun` **implemented**: retain one stable open-file identity per bounded target, obtain a coherent package-wide pre-state, verify every declared fingerprint, prepare each exact result through the shared edit pipeline, enforce aggregate prepared/output limits, perform final identity and package-wide state verification, and return bounded ordered per-file diffs plus `patch-package-aggregate-v1` before/after fingerprints. No source file is changed.
+- `apply` **pending**: consume the exact dry-run package preview, revalidate every precondition, stage all outputs, then commit in deterministic manifest order.
+- `verify` **pending**: compare current target fingerprints with the package's expected post-state and return per-file plus aggregate results.
 
 Package apply must not reaccept a modified manifest. It should use the same one-shot preview capability model as `edit_file`.
+
+Current limits are `MCP_MAX_BATCH_FILES` for target count, `MCP_MAX_FILE_BYTES` per source/patch/result, `MCP_MAX_PATCH_PACKAGE_BYTES=16777216` for semantic manifest input, `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES=67108864` for aggregate retained preparation state, and `MCP_MAX_OUTPUT_BYTES` for combined structured/text output. The dry-run aggregate binds manifest order, canonical declared paths, and ordered per-target `content-v1` fingerprints; it is evidence, not an atomicity claim.
 
 ### Partial-commit contract
 
@@ -155,7 +158,7 @@ Documentation must describe this limitation prominently. The implementation must
 
 ### Required tests
 
-Cover malformed manifests, unsupported versions, duplicate and aliased targets, path escapes, external links, stale fingerprints, preparation and staging failures before commit, deterministic commit order, injected failure on each commit position, accurate partial results, cancellation at every phase, exact verification, bounded diagnostics, large packages, cross-directory targets, direct/HTTP equivalence, and preservation of unrelated files.
+Implemented inspect/dry-run tests cover malformed and unknown-field manifests, unsupported versions/algorithms/modes, duplicate paths, hard-link aliases, path escapes, stale fingerprints, content changes and same-content path replacement after preparation, strict patch rejection, UTF-16 BOM/CRLF preservation, CP1251 direct/HTTP equivalence, count/manifest/prepared/output limits, cancellation, deterministic result order, and byte-identical preservation of every target. Apply/verify tests for staging failures, deterministic commit order, injected failures, partial-state classification, and exact post-state verification remain pending.
 
 ## 4. Structured verification
 
