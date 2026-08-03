@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
@@ -37,6 +38,7 @@ type WalkOptions struct {
 	MaxDepth            int
 	Exclude             func(Entry) bool
 	OnError             func(path string, depth int, err error) error
+	RespectGitignore    bool
 }
 
 // Visitor processes a safe entry and selects the next traversal action.
@@ -66,14 +68,14 @@ func Walk(ctx context.Context, root string, options WalkOptions, visitor Visitor
 		return handleWalkError(options, root, 0, fmt.Errorf("root path resolves outside allowed directories: %s", root))
 	}
 
-	err := walkDirectory(ctx, resolvedRoot, "", 0, options, visitor)
+	err := walkDirectory(ctx, resolvedRoot, "", 0, options, nil, visitor)
 	if errors.Is(err, errWalkStopped) {
 		return nil
 	}
 	return err
 }
 
-func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, options WalkOptions, visitor Visitor) error {
+func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, options WalkOptions, scopes []ignoreScope, visitor Visitor) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -81,6 +83,21 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 	resolvedDir, safe := security.ResolvePathSafe(dirPath, options.ResolvedAllowedDirs)
 	if !safe {
 		return handleWalkError(options, dirPath, depth, fmt.Errorf("path is no longer safe: %s", dirPath))
+	}
+
+	currentScopes := scopes
+	if options.RespectGitignore {
+		scope, scopeErr := loadIgnoreScope(resolvedDir, relativeDir, options.ResolvedAllowedDirs)
+		if scopeErr != nil {
+			if errors.Is(scopeErr, ErrInvalidGitignore) {
+				return fmt.Errorf("%s: %w", filepath.Join(resolvedDir, ".gitignore"), scopeErr)
+			}
+			if handled := handleWalkError(options, filepath.Join(resolvedDir, ".gitignore"), depth, scopeErr); handled != nil {
+				return handled
+			}
+		} else if len(scope.rules) > 0 {
+			currentScopes = append(append([]ignoreScope(nil), scopes...), scope)
+		}
 	}
 
 	entries, err := os.ReadDir(resolvedDir)
@@ -111,6 +128,14 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 			Depth:        depth + 1,
 			DirEntry:     dirEntry,
 		}
+		if options.RespectGitignore {
+			if dirEntry.IsDir() && strings.EqualFold(dirEntry.Name(), ".git") {
+				continue
+			}
+			if ignoredByScopes(currentScopes, relativePath, dirEntry.IsDir()) {
+				continue
+			}
+		}
 		if options.Exclude != nil && options.Exclude(entry) {
 			continue
 		}
@@ -128,7 +153,7 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 		if options.MaxDepth > 0 && entry.Depth >= options.MaxDepth {
 			continue
 		}
-		if err := walkDirectory(ctx, resolvedChild, relativePath, entry.Depth, options, visitor); err != nil {
+		if err := walkDirectory(ctx, resolvedChild, relativePath, entry.Depth, options, currentScopes, visitor); err != nil {
 			return err
 		}
 	}

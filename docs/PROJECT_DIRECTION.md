@@ -35,9 +35,15 @@ Potential upstream suggestions should be concept-level and narrowly scoped to th
 
 Conversely, upstream agent-experience improvements may be considered here only after they are adapted to this fork's bounded-memory pipeline, durable mutation layer, stable public schemas, transport equivalence requirements, and security model.
 
+## Reciprocal feature exchange
+
+R15 explicitly credits the original project as the source for optional read line numbers, richer grep modes and paging, `.gitignore`-aware traversal, bounded result sorting, batch encoding dry runs, encoding workflow prompts, unified-patch editing, and opt-in fuzzy matching. Both the user-facing concepts and the original implementation approaches informed this fork's evaluation of behavior, edge cases, and trade-offs. The resulting code was reworked specifically for the fork's secure walker, bounded-memory streaming, durable mutation layer, stable 23-tool catalog, process-wide roots, and stdio/Streamable HTTP equivalence rather than mechanically synchronized.
+
+This attribution is intended as reciprocal engineering exchange rather than one-way ownership. Improvements developed in either project may inspire the other, and useful functionality, implementation techniques, tests, and security findings may flow in either direction through concept-level discussion or normal GPL-3.0-compatible contributions. Neither repository is expected to accept the other's code unchanged, and shared work does not erase their separate APIs, release histories, security models, or maintenance decisions.
+
 ## Maintenance policy
 
 - Release and API decisions are made for this fork's users rather than to minimize upstream merge conflicts.
 - Upstream changes are reviewed selectively; no automatic merge or rebasing policy exists.
 - Public documentation must distinguish shared lineage from current fork behavior.
-- Cross-project proposals should describe the user problem and desired behavior, not assume that either repository can accept the other's implementation unchanged.
+- Cross-project proposals should describe the user problem and desired behavior, credit the project where the idea was observed, and not assume that either repository can accept the other's implementation unchanged.

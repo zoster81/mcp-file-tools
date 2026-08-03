@@ -369,6 +369,7 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 	}
 
 	var expectedTools string
+	var expectedPrompts string
 	var expectedRoots string
 	for name, session := range sessions {
 		tools, err := session.ListTools(ctx, nil)
@@ -383,6 +384,23 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 			expectedTools = serializedTools
 		} else if serializedTools != expectedTools {
 			t.Fatalf("%s tool metadata diverged", name)
+		}
+
+		prompts := make([]*mcp.Prompt, 0, 3)
+		for prompt, promptErr := range session.Prompts(ctx, nil) {
+			if promptErr != nil {
+				t.Fatalf("%s list prompts: %v", name, promptErr)
+			}
+			prompts = append(prompts, prompt)
+		}
+		if len(prompts) != 3 {
+			t.Fatalf("%s prompt count = %d", name, len(prompts))
+		}
+		serializedPrompts := marshalJSON(t, prompts)
+		if expectedPrompts == "" {
+			expectedPrompts = serializedPrompts
+		} else if serializedPrompts != expectedPrompts {
+			t.Fatalf("%s prompt metadata diverged", name)
 		}
 
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_allowed_directories"})

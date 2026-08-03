@@ -23,7 +23,9 @@ Preserve the flow:
 - Preserve encoding, BOM, and line-ending semantics promised by each tool.
 - Do not add filename- or extension-based encoding behavior.
 - Keep `run_script` and `shell` authorization separate even when they share process mechanics.
-- Bound decoded lines, batches, matches, context, output, worker coordination, and full-document memory through the specific `MCP_MAX_*` limits; retain `MCP_MEMORY_THRESHOLD` only as the documented migration fallback.
+- Bound decoded lines, batches, matches, paging, sorting retention, fuzzy comparison work, patch input/hunks, context, output, worker coordination, and full-document memory through the specific `MCP_MAX_*` limits or explicit fixed safety caps; retain `MCP_MEMORY_THRESHOLD` only as the documented migration fallback.
+- Keep fuzzy edits opt-in and ambiguity-safe; keep unified patches single-file, exact-context, ordered, and non-overlapping.
+- Batch mutations must preserve input order and expose partial success explicitly; dry runs must not create backups or alter source bytes.
 
 ## Tool metadata
 

@@ -14,8 +14,11 @@ import (
 
 // HandleEditFile applies line-based edits to a text file with encoding support.
 func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, input EditFileInput) (*mcp.CallToolResult, EditFileOutput, error) {
-	if len(input.Edits) == 0 {
-		return errorResult(ErrEditsRequired.Error()), EditFileOutput{}, nil
+	if len(input.Edits) == 0 && strings.TrimSpace(input.Patch) == "" {
+		return errorResult("edits or patch is required"), EditFileOutput{}, nil
+	}
+	if len(input.Edits) > 0 && strings.TrimSpace(input.Patch) != "" {
+		return errorResult("edits and patch are mutually exclusive"), EditFileOutput{}, nil
 	}
 
 	v := h.ValidatePath(input.Path)
@@ -40,7 +43,12 @@ func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, 
 	}
 
 	content := ConvertLineEndings(document.Text, LineEndingLF)
-	modifiedContent, err := applyEdits(content, input.Edits)
+	var modifiedContent string
+	if strings.TrimSpace(input.Patch) != "" {
+		modifiedContent, err = applyUnifiedPatch(content, input.Patch, input.Path, h.maxFileBytes())
+	} else {
+		modifiedContent, err = applyEdits(content, input.Edits)
+	}
 	if err != nil {
 		return errorResultFromError(err), EditFileOutput{}, nil
 	}
@@ -126,11 +134,24 @@ func applyEdits(content string, edits []EditOperation) (string, error) {
 			continue
 		}
 
-		// Try whitespace-flexible line matching
+		// Try whitespace-flexible line matching.
 		matched, result := tryFlexibleMatch(modifiedContent, normalizedOld, normalizedNew)
 		if matched {
 			modifiedContent = result
 			continue
+		}
+
+		// Fuzzy matching is opt-in, complexity-bounded, and requires one unique
+		// best candidate at or above the requested similarity threshold.
+		if edit.Similarity != nil {
+			matched, result, fuzzyErr := tryFuzzyMatch(modifiedContent, normalizedOld, normalizedNew, *edit.Similarity)
+			if fuzzyErr != nil {
+				return "", fuzzyErr
+			}
+			if matched {
+				modifiedContent = result
+				continue
+			}
 		}
 
 		return "", noMatchError(modifiedContent, normalizedOld, edit.OldText)

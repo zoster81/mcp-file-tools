@@ -11,7 +11,8 @@ AI clients see `Настройки` — not `????` or `Íàñòðîéêè`.
 
 Secure, encoding-aware MCP filesystem service with two first-class transports: local **stdio** and native stateful **MCP Streamable HTTP**. It detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
 
-- **23 tools over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
+- **23 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
+- **Agent-oriented repository workflows** — optional read line numbers, paged/multi-mode grep, `.gitignore` traversal, bounded sorting, batch conversion previews, strict patch edits, and ambiguity-safe fuzzy matching.
 - **24 registered encodings** — Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030, and other legacy text formats.
 - **Fail-closed HTTP service** — bearer authentication on every MCP request, loopback defaults, exact Host/Origin checks, bounded sessions and request resources, no CORS, and explicit TLS/proxy requirements for non-loopback exposure.
 - **Secure filesystem and mutation model** — resolved-root containment, deterministic traversal, bounded streaming, staged writes, practical concurrent-change detection, transactional backups, and no-replace creation.
@@ -28,7 +29,7 @@ This repository began as a deployment-oriented fork for ChatGPT Web, but version
 | stdio | Local MCP clients and secure tunnel bridges | Client configuration and operating-system process boundary | Startup directories are authoritative; dynamic roots are a compatibility fallback only when startup roots are empty |
 | stateful Streamable HTTP | Persistent localhost services, containers, trusted proxies, and explicitly secured remote services | Bearer token on every MCP request; loopback by default; TLS or a trusted proxy boundary for non-loopback listeners | Startup directories are immutable and shared by every session; HTTP client roots are disabled |
 
-Both transports use the same `BuildServer` path and expose the same 23 tools, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
+Both transports use the same `BuildServer` path and expose the same 23 tools, 3 prompts, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
 
 The OpenAI Secure MCP Tunnel remains a supported stdio deployment option, not the identity or only use case of the project. The fork does not require Claude Code, Codex, ChatGPT, or another specific MCP host. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; any compatible client can invoke the released binary directly or connect to its HTTP endpoint.
 
@@ -52,21 +53,27 @@ Encoding detection is content-based. File extensions are not used to select or b
 
 The semantic-tag release workflow validates each release tag against a dated changelog entry before generating binaries, archives, checksums, and Registry metadata.
 
+## Unreleased R15 Features
+
+R15 is implemented and verified but remains unreleased and undeployed. It adds backward-compatible optional fields to the existing 23-tool catalog plus three transport-independent prompts: `audit_encodings`, `fix_mojibake`, and `migrate_to_utf8`. Recursive read/search workflows respect nested `.gitignore` rules by default, while mutation additions retain the existing full-document size limits, encoding/BOM-aware pipeline, durable staging, and concurrent-change checks.
+
+The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
+
 ## What It Does
 
-Provides 23 tools for file operations, encoding conversion, update checks, and optional local execution:
-- [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line and output memory
+Provides 23 tools for file operations, encoding conversion, update checks, and optional local execution, plus 3 guided prompts:
+- [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line/output memory and optional absolute line numbers
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
-- [`edit_file`](TOOLS.md#edit_file) - Encoding/BOM-aware full-document edits with a hard configured size limit
+- [`edit_file`](TOOLS.md#edit_file) - Exact/flexible edits, bounded unique fuzzy matching, or one strict single-file unified patch
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
-- [`list_directory`](TOOLS.md#list_directory) - Browse directories with pattern filtering
-- [`tree`](TOOLS.md#tree) - Compact deterministic tree through the shared secure walker (85% fewer tokens than JSON)
-- [`search_files`](TOOLS.md#search_files) - Deterministic glob search that skips symlink, junction, and reparse-point escapes
-- [`grep_text_files`](TOOLS.md#grep_text_files) - Deterministic streaming regex search with bounded context and aggregate retained state
+- [`list_directory`](TOOLS.md#list_directory) - Browse directories with filtering and deterministic name/mtime/size sorting
+- [`tree`](TOOLS.md#tree) - Compact deterministic `.gitignore`-aware tree through the shared secure walker
+- [`search_files`](TOOLS.md#search_files) - `.gitignore`-aware glob search with bounded globally correct sorting
+- [`grep_text_files`](TOOLS.md#grep_text_files) - Paged regex search with pattern/filter arrays and content/path/count modes
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
-- [`convert_encoding`](TOOLS.md#convert_encoding) - Stream decoder-to-encoder conversion into durable staging with exact no-op suppression
+- [`convert_encoding`](TOOLS.md#convert_encoding) - Single/batch conversion, dry-run previews, unsupported-rune locations, and durable writes
 - [`detect_line_endings`](TOOLS.md#detect_line_endings) - Stream CRLF/LF/mixed detection with bounded inconsistent-line output
 - [`change_line_endings`](TOOLS.md#change_line_endings) - Stream LF/CRLF conversion while preserving encoding, BOM, and unrelated bytes
 - [`manage_bom`](TOOLS.md#manage_bom) - Inspect a bounded prefix or stream BOM add/strip through durable staging
@@ -325,7 +332,7 @@ Set `MCP_NO_UPDATE_CHECK=1` before starting the server to disable release checks
 
 This project originated from the [original upstream repository](https://github.com/dimitar-grigorov/mcp-file-tools) and retains its GPL-3.0 lineage and attribution. The fork now owns its module path, release pipeline, update source, MCP Registry namespace, public API decisions, transport architecture, and security model. It is maintained as an independent downstream project rather than a branch expected to remain merge-compatible with later upstream releases.
 
-Upstream continues to evolve separately and may contain useful agent-workflow ideas that are not yet present here. Likewise, several fork capabilities are intentionally outside upstream's narrower product direction. See [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md) for the maintenance and cross-project contribution boundaries.
+Upstream continues to evolve separately and is explicitly credited as the source for the R15 agent-workflow feature set and relevant implementation approaches. The code in this fork is reworked for its own architecture rather than mechanically synchronized, and useful functionality, implementation techniques, tests, or security improvements may flow in either direction through normal discussion or GPL-3.0-compatible contributions. Several fork capabilities remain intentionally outside upstream's narrower product direction. See [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) for the reciprocal-exchange, maintenance, and contribution boundaries.
 
 ## How to Use
 
@@ -337,6 +344,9 @@ Once the connector is active, ask ChatGPT Web or the connected MCP client:
 - "Detect this extensionless file's encoding and line endings"
 - "Convert data.legacy from mixed endings to CRLF without changing its encoding or BOM"
 - "Convert multilingual.data from UTF-8 to UTF-16 LE with `bom: auto` and create a backup"
+- "List the largest matching files while respecting `.gitignore`"
+- "Show only file paths containing either of these two regex patterns"
+- "Run the UTF-8 migration prompt for this project and preview every unsupported character before writing"
 
 **Security:** File tools access only explicitly allowed directories:
 - **OpenAI Tunnel:** the directory arguments embedded in `MCP_COMMAND` are the authoritative process-wide set;

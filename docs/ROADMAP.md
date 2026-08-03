@@ -30,7 +30,7 @@ Product identity and the fork's independent relationship to upstream are defined
 | R12 | COMPLETE | Approve the Streamable HTTP threat model and security design. |
 | R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
 | R14 | COMPLETE | Completed hardening, publication, dual-transport deployment, active rollback, restoration, and final handoff for 2.0.0. |
-| R15 | PLANNED | Improve agent ergonomics and project-aware workflows without weakening transport, memory, mutation, or security guarantees. |
+| R15 | COMPLETE | Added attributed agent-ergonomics and project-aware workflows while preserving transport, memory, mutation, and security guarantees. |
 
 ---
 
@@ -355,25 +355,28 @@ Operator deployment completed on 2026-08-02. The published Windows amd64 `2.0.0`
 
 ## Status
 
-Planned. R14 is complete; R15 has not started.
+Completed on 2026-08-03. The implementation remains unreleased.
 
 ## Goal
 
 Reduce unnecessary tool calls and token usage for common repository and encoding workflows while preserving the fork's bounded-memory pipeline, durable mutation semantics, stable public errors, process-wide root model, and stdio/HTTP equivalence.
 
-## Candidate evaluation backlog
+## Provenance and accepted scope
 
-These are design candidates, not accepted API commitments:
+The [original project](PROJECT_DIRECTION.md#reciprocal-feature-exchange) is the explicit source for this R15 feature set and the implementation approaches reviewed during design. The fork accepts this work as part of a reciprocal exchange of useful functionality and techniques, while reworking the code against its own APIs, security model, bounded-memory pipeline, durable mutation guarantees, and dual-transport architecture rather than synchronizing it mechanically. See [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
-- optional absolute line numbers in paged `read_text_file` results;
-- grep output modes for full content, matching file paths, and per-file counts;
-- grep result paging and plural include/exclude patterns under existing aggregate budgets;
-- `.gitignore`-aware traversal with explicit opt-out and secure nested-pattern handling;
-- bounded sorting for directory/search results by name, modification time, or size;
-- batch encoding-conversion dry runs with machine-readable unsupported-character locations;
-- transport-independent MCP prompts for encoding audits, mojibake diagnosis, and controlled UTF-8 migration;
-- unified-diff edit input after strict single-file parsing, bounded hunk processing, and ambiguity tests;
-- fuzzy edit matching only if a deterministic complexity bound, explicit threshold, unique-match policy, and safe failure behavior are established.
+## Implementation checklist
+
+- [x] Add optional absolute line numbers to paged `read_text_file` results without changing default output.
+- [x] Add grep output modes for content, matching paths, and per-file counts.
+- [x] Add grep paging, pattern arrays, plural include/exclude filters, and matches-only output under existing limits.
+- [x] Add `.gitignore`-aware traversal with explicit opt-out, nested rules, negation, and secure regular-file validation.
+- [x] Add deterministic bounded sorting for directory/search results by name, modification time, or size.
+- [x] Add batch encoding conversion, dry-run previews, per-file partial results, and machine-readable unsupported-character locations.
+- [x] Add transport-independent MCP prompts for encoding audits, mojibake diagnosis, and controlled UTF-8 migration.
+- [x] Add strict single-file unified-diff edit input with bounded hunk parsing and exact context validation.
+- [x] Add opt-in fuzzy edit matching with explicit thresholds, deterministic complexity bounds, unique-best-match requirements, and safe ambiguity failure.
+- [x] Complete repository-wide tests, race/static/security checks, documentation consistency, and final diff review.
 
 ## Design constraints
 
@@ -388,3 +391,9 @@ These are design candidates, not accepted API commitments:
 ## Completion gate
 
 Accepted R15 features demonstrate measurable call/token reduction, pass normal and adversarial tests on supported platforms, remain bounded under large inputs, preserve exact mutation guarantees, and expose equivalent schemas and behavior through both transports.
+
+## Completion record
+
+Completed on 2026-08-03. The existing 23-tool catalog gained backward-compatible optional fields for line-numbered reads, richer paged grep, `.gitignore`-aware traversal, explicit bounded sorting, batch conversion previews, strict unified patches, and ambiguity-safe fuzzy edits. Three shared MCP prompts now guide encoding audits, mojibake diagnosis, and controlled UTF-8 migration over both stdio and Streamable HTTP. The original project is credited for both the feature concepts and implementation approaches reviewed, while the resulting code was reworked for the fork's secure walker, bounded-memory pipeline, durable mutation layer, stable schemas, process-wide roots, and dual-transport security model.
+
+Normal, compatibility, malformed-input, symlink/reparse, `.gitignore`, paging, starvation, backup-collision, partial-batch, unsupported-character, patch, fuzzy-ambiguity, concurrency, and HTTP equivalence tests passed. A deterministic fixture reduced retained grep JSON from 2,963 bytes in content mode to 379 bytes in path-only mode, while batch conversion consolidates multiple files into one MCP request. Complete Go tests, the race detector, vet, Staticcheck, govulncheck, manual MCP checks, release-script tests, documentation/catalog identity checks, link validation, and Gitleaks passed. R15 has not yet been packaged into a public release or deployed to an operator runtime.

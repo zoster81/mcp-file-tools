@@ -119,13 +119,14 @@ func (h *Handler) readTextFileStream(ctx context.Context, path string, input Rea
 			firstSelectedLine = line.Number
 		}
 		lastSelectedLine = line.Number
-		if rangeRequested {
-			if selectedCount > 0 {
-				collector.append([]byte{'\n'})
-			}
-			collector.append(line.Data)
-		} else {
-			collector.append(line.Data)
+		if rangeRequested && selectedCount > 0 {
+			collector.append([]byte{'\n'})
+		}
+		if input.LineNumbers {
+			collector.append([]byte(fmt.Sprintf("%d\t", line.Number)))
+		}
+		collector.append(line.Data)
+		if !rangeRequested {
 			collector.append(line.Ending)
 		}
 		selectedCount++

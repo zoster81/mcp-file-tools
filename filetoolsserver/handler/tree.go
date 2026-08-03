@@ -41,9 +41,10 @@ func (h *Handler) HandleTree(ctx context.Context, req *mcp.CallToolRequest, inpu
 	}
 	allowedDirs := h.ResolvedAllowedDirs()
 	var sb strings.Builder
-	_ = filesystem.Walk(ctx, v.Path, filesystem.WalkOptions{
+	walkErr := filesystem.Walk(ctx, v.Path, filesystem.WalkOptions{
 		ResolvedAllowedDirs: allowedDirs,
 		MaxDepth:            input.MaxDepth,
+		RespectGitignore:    shouldRespectGitignore(input.RespectGitignore),
 	}, func(entry filesystem.Entry) (filesystem.WalkAction, error) {
 		if state.totalCount() >= state.maxFiles {
 			state.truncated = true
@@ -83,8 +84,12 @@ func (h *Handler) HandleTree(ctx context.Context, req *mcp.CallToolRequest, inpu
 		sb.WriteString("\n")
 		return filesystem.WalkContinue, nil
 	})
-	if ctx.Err() != nil {
-		state.truncated = true
+	if walkErr != nil {
+		if ctx.Err() != nil {
+			state.truncated = true
+		} else {
+			return errorResult("tree failed: " + walkErr.Error()), TreeOutput{}, nil
+		}
 	}
 	return &mcp.CallToolResult{}, TreeOutput{
 		Tree:      sb.String(),

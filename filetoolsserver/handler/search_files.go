@@ -33,7 +33,14 @@ func (h *Handler) HandleSearchFiles(ctx context.Context, req *mcp.CallToolReques
 	if maxResults <= 0 {
 		maxResults = defaultMaxResults
 	}
-	results, truncated, err := searchFiles(ctx, v.Path, input.Pattern, input.ExcludePatterns, h.ResolvedAllowedDirs(), maxResults)
+	sortBy, sortErr := normalizeSortBy(input.SortBy)
+	if sortErr != nil {
+		return errorResult(sortErr.Error()), SearchFilesOutput{}, nil
+	}
+	if sortBy == "" && input.Reverse {
+		sortBy = "name"
+	}
+	results, truncated, err := searchFilesWithOptions(ctx, v.Path, input.Pattern, input.ExcludePatterns, h.ResolvedAllowedDirs(), maxResults, sortBy, input.Reverse, shouldRespectGitignore(input.RespectGitignore))
 	if err != nil {
 		if err == context.Canceled || err == context.DeadlineExceeded {
 			return errorResult("search cancelled"), SearchFilesOutput{}, nil
@@ -43,12 +50,48 @@ func (h *Handler) HandleSearchFiles(ctx context.Context, req *mcp.CallToolReques
 	return &mcp.CallToolResult{}, SearchFilesOutput{Files: results, Truncated: truncated}, nil
 }
 
-// searchFiles recursively searches for files matching the pattern.
-func searchFiles(ctx context.Context, rootPath, pattern string, excludePatterns, allowedDirs []string, maxResults int) ([]string, bool, error) {
-	results := make([]string, 0)
-	truncated := false
+func shouldRespectGitignore(value *bool) bool {
+	return value == nil || *value
+}
+
+// searchFilesWithOptions keeps result memory bounded by maxResults while still
+// selecting the globally correct results for reverse, size, and mtime sorting.
+func searchFilesWithOptions(ctx context.Context, rootPath, pattern string, excludePatterns, allowedDirs []string, maxResults int, sortBy string, reverse, respectGitignore bool) ([]string, bool, error) {
+	if maxResults <= 0 {
+		return []string{}, false, nil
+	}
+	if sortBy == "" && !reverse {
+		results := make([]string, 0, min(maxResults, 64))
+		truncated := false
+		err := filesystem.Walk(ctx, rootPath, filesystem.WalkOptions{
+			ResolvedAllowedDirs: allowedDirs,
+			RespectGitignore:    respectGitignore,
+			Exclude: func(entry filesystem.Entry) bool {
+				return shouldExcludePath(filepath.ToSlash(entry.RelativePath), excludePatterns)
+			},
+			OnError: func(path string, _ int, err error) error {
+				slog.Debug("skipping path due to error", "path", path, "error", err)
+				return nil
+			},
+		}, func(entry filesystem.Entry) (filesystem.WalkAction, error) {
+			if !matchGlobPattern(filepath.ToSlash(entry.RelativePath), pattern) {
+				return filesystem.WalkContinue, nil
+			}
+			results = append(results, entry.Path)
+			if len(results) >= maxResults {
+				truncated = true
+				return filesystem.WalkStop, nil
+			}
+			return filesystem.WalkContinue, nil
+		})
+		return results, truncated, err
+	}
+
+	collector := &boundedPathHeap{sortBy: sortBy, reverse: reverse}
+	matchedCount := 0
 	err := filesystem.Walk(ctx, rootPath, filesystem.WalkOptions{
 		ResolvedAllowedDirs: allowedDirs,
+		RespectGitignore:    respectGitignore,
 		Exclude: func(entry filesystem.Entry) bool {
 			return shouldExcludePath(filepath.ToSlash(entry.RelativePath), excludePatterns)
 		},
@@ -60,17 +103,23 @@ func searchFiles(ctx context.Context, rootPath, pattern string, excludePatterns,
 		if !matchGlobPattern(filepath.ToSlash(entry.RelativePath), pattern) {
 			return filesystem.WalkContinue, nil
 		}
-		results = append(results, entry.Path)
-		if len(results) >= maxResults {
-			truncated = true
-			return filesystem.WalkStop, nil
+		sortable, statErr := statSortablePath(entry.Path)
+		if statErr != nil {
+			return filesystem.WalkContinue, nil
 		}
+		matchedCount++
+		collector.add(sortable, maxResults)
 		return filesystem.WalkContinue, nil
 	})
 	if err != nil {
 		return nil, false, err
 	}
-	return results, truncated, nil
+	selected := collector.sorted()
+	results := make([]string, len(selected))
+	for index, item := range selected {
+		results[index] = item.path
+	}
+	return results, matchedCount > maxResults, nil
 }
 
 // matchGlobPattern matches a path against a glob pattern, supporting ** for recursive matching

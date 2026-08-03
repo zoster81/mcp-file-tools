@@ -1,6 +1,14 @@
 # Tools Reference
 
-The authoritative 23-tool catalog is transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, and typed errors. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
+The authoritative 23-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
+
+## Guided Prompts
+
+- `audit_encodings(path)`: read-only project encoding, BOM, ambiguity, and line-ending audit.
+- `fix_mojibake(path)`: evidence-driven diagnosis and approval-gated repair of garbled legacy text.
+- `migrate_to_utf8(path, pattern?)`: search, batch dry-run, approval, backup-enabled conversion, and final verification workflow.
+
+These prompt concepts and the implementation approaches reviewed are credited to the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange); the resulting code is reworked for this fork's tool names, mutation guarantees, limits, and dual-transport server rather than mechanically synchronized. Prompt instructions guide clients; they do not add per-agent filesystem ACLs or bypass tool authorization.
 
 ## Error Handling
 
@@ -22,6 +30,7 @@ Read file contents through the shared incremental decoder with automatic encodin
 - `offset` (optional): Start reading from this line number (1-indexed)
 - `limit` (optional): Maximum number of lines to read
 - `maxCharacters` (optional): Truncate content at this character count to prevent token overflow
+- `lineNumbers` (optional): Prefix each returned line with its absolute 1-based line number (default: false)
 
 **Example:**
 ```json
@@ -134,11 +143,12 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 
 ### edit_file
 
-Make line-based edits to a text file through the shared encoding/BOM-aware document pipeline. Editing and unified diff generation inherently require full-document state, so the source file is rejected before reading when its byte size exceeds `MCP_MAX_FILE_BYTES`. Supports exact matching and whitespace-flexible matching. Returns a git-style unified diff showing changes. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after it was decoded.
+Edit one text file through the shared encoding/BOM-aware document pipeline. Editing and diff generation inherently require full-document state, so the source and any supplied patch are rejected when they exceed `MCP_MAX_FILE_BYTES`. Supply either `edits` or one strict single-file unified `patch`, never both. Edit operations retain exact and whitespace-flexible matching and may opt into bounded fuzzy matching with an explicit similarity threshold; fuzzy edits require one unique best match and fail safely on ambiguity. Returns a git-style unified diff. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after decoding.
 
 **Parameters:**
 - `path` (required): Path to the file to edit
-- `edits` (required): Array of edit operations, each with `oldText` and `newText`
+- `edits` (conditionally required): Array of operations with `oldText`, `newText`, and optional `similarity` from `0.50` to `1.0`
+- `patch` (conditionally required): One strict unified diff for the target file; multi-file patches, creation/deletion, unordered/overlapping hunks, and no-newline markers are rejected
 - `dryRun` (optional): If true, returns diff without writing changes (default: false)
 - `encoding` (optional): File encoding (auto-detected if not specified)
 - `forceWritable` (optional): If true, clears read-only flag before editing (default: false — fails on read-only files)
@@ -146,6 +156,8 @@ Make line-based edits to a text file through the shared encoding/BOM-aware docum
 **Features:**
 - Exact text matching (first occurrence)
 - Whitespace-flexible matching (ignores leading whitespace differences)
+- Opt-in bounded fuzzy matching with deterministic comparison budgets and unique-best-match enforcement
+- Strict single-file unified patch application with exact context/deletion validation and bounded hunk count
 - Preserves original indentation
 - Preserves UTF-8/UTF-16 BOM state explicitly
 - Preserves CRLF or LF line endings for consistently formatted files
@@ -180,7 +192,7 @@ The `readOnlyCleared` field indicates if the read-only flag was removed (only pr
 
 ## Directory Operations
 
-The recursive tools `tree`, `search_files`, and `grep_text_files` use one deterministic, cancellation-aware secure walker. Every traversed entry is resolved before it is exposed to the tool; symlinks, Windows junctions, and other reparse points that resolve outside the allowed directories are skipped. Directory links encountered below the requested root are not followed.
+The recursive tools `tree`, `search_files`, and `grep_text_files` use one deterministic, cancellation-aware secure walker. Every traversed entry is resolved before it is exposed to the tool; symlinks, Windows junctions, and other reparse points that resolve outside the allowed directories are skipped. Directory links encountered below the requested root are not followed. Nested `.gitignore` files are respected by default; each must be a bounded regular file inside an allowed root, and callers may opt out explicitly with `respectGitignore: false`.
 
 ### list_directory
 
@@ -189,6 +201,8 @@ List files and directories with optional pattern filtering.
 **Parameters:**
 - `path` (required): Path to directory
 - `pattern` (optional): Glob pattern like `*.pas` or `*.dfm` (default: `*`)
+- `sortBy` (optional): `name` (default), `mtime`, or `size`
+- `reverse` (optional): Reverse the selected deterministic order (default: false)
 
 **Example:**
 ```json
@@ -216,6 +230,7 @@ Compact indented tree view optimized for AI/LLM consumption. It returns entries 
 - `dirsOnly` (optional): Only show directories, not files
 - `exclude` (optional): Array of patterns to exclude
 - `showEncoding` (optional): Detect and display encoding per file (useful for auditing legacy codebases)
+- `respectGitignore` (optional): Apply nested `.gitignore` rules (default: true)
 
 **Example:**
 ```json
@@ -294,13 +309,16 @@ Delete a file after path revalidation and an optimistic metadata snapshot check,
 
 ### search_files
 
-Recursively search for files and directories matching a glob pattern in deterministic lexical traversal order. Entries resolving outside the allowed directories through symlinks, junctions, or other reparse points are skipped.
+Recursively search for files and directories matching a glob pattern through the secure walker. Results are selected with bounded top-K retention, so `maxResults` bounds memory even when sorting globally by modification time or size. Entries resolving outside allowed directories are skipped, and nested `.gitignore` files are respected by default.
 
 **Parameters:**
 - `path` (required): Root directory to search from
 - `pattern` (required): Glob pattern (`*.txt` for current dir, `**/*.txt` for recursive)
 - `excludePatterns` (optional): Array of patterns to exclude
-- `maxResults` (optional): Maximum number of results to return (default: 10000)
+- `respectGitignore` (optional): Apply nested `.gitignore` rules (default: true)
+- `maxResults` (optional): Maximum number of retained results (default: 10000)
+- `sortBy` (optional): `name`, `mtime`, or `size`; when omitted, preserve the historical deterministic traversal order
+- `reverse` (optional): Reverse the selected deterministic order; with omitted `sortBy`, this selects reverse name order
 
 **Example:**
 ```json
@@ -323,18 +341,23 @@ Recursively search for files and directories matching a glob pattern in determin
 
 ### grep_text_files
 
-Search decoded text incrementally using regex patterns. UTF-8 and structurally clear UTF-16 LE/BE are auto-detected; ambiguous non-empty input requires an explicit `encoding`. Directory inputs use the shared secure walker. File scans preserve deterministic traversal order, use bounded context queues, enforce `MCP_MAX_LINE_BYTES`, reject request `maxMatches` above `MCP_MAX_MATCHES`, and keep aggregate retained state within `MCP_MAX_OUTPUT_BYTES`.
+Search decoded text incrementally using one regex `pattern` or a `patterns` array combined with OR semantics. UTF-8 and structurally clear UTF-16 LE/BE are auto-detected; ambiguous non-empty input requires an explicit `encoding`. Directory inputs use the `.gitignore`-aware secure walker. Content mode preserves deterministic traversal order and bounded context queues; path/count modes scan each selected file without letting an early high-match file hide later files. `offset + maxMatches` is bounded by `MCP_MAX_MATCHES`, and retained output remains within `MCP_MAX_OUTPUT_BYTES`.
 
 **Parameters:**
-- `pattern` (required): Regular expression pattern to search for
+- `pattern` (conditionally required): One regular expression
+- `patterns` (conditionally required): Array of regular expressions combined with OR semantics; may be used with `pattern`
 - `paths` (required): Array of file or directory paths to search
 - `caseSensitive` (optional): Case-sensitive matching (default: true)
 - `contextBefore` (optional): Number of lines to show before each match
 - `contextAfter` (optional): Number of lines to show after each match
 - `maxMatches` (optional): Maximum total matches to return (default: 1000)
-- `include` (optional): Glob pattern to include files (e.g., `*.go`)
-- `exclude` (optional): Glob pattern to exclude files (e.g., `*_test.go`)
+- `include` / `exclude` (optional): Backward-compatible single glob filters
+- `includes` / `excludes` (optional): Arrays of glob filters
 - `encoding` (optional): File encoding (auto-detected if omitted)
+- `outputMode` (optional): `content` (default), `files_with_matches`, or `count`
+- `matchesOnly` (optional): In content mode return only the regex substring in `text`
+- `offset` (optional): Zero-based result offset for paging
+- `respectGitignore` (optional): Apply nested `.gitignore` rules for directory inputs (default: true)
 
 **Example:**
 ```json
@@ -401,14 +424,16 @@ Detect the encoding of a file with confidence percentage. Detection is based on 
 
 ### convert_encoding
 
-Convert a file by streaming the selected decoder into the target encoder and a synced same-directory staging file. The decoded text and its CRLF, LF, CR, or mixed line endings are preserved exactly; only the encoding and selected BOM policy change. A byte-identical staged result is reported as `changed: false` without rewriting the file or creating a requested backup. Changed output uses the durable atomic replacement path and rejects concurrent source changes.
+Convert one file or a bounded batch through the selected decoder and target encoder. `dryRun` performs a complete preflight without writing and reports unrepresentable runes with Unicode code point plus 1-based line/column locations. Batch results preserve input order, report per-file success or stable error codes, and may succeed partially. Actual changed output uses synced same-directory staging, byte-identical no-op suppression, optional transactional backup, path revalidation, and concurrent-source-change rejection.
 
 **Parameters:**
-- `path` (required): Path to the file to convert
+- `path` (conditionally required): One file to convert
+- `paths` (conditionally required): Bounded array of files; mutually exclusive with `path`
 - `from` (optional): Source encoding (auto-detected if omitted)
 - `to` (required): Target encoding
 - `backup` (optional): Transactionally create or replace a `.bak` backup before committing the conversion (default: false). The backup is staged and synced first; if target commit fails, a previous backup is restored or a newly created backup is removed. If restoration itself fails, the previous backup remains in a recovery staging file whose path is included in the error.
 - `bom` (optional): BOM policy — `auto` (default), `always`, `never`, or `preserve`
+- `dryRun` (optional): Preview per-file changes and unsupported-character locations without mutation
 
 **BOM policy:**
 - `auto`: UTF-8 and legacy targets have no BOM; UTF-16 LE/BE targets receive their canonical BOM

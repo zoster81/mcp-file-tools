@@ -80,6 +80,21 @@ func Get(name string) (encoding.Encoding, bool) {
 	return info.Encoding, true
 }
 
+// CanonicalName resolves a registered alias to its stable public name.
+func CanonicalName(name string) (string, bool) {
+	lower := strings.ToLower(name)
+	info, ok := registry[lower]
+	if !ok {
+		return "", false
+	}
+	for canonical := range encodings {
+		if candidate := registry[canonical]; candidate == info {
+			return canonical, true
+		}
+	}
+	return "", false
+}
+
 func IsUTF8(name string) bool {
 	lower := strings.ToLower(name)
 	return lower == "utf-8" || lower == "utf8" || lower == "ascii"

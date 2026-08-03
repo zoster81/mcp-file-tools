@@ -3,7 +3,7 @@
     {
       "name": "read_text_file",
       "title": "Read Text File",
-      "description": "Stream file content through the shared incremental decoder, convert it to UTF-8, strip a transport BOM, and report hasBOM/bomType metadata. Empty files are assumed UTF-8; ambiguous non-empty input requires an explicit encoding. MCP_MAX_LINE_BYTES, MCP_MAX_DECODED_CHARACTERS, and MCP_MAX_OUTPUT_BYTES bound the result. Parameters: path, encoding, offset, limit, maxCharacters.",
+      "description": "Stream file content through the shared incremental decoder, convert it to UTF-8, strip a transport BOM, and report hasBOM/bomType metadata. Empty files are assumed UTF-8; ambiguous non-empty input requires an explicit encoding. Optional lineNumbers prefixes returned lines with absolute 1-based numbers. MCP_MAX_LINE_BYTES, MCP_MAX_DECODED_CHARACTERS, and MCP_MAX_OUTPUT_BYTES bound the result. Parameters: path, encoding, offset, limit, maxCharacters, lineNumbers.",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -21,7 +21,7 @@
     {
       "name": "list_directory",
       "title": "List Directory",
-      "description": "List files and directories with optional glob pattern filtering (e.g., *.pas, *.dfm). Parameters: path (required), pattern (optional, default: *).",
+      "description": "List files and directories with optional glob filtering and deterministic sorting by name, modification time, or size. Metadata sorting skips entries that resolve outside allowed directories. Parameters: path, pattern (default: *), sortBy=name|mtime|size, reverse.",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -48,7 +48,7 @@
     {
       "name": "grep_text_files",
       "title": "Grep Text Files",
-      "description": "Incremental regex search through the shared decoder and deterministic secure walker. Results commit in lexical order; MCP_MAX_LINE_BYTES, MCP_MAX_MATCHES, and MCP_MAX_OUTPUT_BYTES bound lines, requested matches, context, and retained output. Empty files are UTF-8; ambiguous non-empty input requires an explicit encoding. Parameters: pattern, paths, caseSensitive, contextBefore/After, maxMatches, include/exclude, encoding.",
+      "description": "Incremental regex search through the shared decoder and deterministic secure walker. Accepts one pattern or a patterns array, plural include/exclude filters, result paging, matches-only text, and content/files_with_matches/count output modes. Recursive traversal respects nested .gitignore files by default and can opt out explicitly. MCP_MAX_LINE_BYTES, MCP_MAX_MATCHES, and MCP_MAX_OUTPUT_BYTES bound work and retained output. Parameters: pattern, patterns, paths, caseSensitive, contextBefore/After, maxMatches, include/exclude, includes/excludes, encoding, outputMode, matchesOnly, offset, respectGitignore.",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -75,7 +75,7 @@
     {
       "name": "tree",
       "title": "Tree (Compact)",
-      "description": "Compact deterministic tree view through the shared secure walker. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Set showEncoding=true to detect and display file encodings after immediate path revalidation. Parameters: path (required), maxDepth (0=unlimited), maxFiles (default 1000), dirsOnly (bool), exclude (array of patterns), showEncoding (bool, shows detected encoding per file).",
+      "description": "Compact deterministic tree view through the shared secure walker. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories, and respects nested .gitignore files by default. Set showEncoding=true to detect and display file encodings after immediate path revalidation. Parameters: path, maxDepth, maxFiles, dirsOnly, exclude, showEncoding, respectGitignore.",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -84,7 +84,7 @@
     {
       "name": "search_files",
       "title": "Search Files",
-      "description": "Recursively search in deterministic lexical order through the shared secure walker. Skips symlinks, Windows junctions, and other reparse points resolving outside allowed directories. Returns full paths matching a glob pattern (*.ext or **/*.ext). Parameters: path (required), pattern (required), excludePatterns, maxResults (default 10000).",
+      "description": "Recursively search through the shared secure walker. Omitted sortBy preserves historical deterministic traversal order; explicit name, modification-time, or size sorting uses bounded globally correct top-K retention. Skips entries resolving outside allowed directories and respects nested .gitignore files by default, with explicit opt-out. Returns full paths matching a glob pattern. Parameters: path, pattern, excludePatterns, respectGitignore, maxResults, sortBy=name|mtime|size, reverse.",
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false
@@ -177,7 +177,7 @@
     {
       "name": "edit_file",
       "title": "Edit File",
-      "description": "Replace text with whitespace-flexible matching through the shared encoding/BOM-aware document pipeline and synced atomic replacement. Files above MCP_MAX_FILE_BYTES are rejected before full-document reading and diff generation. Ambiguous non-empty input requires an explicit encoding. Returns a unified diff, rejects concurrent changes, preserves BOM and line endings, and skips logical no-ops. Parameters: path, edits, dryRun, encoding.",
+      "description": "Edit one text file through the shared encoding/BOM-aware document pipeline and synced atomic replacement. Accepts either edits or one strict single-file unified patch. Each edit may opt into bounded fuzzy matching with an explicit similarity threshold; ambiguous best matches fail safely. Files and patch input are bounded by MCP_MAX_FILE_BYTES. Returns a unified diff, rejects concurrent changes, preserves BOM and line endings, and skips logical no-ops. Parameters: path, edits, patch, dryRun, encoding, forceWritable.",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": true,
@@ -187,7 +187,7 @@
     {
       "name": "convert_encoding",
       "title": "Convert Encoding",
-      "description": "Stream the selected decoder into the target encoder and synced same-directory staging while preserving decoded text and line endings exactly. Byte-identical staged results skip writes/backups. backup=true transactionally stages the original first and restores a previous backup if target commit fails. Detected concurrent source changes are rejected. Parameters: path, from, to, backup, bom=auto|always|never|preserve.",
+      "description": "Convert one path or a bounded paths batch through the shared decoder and durable staging while preserving decoded text and line endings. dryRun previews changes and reports unrepresentable runes with line/column locations without writing. Batch results are per-file and may succeed partially; byte-identical outputs skip writes/backups. backup=true remains transactional per changed file. Parameters: path or paths, from, to, backup, bom=auto|always|never|preserve, dryRun.",
       "annotations": {
         "readOnlyHint": false,
         "idempotentHint": true,

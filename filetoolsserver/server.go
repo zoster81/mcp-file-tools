@@ -19,11 +19,14 @@ const serverInstructions = `MCP filesystem server with non-UTF-8 encoding suppor
 Encoding detection is content-based and never uses filenames or extensions. Unicode BOMs and valid UTF-8 are authoritative. Empty files are assumed UTF-8. Ambiguous non-empty input requires an explicit encoding; UTF-32 remains BOM-management only.
 
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
-- read_text_file: incremental decoding to UTF-8 under MCP_MAX_LINE_BYTES, MCP_MAX_DECODED_CHARACTERS, and MCP_MAX_OUTPUT_BYTES; ambiguous non-empty input requires explicit encoding
+- read_text_file: incremental decoding to UTF-8 under MCP_MAX_LINE_BYTES, MCP_MAX_DECODED_CHARACTERS, and MCP_MAX_OUTPUT_BYTES; optional lineNumbers adds absolute 1-based prefixes; ambiguous non-empty input requires explicit encoding
 - write_file: encodes UTF-8 content through the shared document encoder; supports bom=auto|always|never|preserve (default: auto)
-- edit_file: full-document editing with a hard MCP_MAX_FILE_BYTES input limit; preserves BOM and consistent CRLF/LF style, skips logical no-op writes, and returns a unified diff
-- grep_text_files: deterministic incremental regex search with bounded context and retained output; skips symlink/junction/reparse escapes, auto-detects structurally clear UTF-16 LE/BE, and accepts explicit encoding for ambiguous files
-- tree/search_files: deterministic shared traversal that skips entries resolving outside allowed directories, including Windows junctions and reparse points
+- edit_file: full-document editing with a hard MCP_MAX_FILE_BYTES limit; accepts exact/flexible edits, opt-in bounded unique fuzzy matching, or one strict single-file unified patch; preserves BOM and consistent CRLF/LF style
+- grep_text_files: deterministic incremental regex search with bounded paging, pattern/filter arrays, content/files/count modes, and optional matches-only text; recursive inputs respect nested .gitignore files by default
+- tree/search_files: deterministic secure traversal that skips entries resolving outside allowed directories and respects nested .gitignore files by default; search sorting remains bounded by maxResults
+- list_directory/search_files: optional deterministic name/mtime/size sorting with reverse order; metadata sorting never follows an entry outside allowed roots
+- convert_encoding: one path or a bounded paths batch; dryRun reports unsupported runes with positions before writes, and each changed item retains durable no-op, backup, and conflict guarantees
+- prompts: audit_encodings, fix_mojibake, and migrate_to_utf8 are transport-independent guided workflows
 - mutating file tools: synced same-directory staging, atomic/no-replace commits, path revalidation, practical conflict detection, and transactional conversion backups
 - ordered batch work: MCP_MAX_BATCH_FILES, MCP_MAX_MATCHES, and MCP_MAX_OUTPUT_BYTES bound aggregate work while preserving deterministic commits
 - operation errors: failed calls expose stable _meta.errorCode values; read_multiple_files uses the same vocabulary per item
@@ -101,6 +104,7 @@ func BuildServer(options ServerOptions) *mcp.Server {
 		RootsListChangedHandler: createRootsListChangedHandler(h, options.EnableClientRoots),
 	}
 	server := mcp.NewServer(impl, serverOpts)
+	registerProjectPrompts(server)
 
 	// Repair array/object args some MCP clients send as JSON-encoded strings.
 	server.AddReceivingMiddleware(handler.RepairStringifiedArrayArgs)

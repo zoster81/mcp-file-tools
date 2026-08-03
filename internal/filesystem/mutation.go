@@ -130,6 +130,14 @@ func (snapshot FileSnapshot) Equal(other FileSnapshot) bool {
 	return !snapshot.hasDigest || bytes.Equal(snapshot.digest[:], other.digest[:])
 }
 
+// MatchesContentDigest reports whether a digest-bearing snapshot has the given
+// byte size and SHA-256 digest. It supports bounded dry-run comparisons without
+// exposing mutable snapshot internals.
+func (snapshot FileSnapshot) MatchesContentDigest(size int64, digest []byte) bool {
+	return snapshot.Exists && snapshot.hasDigest && snapshot.Size == size &&
+		len(digest) == sha256.Size && bytes.Equal(snapshot.digest[:], digest)
+}
+
 // Verify confirms that path still matches the captured state.
 func (snapshot FileSnapshot) Verify(path string) (err error) {
 	defer func() {

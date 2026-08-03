@@ -10,6 +10,7 @@ type ReadTextFileInput struct {
 	Offset        *int   `json:"offset,omitempty"`
 	Limit         *int   `json:"limit,omitempty"`
 	MaxCharacters *int   `json:"maxCharacters,omitempty"`
+	LineNumbers   bool   `json:"lineNumbers,omitempty"`
 
 	maxOutputBytes  int
 	outputLimitName string
@@ -49,6 +50,8 @@ type WriteFileOutput struct {
 type ListDirectoryInput struct {
 	Path    string `json:"path"`
 	Pattern string `json:"pattern,omitempty"` // glob pattern, e.g. *.pas
+	SortBy  string `json:"sortBy,omitempty"`  // name (default), mtime, size
+	Reverse bool   `json:"reverse,omitempty"`
 }
 
 type ListDirectoryOutput struct {
@@ -116,10 +119,13 @@ type MoveFileOutput struct {
 
 // SearchFilesInput - pattern supports *.ext and **/*.ext syntax
 type SearchFilesInput struct {
-	Path            string   `json:"path"`
-	Pattern         string   `json:"pattern"`
-	ExcludePatterns []string `json:"excludePatterns,omitempty"`
-	MaxResults      int      `json:"maxResults,omitempty"`
+	Path             string   `json:"path"`
+	Pattern          string   `json:"pattern"`
+	ExcludePatterns  []string `json:"excludePatterns,omitempty"`
+	RespectGitignore *bool    `json:"respectGitignore,omitempty"`
+	MaxResults       int      `json:"maxResults,omitempty"`
+	SortBy           string   `json:"sortBy,omitempty"` // name, mtime, size; omitted preserves traversal order
+	Reverse          bool     `json:"reverse,omitempty"`
 }
 
 type SearchFilesOutput struct {
@@ -128,15 +134,17 @@ type SearchFilesOutput struct {
 }
 
 type EditOperation struct {
-	OldText string `json:"oldText"`
-	NewText string `json:"newText"`
+	OldText    string   `json:"oldText"`
+	NewText    string   `json:"newText"`
+	Similarity *float64 `json:"similarity,omitempty"`
 }
 
 // EditFileInput applies text replacements with whitespace-flexible matching.
 // Set DryRun to preview changes without writing.
 type EditFileInput struct {
 	Path          string          `json:"path"`
-	Edits         []EditOperation `json:"edits"`
+	Edits         []EditOperation `json:"edits,omitempty"`
+	Patch         string          `json:"patch,omitempty"`
 	DryRun        bool            `json:"dryRun,omitempty"`
 	Encoding      string          `json:"encoding,omitempty"`
 	ForceWritable *bool           `json:"forceWritable,omitempty"` // default: false - fail on read-only files
@@ -194,12 +202,13 @@ type ReadMultipleFilesOutput struct {
 
 // TreeInput for compact tree view. MaxFiles defaults to 1000.
 type TreeInput struct {
-	Path         string   `json:"path"`
-	MaxDepth     int      `json:"maxDepth,omitempty"`
-	MaxFiles     int      `json:"maxFiles,omitempty"`
-	DirsOnly     bool     `json:"dirsOnly,omitempty"`
-	Exclude      []string `json:"exclude,omitempty"`
-	ShowEncoding bool     `json:"showEncoding,omitempty"`
+	Path             string   `json:"path"`
+	MaxDepth         int      `json:"maxDepth,omitempty"`
+	MaxFiles         int      `json:"maxFiles,omitempty"`
+	DirsOnly         bool     `json:"dirsOnly,omitempty"`
+	Exclude          []string `json:"exclude,omitempty"`
+	ShowEncoding     bool     `json:"showEncoding,omitempty"`
+	RespectGitignore *bool    `json:"respectGitignore,omitempty"`
 }
 
 type TreeOutput struct {
@@ -229,35 +238,71 @@ type CopyFileOutput struct {
 // ConvertEncodingInput converts between encodings. From is auto-detected if empty.
 // BOM accepts "auto" (default), "always", "never", or "preserve".
 type ConvertEncodingInput struct {
-	Path   string `json:"path"`
-	From   string `json:"from,omitempty"`
-	To     string `json:"to"`
-	Backup bool   `json:"backup,omitempty"`
-	BOM    string `json:"bom,omitempty"`
+	Path   string   `json:"path,omitempty"`
+	Paths  []string `json:"paths,omitempty"`
+	From   string   `json:"from,omitempty"`
+	To     string   `json:"to"`
+	Backup bool     `json:"backup,omitempty"`
+	BOM    string   `json:"bom,omitempty"`
+	DryRun bool     `json:"dryRun,omitempty"`
+}
+
+type UnsupportedCharacter struct {
+	Rune   string `json:"rune"`
+	Code   string `json:"code"`
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+}
+
+type ConvertFileResult struct {
+	Path             string                 `json:"path"`
+	SourceEncoding   string                 `json:"sourceEncoding,omitempty"`
+	Changed          bool                   `json:"changed"`
+	Message          string                 `json:"message,omitempty"`
+	Error            string                 `json:"error,omitempty"`
+	ErrorCode        string                 `json:"errorCode,omitempty"`
+	BackupPath       string                 `json:"backupPath,omitempty"`
+	BOMPolicy        string                 `json:"bomPolicy,omitempty"`
+	HasBOM           bool                   `json:"hasBOM,omitempty"`
+	BOMType          string                 `json:"bomType,omitempty"`
+	Unsupported      []UnsupportedCharacter `json:"unsupported,omitempty"`
+	UnsupportedCount int                    `json:"unsupportedCount,omitempty"`
 }
 
 type ConvertEncodingOutput struct {
-	Message        string `json:"message"`
-	SourceEncoding string `json:"sourceEncoding"`
-	TargetEncoding string `json:"targetEncoding"`
-	BackupPath     string `json:"backupPath,omitempty"`
-	BOMPolicy      string `json:"bomPolicy"`
-	HasBOM         bool   `json:"hasBOM"`
-	BOMType        string `json:"bomType,omitempty"`
-	Changed        bool   `json:"changed"`
+	Message        string              `json:"message"`
+	SourceEncoding string              `json:"sourceEncoding"`
+	TargetEncoding string              `json:"targetEncoding"`
+	BackupPath     string              `json:"backupPath,omitempty"`
+	BOMPolicy      string              `json:"bomPolicy"`
+	HasBOM         bool                `json:"hasBOM"`
+	BOMType        string              `json:"bomType,omitempty"`
+	Changed        bool                `json:"changed"`
+	DryRun         bool                `json:"dryRun,omitempty"`
+	Results        []ConvertFileResult `json:"results,omitempty"`
+	SuccessCount   int                 `json:"successCount,omitempty"`
+	ErrorCount     int                 `json:"errorCount,omitempty"`
+	Errors         []string            `json:"errors,omitempty"`
 }
 
 // GrepInput for searching file contents with regex
 type GrepInput struct {
-	Pattern       string   `json:"pattern"`
-	Paths         []string `json:"paths"`
-	CaseSensitive *bool    `json:"caseSensitive,omitempty"` // defaults to true
-	ContextBefore int      `json:"contextBefore,omitempty"`
-	ContextAfter  int      `json:"contextAfter,omitempty"`
-	MaxMatches    int      `json:"maxMatches,omitempty"` // defaults to 1000
-	Include       string   `json:"include,omitempty"`
-	Exclude       string   `json:"exclude,omitempty"`
-	Encoding      string   `json:"encoding,omitempty"`
+	Pattern          string   `json:"pattern,omitempty"`
+	Patterns         []string `json:"patterns,omitempty"`
+	Paths            []string `json:"paths"`
+	CaseSensitive    *bool    `json:"caseSensitive,omitempty"` // defaults to true
+	ContextBefore    int      `json:"contextBefore,omitempty"`
+	ContextAfter     int      `json:"contextAfter,omitempty"`
+	MaxMatches       int      `json:"maxMatches,omitempty"` // defaults to 1000
+	Include          string   `json:"include,omitempty"`
+	Exclude          string   `json:"exclude,omitempty"`
+	Includes         []string `json:"includes,omitempty"`
+	Excludes         []string `json:"excludes,omitempty"`
+	Encoding         string   `json:"encoding,omitempty"`
+	OutputMode       string   `json:"outputMode,omitempty"` // content (default), files_with_matches, count
+	MatchesOnly      bool     `json:"matchesOnly,omitempty"`
+	Offset           int      `json:"offset,omitempty"`
+	RespectGitignore *bool    `json:"respectGitignore,omitempty"`
 }
 
 type GrepMatch struct {
@@ -270,12 +315,20 @@ type GrepMatch struct {
 	Encoding string   `json:"encoding,omitempty"`
 }
 
+type GrepFileCount struct {
+	Path  string `json:"path"`
+	Count int    `json:"count"`
+}
+
 type GrepOutput struct {
-	Matches       []GrepMatch `json:"matches"`
-	TotalMatches  int         `json:"totalMatches"`
-	FilesSearched int         `json:"filesSearched"`
-	FilesMatched  int         `json:"filesMatched"`
-	Truncated     bool        `json:"truncated,omitempty"`
+	Matches       []GrepMatch     `json:"matches"`
+	Files         []string        `json:"files,omitempty"`
+	Counts        []GrepFileCount `json:"counts,omitempty"`
+	TotalMatches  int             `json:"totalMatches"`
+	FilesSearched int             `json:"filesSearched"`
+	FilesMatched  int             `json:"filesMatched"`
+	Truncated     bool            `json:"truncated,omitempty"`
+	NextOffset    int             `json:"nextOffset,omitempty"`
 }
 
 type DetectLineEndingsInput struct {

@@ -7,6 +7,7 @@ This guide applies to `internal/filesystem/`. Follow the repository root [`AGENT
 - Treat every path and filesystem result as untrusted.
 - Use `internal/security` for path resolution and allowed-root enforcement; do not add weaker local prefix checks.
 - Recursive traversal must remain deterministic, cancellation-aware, and fail closed for symlinks, Windows junctions, and other reparse points that escape allowed roots.
+- `.gitignore` support must read only bounded regular files that resolve inside allowed roots, preserve nested last-match/negation semantics, and never weaken secure traversal.
 - Mutations stage bytes or reader streams in the destination directory, sync staged content before commit, and use the platform-specific atomic or no-replace primitive.
 - Existing targets use optimistic snapshots. Initially missing destinations must not overwrite a path created concurrently.
 - Preserve source permissions and timestamps where the public operation promises them.

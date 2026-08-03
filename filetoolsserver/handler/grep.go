@@ -30,15 +30,34 @@ const (
 	grepLineOverhead  = 32
 )
 
-// HandleGrep searches for a pattern in files with encoding support.
+// HandleGrep searches for one or more regex patterns with bounded paging.
 func (h *Handler) HandleGrep(ctx context.Context, req *mcp.CallToolRequest, input GrepInput) (*mcp.CallToolResult, GrepOutput, error) {
-	if input.Pattern == "" {
-		return errorResult("pattern is required"), GrepOutput{}, nil
+	patterns := make([]string, 0, 1+len(input.Patterns))
+	if strings.TrimSpace(input.Pattern) != "" {
+		patterns = append(patterns, input.Pattern)
+	}
+	for _, pattern := range input.Patterns {
+		if strings.TrimSpace(pattern) != "" {
+			patterns = append(patterns, pattern)
+		}
+	}
+	if len(patterns) == 0 {
+		return errorResult("pattern or patterns is required"), GrepOutput{}, nil
 	}
 	if len(input.Paths) == 0 {
 		return errorResult("paths is required"), GrepOutput{}, nil
 	}
-	re, err := compilePattern(input.Pattern, input.CaseSensitive)
+	if input.Offset < 0 {
+		return errorResult("offset must be non-negative"), GrepOutput{}, nil
+	}
+	outputMode := strings.ToLower(strings.TrimSpace(input.OutputMode))
+	if outputMode == "" {
+		outputMode = "content"
+	}
+	if outputMode != "content" && outputMode != "files_with_matches" && outputMode != "count" {
+		return errorResult("outputMode must be content, files_with_matches, or count"), GrepOutput{}, nil
+	}
+	re, err := compilePatterns(patterns, input.CaseSensitive)
 	if err != nil {
 		return errorResult(fmt.Sprintf("invalid regex pattern: %v", err)), GrepOutput{}, nil
 	}
@@ -46,39 +65,98 @@ func (h *Handler) HandleGrep(ctx context.Context, req *mcp.CallToolRequest, inpu
 	if maxMatches <= 0 {
 		maxMatches = min(defaultMaxMatches, h.maxMatches())
 	}
-	if maxMatches > h.maxMatches() {
+	if maxMatches > h.maxMatches() || input.Offset > h.maxMatches()-maxMatches {
 		return errorResultWithCode(
 			ErrCodeLimit,
-			fmt.Sprintf("maxMatches %d exceeds the configured limit %d", maxMatches, h.maxMatches()),
+			fmt.Sprintf("offset + maxMatches exceeds the configured limit %d", h.maxMatches()),
 		), GrepOutput{}, nil
 	}
-	files := h.collectFiles(ctx, input.Paths, input.Include, input.Exclude)
+	includes := append([]string(nil), input.Includes...)
+	if input.Include != "" {
+		includes = append(includes, input.Include)
+	}
+	excludes := append([]string(nil), input.Excludes...)
+	if input.Exclude != "" {
+		excludes = append(excludes, input.Exclude)
+	}
+	files, collectErr := h.collectFiles(ctx, input.Paths, includes, excludes, shouldRespectGitignore(input.RespectGitignore))
+	if collectErr != nil {
+		return errorResult("grep traversal failed: " + collectErr.Error()), GrepOutput{}, nil
+	}
 	if len(files) == 0 {
 		return &mcp.CallToolResult{}, GrepOutput{Matches: []GrepMatch{}, FilesSearched: 0}, nil
 	}
-	matches, filesMatched, truncated, err := h.searchFiles(ctx, files, re, input, maxMatches)
+
+	output := GrepOutput{Matches: []GrepMatch{}, FilesSearched: len(files)}
+	if outputMode == "files_with_matches" || outputMode == "count" {
+		needed := input.Offset + maxMatches + 1
+		summaries, summaryTruncated, summaryErr := h.searchFileSummaries(ctx, files, re, input, needed)
+		if summaryErr != nil {
+			return errorResultFromError(summaryErr), GrepOutput{}, nil
+		}
+		output.FilesMatched = len(summaries)
+		start, end := pageBounds(len(summaries), input.Offset, maxMatches)
+		selected := summaries[start:end]
+		if outputMode == "files_with_matches" {
+			output.Files = make([]string, len(selected))
+			for index, summary := range selected {
+				output.Files[index] = summary.Path
+			}
+			output.TotalMatches = len(output.Files)
+		} else {
+			output.Counts = append([]GrepFileCount(nil), selected...)
+			for _, summary := range summaries {
+				output.TotalMatches += summary.Count
+			}
+		}
+		output.Truncated = summaryTruncated || end < len(summaries)
+		if output.Truncated {
+			output.NextOffset = end
+		}
+		return &mcp.CallToolResult{}, output, nil
+	}
+
+	scanLimit := input.Offset + maxMatches + 1
+	matches, filesMatched, scanTruncated, err := h.searchFiles(ctx, files, re, input, scanLimit)
 	if err != nil {
 		return errorResultFromError(err), GrepOutput{}, nil
 	}
-	return &mcp.CallToolResult{}, GrepOutput{
-		Matches:       matches,
-		TotalMatches:  len(matches),
-		FilesSearched: len(files),
-		FilesMatched:  filesMatched,
-		Truncated:     truncated,
-	}, nil
+	output.FilesMatched = filesMatched
+	start, end := pageBounds(len(matches), input.Offset, maxMatches)
+	output.Matches = append([]GrepMatch(nil), matches[start:end]...)
+	if input.MatchesOnly {
+		for index := range output.Matches {
+			output.Matches[index].Text = re.FindString(output.Matches[index].Text)
+		}
+	}
+	output.TotalMatches = len(output.Matches)
+	output.Truncated = scanTruncated || end < len(matches)
+	if output.Truncated {
+		output.NextOffset = end
+	}
+	return &mcp.CallToolResult{}, output, nil
 }
 
-// compilePattern compiles the regex pattern with optional case sensitivity.
-func compilePattern(pattern string, caseSensitive *bool) (*regexp.Regexp, error) {
-	if caseSensitive != nil && !*caseSensitive {
-		pattern = "(?i)" + pattern
+func pageBounds(length, offset, limit int) (int, int) {
+	start := min(offset, length)
+	end := min(length, start+limit)
+	return start, end
+}
+
+func compilePatterns(patterns []string, caseSensitive *bool) (*regexp.Regexp, error) {
+	wrapped := make([]string, len(patterns))
+	for index, pattern := range patterns {
+		wrapped[index] = "(?:" + pattern + ")"
 	}
-	return regexp.Compile(pattern)
+	combined := strings.Join(wrapped, "|")
+	if caseSensitive != nil && !*caseSensitive {
+		combined = "(?i:" + combined + ")"
+	}
+	return regexp.Compile(combined)
 }
 
 // collectFiles gathers all files to search from the given paths.
-func (h *Handler) collectFiles(ctx context.Context, paths []string, include, exclude string) []string {
+func (h *Handler) collectFiles(ctx context.Context, paths, includes, excludes []string, respectGitignore bool) ([]string, error) {
 	var files []string
 	seen := make(map[string]bool)
 	allowedDirs := h.ResolvedAllowedDirs()
@@ -86,7 +164,7 @@ func (h *Handler) collectFiles(ctx context.Context, paths []string, include, exc
 		// Check for cancellation between paths
 		select {
 		case <-ctx.Done():
-			return files
+			return files, ctx.Err()
 		default:
 		}
 		v := h.ValidatePath(path)
@@ -100,6 +178,7 @@ func (h *Handler) collectFiles(ctx context.Context, paths []string, include, exc
 		if info.IsDir() {
 			err := filesystem.Walk(ctx, v.Path, filesystem.WalkOptions{
 				ResolvedAllowedDirs: allowedDirs,
+				RespectGitignore:    respectGitignore,
 				OnError: func(path string, _ int, err error) error {
 					slog.Debug("skipping path due to error", "path", path, "error", err)
 					return nil
@@ -108,46 +187,108 @@ func (h *Handler) collectFiles(ctx context.Context, paths []string, include, exc
 				if entry.DirEntry.IsDir() {
 					return filesystem.WalkContinue, nil
 				}
-				if shouldIncludeFile(entry.Path, include, exclude) && !seen[entry.ResolvedPath] {
+				if shouldIncludeFile(entry.Path, includes, excludes) && !seen[entry.ResolvedPath] {
 					seen[entry.ResolvedPath] = true
 					files = append(files, entry.ResolvedPath)
 				}
 				return filesystem.WalkContinue, nil
 			})
-			if err != nil && ctx.Err() != nil {
-				return files
+			if err != nil {
+				if ctx.Err() != nil {
+					return files, ctx.Err()
+				}
+				return files, err
 			}
-		} else if shouldIncludeFile(v.Path, include, exclude) && !seen[v.Path] {
+		} else if shouldIncludeFile(v.Path, includes, excludes) && !seen[v.Path] {
 			seen[v.Path] = true
 			files = append(files, v.Path)
 		}
 	}
-	return files
+	return files, nil
 }
 
 // shouldIncludeFile checks if a file matches include/exclude patterns.
 // Matches against both full path (with forward slashes) and basename.
-func shouldIncludeFile(path string, include, exclude string) bool {
-	base := filepath.Base(path)
-	normalized := filepath.ToSlash(path)
-	if exclude != "" {
-		if matchedBase, _ := filepath.Match(exclude, base); matchedBase {
-			return false
-		}
-		if matchedPath, _ := filepath.Match(exclude, normalized); matchedPath {
-			return false
-		}
-	}
-	if include != "" {
-		if matchedBase, _ := filepath.Match(include, base); matchedBase {
-			return true
-		}
-		if matchedPath, _ := filepath.Match(include, normalized); matchedPath {
-			return true
+func shouldIncludeFile(filePath string, includes, excludes []string) bool {
+	base := filepath.Base(filePath)
+	normalized := filepath.ToSlash(filePath)
+	matchesAny := func(patterns []string) bool {
+		for _, pattern := range patterns {
+			if matchedBase, _ := filepath.Match(pattern, base); matchedBase {
+				return true
+			}
+			if matchedPath, _ := filepath.Match(filepath.ToSlash(pattern), normalized); matchedPath {
+				return true
+			}
 		}
 		return false
 	}
-	return true
+	if matchesAny(excludes) {
+		return false
+	}
+	return len(includes) == 0 || matchesAny(includes)
+}
+
+func (h *Handler) searchFileSummaries(ctx context.Context, files []string, re *regexp.Regexp, input GrepInput, limit int) ([]GrepFileCount, bool, error) {
+	summaries := make([]GrepFileCount, 0, min(limit, len(files)))
+	for index, path := range files {
+		count, err := h.countMatchingLines(ctx, path, re, input.Encoding)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, false, ctx.Err()
+			}
+			slog.Debug("skipping file due to grep summary error", "path", path, "error", err)
+			continue
+		}
+		if count == 0 {
+			continue
+		}
+		summaries = append(summaries, GrepFileCount{Path: path, Count: count})
+		if len(summaries) >= limit {
+			return summaries, index < len(files)-1, nil
+		}
+	}
+	return summaries, false, nil
+}
+
+func (h *Handler) countMatchingLines(ctx context.Context, path string, re *regexp.Regexp, requestedEncoding string) (int, error) {
+	validated := h.ValidatePath(path)
+	if !validated.Ok() {
+		return 0, validated.Err
+	}
+	stream, err := h.openDecodedTextStream(ctx, validated.Path, requestedEncoding)
+	if err != nil {
+		return 0, err
+	}
+	defer stream.Close()
+
+	prefix := make([]byte, binaryCheckSize)
+	read, prefixErr := io.ReadFull(stream.Reader, prefix)
+	if prefixErr != nil && !errors.Is(prefixErr, io.EOF) && !errors.Is(prefixErr, io.ErrUnexpectedEOF) {
+		return 0, prefixErr
+	}
+	prefix = prefix[:read]
+	if len(prefix) == 0 || isLikelyBinaryText(string(trimIncompleteUTF8Suffix(prefix))) {
+		return 0, nil
+	}
+
+	count := 0
+	reader := io.MultiReader(bytes.NewReader(prefix), stream.Reader)
+	_, scanErr := textstream.ScanLines(ctx, reader, h.maxLineBytes(), func(line textstream.Line) error {
+		for _, segment := range bytes.Split(line.Data, []byte{'\r'}) {
+			if re.Match(segment) {
+				count++
+			}
+		}
+		return nil
+	})
+	if scanErr != nil {
+		return 0, scanErr
+	}
+	if _, err := stream.Finish(); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 type grepFileResult struct {
