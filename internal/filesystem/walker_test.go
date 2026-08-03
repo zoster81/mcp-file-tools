@@ -153,6 +153,42 @@ func TestWalk_OnErrorCanSkipChangedSubtree(t *testing.T) {
 	}
 }
 
+func TestWalk_ReportsButDoesNotFollowSafeDirectoryLinks(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	mustMkdirAll(t, target)
+	mustWriteFile(t, filepath.Join(target, "nested.txt"))
+	alias := filepath.Join(root, "alias")
+	createDirectoryLinkForTest(t, target, alias)
+
+	var visited []string
+	var aliasIsLink bool
+	err := Walk(context.Background(), root, WalkOptions{
+		ResolvedAllowedDirs: security.ResolveAllowedDirs([]string{root}),
+	}, func(entry Entry) (WalkAction, error) {
+		relative := filepath.ToSlash(entry.RelativePath)
+		visited = append(visited, relative)
+		if relative == "alias" {
+			aliasIsLink = entry.IsLink
+		}
+		return WalkContinue, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !aliasIsLink {
+		t.Fatalf("safe directory alias was not identified as a link: %v", visited)
+	}
+	if containsTestPath(visited, "alias/nested.txt") {
+		t.Fatalf("safe directory link was followed: %v", visited)
+	}
+	for _, required := range []string{"alias", "target", "target/nested.txt"} {
+		if !containsTestPath(visited, required) {
+			t.Fatalf("missing %q from visited paths: %v", required, visited)
+		}
+	}
+}
+
 func TestWalk_SkipsDirectoryLinkEscape(t *testing.T) {
 	allowedDir := t.TempDir()
 	outsideDir := t.TempDir()
@@ -241,6 +277,15 @@ func createDirectoryLinkForTest(t *testing.T, target, link string) {
 	if err != nil {
 		t.Skipf("directory junction creation is not supported in this environment: %v (%s)", err, output)
 	}
+}
+
+func containsTestPath(paths []string, target string) bool {
+	for _, path := range paths {
+		if path == target {
+			return true
+		}
+	}
+	return false
 }
 
 func mustMkdirAll(t *testing.T, path string) {

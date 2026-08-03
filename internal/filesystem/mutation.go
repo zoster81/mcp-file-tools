@@ -138,6 +138,12 @@ func (snapshot FileSnapshot) MatchesContentDigest(size int64, digest []byte) boo
 		len(digest) == sha256.Size && bytes.Equal(snapshot.digest[:], digest)
 }
 
+// ContentDigest returns the captured SHA-256 digest without exposing mutable
+// snapshot storage. The boolean is false when the snapshot has no digest.
+func (snapshot FileSnapshot) ContentDigest() ([sha256.Size]byte, bool) {
+	return snapshot.digest, snapshot.hasDigest
+}
+
 // Verify confirms that path still matches the captured state.
 func (snapshot FileSnapshot) Verify(path string) (err error) {
 	defer func() {

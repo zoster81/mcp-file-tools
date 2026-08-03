@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 is complete in source and remains unreleased. R16 is the active design and implementation milestone.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -31,6 +31,7 @@ Product identity and the fork's independent relationship to upstream are defined
 | R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
 | R14 | COMPLETE | Completed hardening, publication, dual-transport deployment, active rollback, restoration, and final handoff for 2.0.0. |
 | R15 | COMPLETE | Added attributed agent-ergonomics and project-aware workflows while preserving transport, memory, mutation, and security guarantees. |
+| R16 | ACTIVE | Add verified change workflows through deterministic fingerprints, one-shot edit preview/apply, declared patch packages, and structured verification. |
 
 ---
 
@@ -397,3 +398,66 @@ Accepted R15 features demonstrate measurable call/token reduction, pass normal a
 Completed on 2026-08-03. The existing 23-tool catalog gained backward-compatible optional fields for line-numbered reads, richer paged grep, `.gitignore`-aware traversal, explicit bounded sorting, batch conversion previews, strict unified patches, and ambiguity-safe fuzzy edits. Three shared MCP prompts now guide encoding audits, mojibake diagnosis, and controlled UTF-8 migration over both stdio and Streamable HTTP. The original project is credited for both the feature concepts and implementation approaches reviewed, while the resulting code was reworked for the fork's secure walker, bounded-memory pipeline, durable mutation layer, stable schemas, process-wide roots, and dual-transport security model.
 
 Normal, compatibility, malformed-input, symlink/reparse, `.gitignore`, paging, starvation, backup-collision, partial-batch, unsupported-character, patch, fuzzy-ambiguity, concurrency, and HTTP equivalence tests passed. A deterministic fixture reduced retained grep JSON from 2,963 bytes in content mode to 379 bytes in path-only mode, while batch conversion consolidates multiple files into one MCP request. Complete Go tests, the race detector, vet, Staticcheck, govulncheck, manual MCP checks, release-script tests, documentation/catalog identity checks, link validation, and Gitleaks passed. R15 has not yet been packaged into a public release or deployed to an operator runtime.
+
+---
+
+# R16 — Verified change workflows
+
+## Status
+
+Active. Approved on 2026-08-03. The deterministic fingerprint tranche is implemented and verified in source; preview/apply, patch packages, and structured verification remain pending.
+
+## Goal
+
+Make agent-driven mutations explicitly approvable, state-bound, reproducible, and verifiable without weakening the fork's existing path security, encoding preservation, durable single-file mutation guarantees, bounded-memory behavior, stable errors, or transport equivalence.
+
+The approved design baseline is [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_WORKFLOWS.md). That document is authoritative for R16 scope, security boundaries, sequencing, non-goals, and the deferred persistent-backup gate.
+
+## Approved implementation scope
+
+- [x] Add deterministic streamed fingerprints for explicit files and directory roots through the secure walker.
+- [ ] Add bounded one-shot preview/apply for existing `edit_file` operations, with cryptographically unguessable expiring identifiers, replay prevention, and target/result fingerprint validation.
+- [ ] Add a versioned declared patch-package format with inspect, dry-run, apply, and verify actions for bounded edits to existing regular files.
+- [ ] Preflight and stage every patch-package target before the first commit, then report any partial commit precisely without claiming multi-file atomicity or retained rollback.
+- [ ] Add selected structured verification checks with typed arguments, bounded diagnostics, fixed direct executable invocation where required, and no arbitrary shell command.
+- [ ] Keep schemas, limits, error metadata, prompts, and behavior equivalent over stdio and stateful Streamable HTTP.
+- [ ] Complete focused TDD, adversarial path/cache/replay/partial-commit tests, full regression, race, static-analysis, vulnerability, manual MCP, catalog, documentation, and repository checks.
+
+## Deferred but approved work
+
+Persistent backup storage and user-managed change review are approved in principle but blocked on a separate lifecycle design. R16 must not introduce an incidental unbounded `.bak` scheme or imply that patch packages can be restored after success.
+
+The later design review must resolve store location, content-addressed deduplication, global and per-target quotas, retention, pinning, registry/manifests, dry-run garbage collection, restore preview/apply, secret handling, crash recovery, corruption behavior, and quota-exhaustion policy.
+
+Until that gate is approved:
+
+- preview/apply creates no new persistent backup;
+- patch packages expose no retained rollback point;
+- change review consists of the approved diff plus pre/post fingerprints;
+- existing operation-specific backup behavior remains unchanged.
+
+## Design constraints
+
+- Preserve backward-compatible direct edit behavior unless a separately approved API decision changes it.
+- Use a process-local, bounded, expiring preview cache; process restart invalidates previews.
+- Apply must consume the exact prepared operation rather than accepting resubmitted edit instructions.
+- Fingerprints exclude unstable platform metadata by default and stream file content without full-file allocation.
+- Patch packages initially edit existing regular files only; creation, deletion, move, rename, and `/dev/null` forms are rejected.
+- Structured verification starts with filesystem- and repository-adjacent checks rather than a generic build or command runner.
+- Never use a shell for structured verification.
+- Do not claim complete atomicity across multiple files.
+- Do not add per-session roots, HTTP root mutation, or weaker path validation.
+
+## Implementation order
+
+1. Fingerprint schema, shared primitive, and tests.
+2. Bounded preview storage and `edit_file` preview/apply.
+3. Patch-package manifest, inspect, and dry-run.
+4. Patch-package apply, partial-commit reporting, and verify.
+5. Initial structured verification checks.
+6. Full R16 verification and documentation alignment.
+7. Separate persistent-backup lifecycle brainstorming before any backup-store implementation.
+
+## Completion gate
+
+R16 is complete only when the requirements and tests in [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_WORKFLOWS.md) pass, all caches and outputs are bounded, stale or replayed approvals fail closed, package partial state is reported accurately, structured checks accept no arbitrary command strings, and no persistent backup system has been introduced without its separate approved design.

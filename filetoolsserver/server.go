@@ -24,6 +24,7 @@ PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encodi
 - edit_file: full-document editing with a hard MCP_MAX_FILE_BYTES limit; accepts exact/flexible edits, opt-in bounded unique fuzzy matching, or one strict single-file unified patch; preserves BOM and consistent CRLF/LF style
 - grep_text_files: deterministic incremental regex search with bounded paging, pattern/filter arrays, content/files/count modes, and optional matches-only text; recursive inputs respect nested .gitignore files by default
 - tree/search_files: deterministic secure traversal that skips entries resolving outside allowed directories and respects nested .gitignore files by default; search sorting remains bounded by maxResults
+- fingerprint_paths: two-pass deterministic SHA-256 state fingerprints for explicit files and directory roots, with canonical relative paths, .git and in-root link exclusion, no link traversal, optional bounded entry details, and concurrent-change detection
 - list_directory/search_files: optional deterministic name/mtime/size sorting with reverse order; metadata sorting never follows an entry outside allowed roots
 - convert_encoding: one path or a bounded paths batch; dryRun reports unsupported runes with positions before writes, and each changed item retains durable no-op, backup, and conflict guarantees
 - prompts: audit_encodings, fix_mojibake, and migrate_to_utf8 are transport-independent guided workflows
@@ -132,6 +133,8 @@ func BuildServer(options ServerOptions) *mcp.Server {
 	mcp.AddTool(server, catalogTool("tree"), handler.Wrap(logger, "tree", h.HandleTree))
 
 	mcp.AddTool(server, catalogTool("search_files"), handler.Wrap(logger, "search_files", h.HandleSearchFiles))
+
+	mcp.AddTool(server, catalogTool("fingerprint_paths"), handler.Wrap(logger, "fingerprint_paths", h.HandleFingerprintPaths))
 
 	mcp.AddTool(server, catalogTool("detect_line_endings"), handler.Wrap(logger, "detect_line_endings", h.HandleDetectLineEndings))
 

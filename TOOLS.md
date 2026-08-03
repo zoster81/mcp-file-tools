@@ -1,6 +1,6 @@
 # Tools Reference
 
-The authoritative 23-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
+The authoritative 24-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
 
 ## Guided Prompts
 
@@ -192,7 +192,7 @@ The `readOnlyCleared` field indicates if the read-only flag was removed (only pr
 
 ## Directory Operations
 
-The recursive tools `tree`, `search_files`, and `grep_text_files` use one deterministic, cancellation-aware secure walker. Every traversed entry is resolved before it is exposed to the tool; symlinks, Windows junctions, and other reparse points that resolve outside the allowed directories are skipped. Directory links encountered below the requested root are not followed. Nested `.gitignore` files are respected by default; each must be a bounded regular file inside an allowed root, and callers may opt out explicitly with `respectGitignore: false`.
+The recursive tools `tree`, `search_files`, `grep_text_files`, and `fingerprint_paths` use one deterministic, cancellation-aware secure walker. Every traversed entry is resolved before it is exposed to the tool. `tree`, `search_files`, and `grep_text_files` skip links or reparse points that resolve outside allowed directories; `fingerprint_paths` fails closed because silently omitting a required entry would produce misleading state evidence. Directory links encountered below the requested root are not followed. Nested `.gitignore` files are respected by default; each must be a bounded regular file inside an allowed root, and callers may opt out explicitly with `respectGitignore: false`.
 
 ### list_directory
 
@@ -336,6 +336,58 @@ Recursively search for files and directories matching a glob pattern through the
     "/path/to/project/main.go",
     "/path/to/project/src/utils.go"
   ]
+}
+```
+
+### fingerprint_paths
+
+Stream one deterministic SHA-256 content fingerprint for explicit regular files and directory roots. The canonical `content-v1` record format includes the input root index, Unicode-NFC slash-separated relative path, entry type, byte length, and file-content SHA-256. Absolute root names, modification times, ownership, and platform-specific permission bits are excluded, so identical trees copied to different locations produce the same result when the ordered inputs and filtering options match. If one root contains distinct filesystem names that collapse to the same NFC canonical path, the request fails with `INVALID_INPUT` instead of producing an ambiguous record stream.
+
+Directory roots use deterministic lexical traversal, exclude `.git` directories in every mode, and respect nested `.gitignore` rules by default. Set `respectGitignore: false` to include otherwise ignored working-tree files; `.git` internals remain excluded. The initial `content-v1` mode includes real directories and regular files only: in-root symlinks, junctions, and other reparse-point entries are neither followed nor included, while entries resolving outside allowed roots fail with `SYMLINK_ESCAPE`. File bytes are streamed in two complete passes; success requires the aggregate state to match, so concurrent content, directory, or filtering changes fail with `CONFLICT`.
+
+`MCP_MAX_BATCH_FILES` bounds root count, `MCP_MAX_FINGERPRINT_ENTRIES` bounds total inspected files plus directories, `MCP_MAX_FINGERPRINT_ENTRY_DETAILS` bounds optional entry records, and `MCP_MAX_OUTPUT_BYTES` bounds the encoded result. Entry-detail truncation does not change the aggregate fingerprint.
+
+**Parameters:**
+- `paths` (required): Ordered array of explicit regular files or directory roots
+- `respectGitignore` (optional): Apply nested `.gitignore` rules to directory roots (default: true)
+- `includeEntries` (optional): Return bounded per-entry records (default: false)
+- `maxEntryDetails` (optional): Requested entry-detail limit; requires `includeEntries: true` and cannot exceed the server limit
+
+**Example:**
+```json
+{
+  "paths": ["/path/to/project", "/path/to/explicit.lock"],
+  "includeEntries": true,
+  "maxEntryDetails": 100
+}
+```
+
+**Response:**
+```json
+{
+  "algorithm": "sha256",
+  "mode": "content-v1",
+  "fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "rootCount": 2,
+  "fileCount": 18,
+  "directoryCount": 6,
+  "totalBytes": 48291,
+  "entries": [
+    {
+      "rootIndex": 0,
+      "path": ".",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "rootIndex": 0,
+      "path": "README.md",
+      "type": "file",
+      "size": 4120,
+      "sha256": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    }
+  ],
+  "entriesTruncated": true
 }
 ```
 

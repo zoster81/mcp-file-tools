@@ -8,7 +8,7 @@ This repository is not a compatibility branch intended for routine merging with 
 
 The fork is a secure, encoding-aware MCP filesystem service for local, tunneled, containerized, and explicitly secured network deployments. Its supported scope includes:
 
-- the same authoritative 23-tool catalog over stdio and native stateful Streamable HTTP;
+- the same authoritative 24-tool catalog over stdio and native stateful Streamable HTTP;
 - process-wide allowed-directory policy with symlink, junction, reparse-point, and missing-ancestor validation;
 - bounded-memory decoding, reading, grep, conversion, line-ending, and BOM operations across 24 registered encodings;
 - durable staged mutations with practical concurrent-change detection, no-replace creation, backup rollback, and platform-specific synchronization;

@@ -15,6 +15,7 @@ Do not copy private workstation state, local process details, credentials, or op
 - Tool behavior and examples: [`TOOLS.md`](TOOLS.md)
 - Release procedure: [`docs/PUBLISHING.md`](docs/PUBLISHING.md)
 - Streamable HTTP security design: [`docs/HTTP_SECURITY.md`](docs/HTTP_SECURITY.md)
+- R16 verified-change design: [`docs/VERIFIED_CHANGE_WORKFLOWS.md`](docs/VERIFIED_CHANGE_WORKFLOWS.md)
 - Authoritative MCP tool metadata: [`internal/toolcatalog/catalog.json`](internal/toolcatalog/catalog.json)
 
 Link to these documents instead of duplicating their detailed content.

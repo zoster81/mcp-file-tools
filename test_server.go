@@ -77,6 +77,9 @@ func main() {
 	r10, o10, _ := h.HandleTree(ctx, nil, handler.TreeInput{Path: tempDir})
 	check("tree", !r10.IsError && o10.FileCount >= 2 && o10.DirCount >= 1)
 
+	r11, o11, _ := h.HandleFingerprintPaths(ctx, nil, handler.FingerprintPathsInput{Paths: []string{tempDir}, IncludeEntries: true})
+	check("fingerprint_paths", !r11.IsError && len(o11.Fingerprint) == 64 && o11.FileCount >= 3 && o11.DirectoryCount >= 2 && len(o11.Entries) > 0)
+
 	// Offset/Limit pagination
 	multiFile := filepath.Join(tempDir, "multi.txt")
 	os.WriteFile(multiFile, []byte("a\nb\nc\nd"), 0644)

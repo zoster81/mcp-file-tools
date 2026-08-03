@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/zoster81/mcp-file-tools/internal/security"
@@ -29,6 +30,7 @@ type Entry struct {
 	Name         string
 	Depth        int
 	DirEntry     fs.DirEntry
+	IsLink       bool
 }
 
 // WalkOptions defines shared traversal policy. Exclude prunes matching
@@ -37,6 +39,7 @@ type WalkOptions struct {
 	ResolvedAllowedDirs []string
 	MaxDepth            int
 	Exclude             func(Entry) bool
+	OnUnsafe            func(path string, depth int) error
 	OnError             func(path string, depth int, err error) error
 	RespectGitignore    bool
 }
@@ -82,6 +85,9 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 
 	resolvedDir, safe := security.ResolvePathSafe(dirPath, options.ResolvedAllowedDirs)
 	if !safe {
+		if _, err := os.Stat(dirPath); err != nil {
+			return handleWalkError(options, dirPath, depth, err)
+		}
 		return handleWalkError(options, dirPath, depth, fmt.Errorf("path is no longer safe: %s", dirPath))
 	}
 
@@ -113,6 +119,11 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 		childPath := filepath.Join(resolvedDir, dirEntry.Name())
 		resolvedChild, safe := security.ResolvePathSafe(childPath, options.ResolvedAllowedDirs)
 		if !safe {
+			if options.OnUnsafe != nil {
+				if unsafeErr := options.OnUnsafe(childPath, depth+1); unsafeErr != nil {
+					return unsafeErr
+				}
+			}
 			continue
 		}
 
@@ -127,6 +138,7 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 			Name:         dirEntry.Name(),
 			Depth:        depth + 1,
 			DirEntry:     dirEntry,
+			IsLink:       dirEntry.Type()&os.ModeSymlink != 0 || !sameTraversalPath(childPath, resolvedChild),
 		}
 		if options.RespectGitignore {
 			if dirEntry.IsDir() && strings.EqualFold(dirEntry.Name(), ".git") {
@@ -147,7 +159,7 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 		if action == WalkStop {
 			return errWalkStopped
 		}
-		if !dirEntry.IsDir() || action == WalkSkipDir {
+		if entry.IsLink || !dirEntry.IsDir() || action == WalkSkipDir {
 			continue
 		}
 		if options.MaxDepth > 0 && entry.Depth >= options.MaxDepth {
@@ -158,6 +170,15 @@ func walkDirectory(ctx context.Context, dirPath, relativeDir string, depth int, 
 		}
 	}
 	return nil
+}
+
+func sameTraversalPath(first, second string) bool {
+	first = filepath.Clean(first)
+	second = filepath.Clean(second)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(first, second)
+	}
+	return first == second
 }
 
 func handleWalkError(options WalkOptions, path string, depth int, err error) error {

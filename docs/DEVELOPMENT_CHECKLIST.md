@@ -14,6 +14,8 @@ Apply only the checks relevant to the change, but record omissions explicitly.
 - [ ] Define filesystem, permission, read-only, missing-path, and partial-failure behavior.
 - [ ] Review path traversal, symlink, junction, reparse-point, and allowed-root risks.
 - [ ] Review cancellation, timeout, concurrency, race, TOCTOU, and cleanup behavior.
+- [ ] For prepared operations, define capability-token lifetime, entropy, replay, ownership, eviction, restart, and stale-target behavior.
+- [ ] For multi-file operations, define preflight, staging, commit order, partial-commit reporting, crash behavior, and any explicit non-atomicity.
 - [ ] Review Windows, Linux, macOS, long-path, and cross-platform implications.
 - [ ] Identify likely regressions and public behavior that must remain unchanged.
 
@@ -23,6 +25,8 @@ Apply only the checks relevant to the change, but record omissions explicitly.
 - [ ] Keep transport, MCP adapters, domain logic, and filesystem primitives separated.
 - [ ] Reuse shared internal primitives instead of adding local copies.
 - [ ] Define data flow, ownership, memory bounds, and cleanup responsibilities.
+- [ ] Define deterministic fingerprint fields, canonical path representation, metadata exclusions, and cross-platform stability.
+- [ ] Keep persistent backup retention, quota, registry, garbage collection, and restore policy behind an explicit approved design gate.
 - [ ] Define typed errors and public error mapping.
 - [ ] Define time and space complexity when relevant.
 - [ ] Select focused failing tests before implementation when practical.
@@ -32,14 +36,17 @@ Apply only the checks relevant to the change, but record omissions explicitly.
 - [ ] Include cancellation, timeout, saturation, deterministic ordering, and race cases where relevant.
 - [ ] Include platform-specific and cross-build coverage where relevant.
 - [ ] Include security-negative tests, not only successful paths.
+- [ ] For structured execution, verify fixed direct invocation, argument construction, working-directory confinement, environment filtering, timeout, and bounded diagnostics without a shell.
 
 ## 3. Devil's advocate review
 
 - [ ] Identify at least two concrete implementation risks.
 - [ ] Review allowed-root escape and path-based race windows.
 - [ ] Review data loss, non-atomic writes, rollback, cleanup, and recovery artifacts.
-- [ ] Review unbounded memory, output, lines, requests, sessions, or worker queues.
+- [ ] Review unbounded memory, output, lines, requests, sessions, worker queues, preview caches, manifests, and retained recovery artifacts.
 - [ ] Review nondeterministic ordering and cancellation behavior.
+- [ ] Review capability guessing, disclosure, replay, concurrent consumption, expiration, and cache-exhaustion risks.
+- [ ] Review multi-file partial commits, misleading atomicity claims, and recovery evidence after failure.
 - [ ] Review encoding corruption, malformed Unicode, and binary false positives.
 - [ ] Review dependency, platform, API, metadata, and documentation drift.
 - [ ] Revise the design before implementation if mitigations are insufficient.

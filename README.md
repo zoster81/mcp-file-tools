@@ -11,7 +11,7 @@ AI clients see `Настройки` — not `????` or `Íàñòðîéêè`.
 
 Secure, encoding-aware MCP filesystem service with two first-class transports: local **stdio** and native stateful **MCP Streamable HTTP**. It detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
 
-- **23 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
+- **24 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
 - **Agent-oriented repository workflows** — optional read line numbers, paged/multi-mode grep, `.gitignore` traversal, bounded sorting, batch conversion previews, strict patch edits, and ambiguity-safe fuzzy matching.
 - **24 registered encodings** — Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030, and other legacy text formats.
 - **Fail-closed HTTP service** — bearer authentication on every MCP request, loopback defaults, exact Host/Origin checks, bounded sessions and request resources, no CORS, and explicit TLS/proxy requirements for non-loopback exposure.
@@ -29,13 +29,13 @@ This repository began as a deployment-oriented fork for ChatGPT Web, but version
 | stdio | Local MCP clients and secure tunnel bridges | Client configuration and operating-system process boundary | Startup directories are authoritative; dynamic roots are a compatibility fallback only when startup roots are empty |
 | stateful Streamable HTTP | Persistent localhost services, containers, trusted proxies, and explicitly secured remote services | Bearer token on every MCP request; loopback by default; TLS or a trusted proxy boundary for non-loopback listeners | Startup directories are immutable and shared by every session; HTTP client roots are disabled |
 
-Both transports use the same `BuildServer` path and expose the same 23 tools, 3 prompts, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
+Both transports use the same `BuildServer` path and expose the same 24 tools, 3 prompts, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
 
 The OpenAI Secure MCP Tunnel remains a supported stdio deployment option, not the identity or only use case of the project. The fork does not require Claude Code, Codex, ChatGPT, or another specific MCP host. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; any compatible client can invoke the released binary directly or connect to its HTTP endpoint.
 
 ### Process-wide directory and session model
 
-Allowed directories are a **process-wide authorization boundary**. Every MCP connection or future HTTP session attached to one server process sees the same configured directory set and the same 23 tools, limits, execution flags, and error behavior. A session represents an independent protocol connection with its own requests, cancellation, and lifecycle; it is not a per-agent filesystem role or sandbox.
+Allowed directories are a **process-wide authorization boundary**. Every MCP connection or future HTTP session attached to one server process sees the same configured directory set and the same 24 tools, limits, execution flags, and error behavior. A session represents an independent protocol connection with its own requests, cancellation, and lifecycle; it is not a per-agent filesystem role or sandbox.
 
 This deliberately supports deployments where several agents work on different projects under one allowed drive or workspace, read shared documentation or libraries, and follow prompt-level rules about where each agent may write. The server does not enforce those per-agent read/write conventions. When technical isolation is required, run separate server processes with narrower allowed directories and, for concurrent Git work, separate checkouts or worktrees.
 
@@ -53,15 +53,17 @@ Encoding detection is content-based. File extensions are not used to select or b
 
 The semantic-tag release workflow validates each release tag against a dated changelog entry before generating binaries, archives, checksums, and Registry metadata.
 
-## Unreleased R15 Features
+## Unreleased Development Features
 
 R15 is implemented and verified but remains unreleased and undeployed. It adds backward-compatible optional fields to the existing 23-tool catalog plus three transport-independent prompts: `audit_encodings`, `fix_mojibake`, and `migrate_to_utf8`. Recursive read/search workflows respect nested `.gitignore` rules by default, while mutation additions retain the existing full-document size limits, encoding/BOM-aware pipeline, durable staging, and concurrent-change checks.
+
+R16 phase 1 is implemented and verified in source with the read-only `fingerprint_paths` tool, bringing the current catalog to 24 tools. It streams deterministic SHA-256 fingerprints for explicit files and directory roots, excludes unstable platform metadata, `.git` internals, and in-root link entries, never follows links, supports default-on `.gitignore` filtering, detects concurrent state changes through a second complete pass, and bounds both inspected entries and optional per-entry output.
 
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
 ## What It Does
 
-Provides 23 tools for file operations, encoding conversion, update checks, and optional local execution, plus 3 guided prompts:
+Provides 24 tools for file operations, encoding conversion, state verification, update checks, and optional local execution, plus 3 guided prompts:
 - [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line/output memory and optional absolute line numbers
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
@@ -71,6 +73,7 @@ Provides 23 tools for file operations, encoding conversion, update checks, and o
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with filtering and deterministic name/mtime/size sorting
 - [`tree`](TOOLS.md#tree) - Compact deterministic `.gitignore`-aware tree through the shared secure walker
 - [`search_files`](TOOLS.md#search_files) - `.gitignore`-aware glob search with bounded globally correct sorting
+- [`fingerprint_paths`](TOOLS.md#fingerprint_paths) - Stream deterministic SHA-256 state fingerprints with optional bounded entry details
 - [`grep_text_files`](TOOLS.md#grep_text_files) - Paged regex search with pattern/filter arrays and content/path/count modes
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
 - [`convert_encoding`](TOOLS.md#convert_encoding) - Single/batch conversion, dry-run previews, unsupported-rune locations, and durable writes
@@ -114,7 +117,7 @@ This repository has evolved from its original upstream codebase. Compared with t
 - real upstream encoding fixtures covering every registered encoding, including UTF-16 and GBK/GB18030 round-trip tests;
 - conservative, extension-independent BOMless UTF-16 LE/BE detection with malformed-Unicode rejection, binary false-positive protection, deterministic mode semantics, and surrogate-pair handling across chunk boundaries;
 - a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression;
-- a deterministic, cancellation-aware secure walker shared by `tree`, `search_files`, and `grep_text_files`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
+- a deterministic, cancellation-aware secure walker shared by `tree`, `search_files`, `grep_text_files`, and `fingerprint_paths`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
@@ -380,9 +383,11 @@ The server can be configured via environment variables:
 | `MCP_MAX_FILE_BYTES` | Hard source-size limit for full-document operations such as `edit_file`. | `67108864` |
 | `MCP_MAX_DECODED_CHARACTERS` | Maximum decoded characters returned by `read_text_file`. | `16777216` |
 | `MCP_MAX_LINE_BYTES` | Maximum bytes in one decoded UTF-8 line. | `16777216` |
-| `MCP_MAX_BATCH_FILES` | Maximum paths accepted by `read_multiple_files`. | `256` |
+| `MCP_MAX_BATCH_FILES` | Maximum paths accepted by bounded batch operations, including `read_multiple_files` and `fingerprint_paths`. | `256` |
 | `MCP_MAX_MATCHES` | Server maximum for `grep_text_files.maxMatches`. | `10000` |
-| `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, and inconsistent-line output budget. | `67108864` |
+| `MCP_MAX_FINGERPRINT_ENTRIES` | Maximum files plus directories inspected by one `fingerprint_paths` request. | `100000` |
+| `MCP_MAX_FINGERPRINT_ENTRY_DETAILS` | Maximum optional per-entry fingerprint records returned by one request. | `1000` |
+| `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, fingerprint details, and inconsistent-line output budget. | `67108864` |
 | `MCP_MAX_SESSIONS` | Maximum live native Streamable HTTP sessions. | `128` |
 | `MCP_MEMORY_THRESHOLD` | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`; specific variables take precedence. | unset |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |

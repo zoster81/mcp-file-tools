@@ -10,36 +10,42 @@ import (
 )
 
 const (
-	EnvDefaultEncoding      = "MCP_DEFAULT_ENCODING"
-	EnvMemoryThreshold      = "MCP_MEMORY_THRESHOLD" // Deprecated 1.x fallback for file/output limits.
-	EnvMaxFileBytes         = "MCP_MAX_FILE_BYTES"
-	EnvMaxDecodedCharacters = "MCP_MAX_DECODED_CHARACTERS"
-	EnvMaxLineBytes         = "MCP_MAX_LINE_BYTES"
-	EnvMaxBatchFiles        = "MCP_MAX_BATCH_FILES"
-	EnvMaxMatches           = "MCP_MAX_MATCHES"
-	EnvMaxOutputBytes       = "MCP_MAX_OUTPUT_BYTES"
-	EnvMaxSessions          = "MCP_MAX_SESSIONS" // Maximum live native Streamable HTTP sessions.
+	EnvDefaultEncoding            = "MCP_DEFAULT_ENCODING"
+	EnvMemoryThreshold            = "MCP_MEMORY_THRESHOLD" // Deprecated 1.x fallback for file/output limits.
+	EnvMaxFileBytes               = "MCP_MAX_FILE_BYTES"
+	EnvMaxDecodedCharacters       = "MCP_MAX_DECODED_CHARACTERS"
+	EnvMaxLineBytes               = "MCP_MAX_LINE_BYTES"
+	EnvMaxBatchFiles              = "MCP_MAX_BATCH_FILES"
+	EnvMaxMatches                 = "MCP_MAX_MATCHES"
+	EnvMaxOutputBytes             = "MCP_MAX_OUTPUT_BYTES"
+	EnvMaxFingerprintEntries      = "MCP_MAX_FINGERPRINT_ENTRIES"
+	EnvMaxFingerprintEntryDetails = "MCP_MAX_FINGERPRINT_ENTRY_DETAILS"
+	EnvMaxSessions                = "MCP_MAX_SESSIONS" // Maximum live native Streamable HTTP sessions.
 
-	DefaultEncoding             = "utf-8"
-	DefaultMaxFileBytes         = int64(64 * 1024 * 1024)
-	DefaultMaxDecodedCharacters = 16 * 1024 * 1024
-	DefaultMaxLineBytes         = 16 * 1024 * 1024
-	DefaultMaxBatchFiles        = 256
-	DefaultMaxMatches           = 10_000
-	DefaultMaxOutputBytes       = int64(64 * 1024 * 1024)
-	DefaultMaxSessions          = 128
+	DefaultEncoding                   = "utf-8"
+	DefaultMaxFileBytes               = int64(64 * 1024 * 1024)
+	DefaultMaxDecodedCharacters       = 16 * 1024 * 1024
+	DefaultMaxLineBytes               = 16 * 1024 * 1024
+	DefaultMaxBatchFiles              = 256
+	DefaultMaxMatches                 = 10_000
+	DefaultMaxOutputBytes             = int64(64 * 1024 * 1024)
+	DefaultMaxFingerprintEntries      = 100_000
+	DefaultMaxFingerprintEntryDetails = 1_000
+	DefaultMaxSessions                = 128
 )
 
 // Limits contains server-wide hard limits. Request-level limits may be lower
 // but must never exceed these values.
 type Limits struct {
-	MaxFileBytes         int64
-	MaxDecodedCharacters int
-	MaxLineBytes         int
-	MaxBatchFiles        int
-	MaxMatches           int
-	MaxOutputBytes       int64
-	MaxSessions          int
+	MaxFileBytes               int64
+	MaxDecodedCharacters       int
+	MaxLineBytes               int
+	MaxBatchFiles              int
+	MaxMatches                 int
+	MaxOutputBytes             int64
+	MaxFingerprintEntries      int
+	MaxFingerprintEntryDetails int
+	MaxSessions                int
 }
 
 // Config holds server configuration loaded from environment variables.
@@ -54,13 +60,15 @@ func Load() *Config {
 	cfg := &Config{
 		DefaultEncoding: DefaultEncoding,
 		Limits: Limits{
-			MaxFileBytes:         DefaultMaxFileBytes,
-			MaxDecodedCharacters: DefaultMaxDecodedCharacters,
-			MaxLineBytes:         DefaultMaxLineBytes,
-			MaxBatchFiles:        DefaultMaxBatchFiles,
-			MaxMatches:           DefaultMaxMatches,
-			MaxOutputBytes:       DefaultMaxOutputBytes,
-			MaxSessions:          DefaultMaxSessions,
+			MaxFileBytes:               DefaultMaxFileBytes,
+			MaxDecodedCharacters:       DefaultMaxDecodedCharacters,
+			MaxLineBytes:               DefaultMaxLineBytes,
+			MaxBatchFiles:              DefaultMaxBatchFiles,
+			MaxMatches:                 DefaultMaxMatches,
+			MaxOutputBytes:             DefaultMaxOutputBytes,
+			MaxFingerprintEntries:      DefaultMaxFingerprintEntries,
+			MaxFingerprintEntryDetails: DefaultMaxFingerprintEntryDetails,
+			MaxSessions:                DefaultMaxSessions,
 		},
 	}
 
@@ -85,6 +93,8 @@ func Load() *Config {
 	cfg.Limits.MaxLineBytes = intEnvironment(EnvMaxLineBytes, cfg.Limits.MaxLineBytes)
 	cfg.Limits.MaxBatchFiles = intEnvironment(EnvMaxBatchFiles, cfg.Limits.MaxBatchFiles)
 	cfg.Limits.MaxMatches = intEnvironment(EnvMaxMatches, cfg.Limits.MaxMatches)
+	cfg.Limits.MaxFingerprintEntries = intEnvironment(EnvMaxFingerprintEntries, cfg.Limits.MaxFingerprintEntries)
+	cfg.Limits.MaxFingerprintEntryDetails = intEnvironment(EnvMaxFingerprintEntryDetails, cfg.Limits.MaxFingerprintEntryDetails)
 	cfg.Limits.MaxSessions = intEnvironment(EnvMaxSessions, cfg.Limits.MaxSessions)
 	return cfg
 }

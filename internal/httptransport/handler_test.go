@@ -376,7 +376,7 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s list tools: %v", name, err)
 		}
-		if len(tools.Tools) != 23 {
+		if len(tools.Tools) != 24 {
 			t.Fatalf("%s tool count = %d", name, len(tools.Tools))
 		}
 		serializedTools := marshalJSON(t, tools.Tools)
@@ -477,6 +477,26 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 			expectedRead = serializedRead
 		} else if serializedRead != expectedRead {
 			t.Fatalf("%s read result diverged: %s != %s", name, serializedRead, expectedRead)
+		}
+	}
+
+	var expectedFingerprint string
+	for name, session := range map[string]*mcp.ClientSession{"http": first, "direct": direct} {
+		fingerprintResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "fingerprint_paths",
+			Arguments: map[string]any{
+				"paths":          []string{path},
+				"includeEntries": true,
+			},
+		})
+		if err != nil || fingerprintResult.IsError {
+			t.Fatalf("%s fingerprint result = %#v err=%v", name, fingerprintResult, err)
+		}
+		serializedFingerprint := marshalJSON(t, fingerprintResult.StructuredContent)
+		if expectedFingerprint == "" {
+			expectedFingerprint = serializedFingerprint
+		} else if serializedFingerprint != expectedFingerprint {
+			t.Fatalf("%s fingerprint result diverged: %s != %s", name, serializedFingerprint, expectedFingerprint)
 		}
 	}
 

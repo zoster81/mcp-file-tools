@@ -11,6 +11,7 @@ This guide applies to files under `docs/`. Follow the root [`AGENTS.md`](../AGEN
 - `PUBLISHING.md`: maintainer release and distribution procedure.
 - `MIGRATION_2.0.md`: authoritative intentional breaking changes and migration actions for 1.8 to 2.0.
 - `HTTP_SECURITY.md`: approved Streamable HTTP threat model, secure defaults, implementation constraints, test matrix, and release blockers.
+- `VERIFIED_CHANGE_WORKFLOWS.md`: approved R16 design baseline for fingerprints, preview/apply, patch packages, structured verification, and the deferred persistent-backup gate.
 
 Keep operational details in their proper source instead of duplicating them across documents.
 

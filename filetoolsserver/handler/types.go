@@ -133,6 +133,33 @@ type SearchFilesOutput struct {
 	Truncated bool     `json:"truncated,omitempty"`
 }
 
+type FingerprintPathsInput struct {
+	Paths            []string `json:"paths"`
+	RespectGitignore *bool    `json:"respectGitignore,omitempty"`
+	IncludeEntries   bool     `json:"includeEntries,omitempty"`
+	MaxEntryDetails  int      `json:"maxEntryDetails,omitempty"`
+}
+
+type FingerprintEntry struct {
+	RootIndex int    `json:"rootIndex"`
+	Path      string `json:"path"`
+	Type      string `json:"type"`
+	Size      int64  `json:"size"`
+	SHA256    string `json:"sha256,omitempty"`
+}
+
+type FingerprintPathsOutput struct {
+	Algorithm        string             `json:"algorithm"`
+	Mode             string             `json:"mode"`
+	Fingerprint      string             `json:"fingerprint"`
+	RootCount        int                `json:"rootCount"`
+	FileCount        int                `json:"fileCount"`
+	DirectoryCount   int                `json:"directoryCount"`
+	TotalBytes       int64              `json:"totalBytes"`
+	Entries          []FingerprintEntry `json:"entries,omitempty"`
+	EntriesTruncated bool               `json:"entriesTruncated,omitempty"`
+}
+
 type EditOperation struct {
 	OldText    string   `json:"oldText"`
 	NewText    string   `json:"newText"`

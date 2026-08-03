@@ -91,6 +91,15 @@
       }
     },
     {
+      "name": "fingerprint_paths",
+      "title": "Fingerprint Paths",
+      "description": "Stream deterministic SHA-256 content fingerprints for explicit regular files and directory roots through the secure walker. Canonical records use root indexes, Unicode-NFC slash-separated relative paths, entry type, byte length, and file-content SHA-256 while excluding unstable metadata, .git directories, and in-root link entries. Links are never followed and escaping links fail closed. Nested .gitignore files are respected by default with explicit opt-out. MCP_MAX_BATCH_FILES, MCP_MAX_FINGERPRINT_ENTRIES, MCP_MAX_FINGERPRINT_ENTRY_DETAILS, and MCP_MAX_OUTPUT_BYTES bound inputs and optional entry details. Parameters: paths, respectGitignore, includeEntries, maxEntryDetails.",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "detect_line_endings",
       "title": "Detect Line Endings",
       "description": "Incrementally detect line ending style (crlf/lf/mixed/none) after decoding any registered encoding. MCP_MAX_LINE_BYTES bounds lines and MCP_MAX_OUTPUT_BYTES bounds minority line numbers. Empty files are UTF-8; ambiguous non-empty input requires an explicit encoding. Parameters: path, encoding.",

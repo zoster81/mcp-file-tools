@@ -44,6 +44,20 @@ func (h *Handler) maxOutputBytes() int64 {
 	return config.DefaultMaxOutputBytes
 }
 
+func (h *Handler) maxFingerprintEntries() int {
+	if h != nil && h.config != nil && h.config.Limits.MaxFingerprintEntries > 0 {
+		return h.config.Limits.MaxFingerprintEntries
+	}
+	return config.DefaultMaxFingerprintEntries
+}
+
+func (h *Handler) maxFingerprintEntryDetails() int {
+	if h != nil && h.config != nil && h.config.Limits.MaxFingerprintEntryDetails > 0 {
+		return h.config.Limits.MaxFingerprintEntryDetails
+	}
+	return config.DefaultMaxFingerprintEntryDetails
+}
+
 func clampBudgetToInt(budget int64) int {
 	maxInt := int64(^uint(0) >> 1)
 	if budget > maxInt {

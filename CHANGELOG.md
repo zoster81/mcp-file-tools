@@ -13,9 +13,12 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added bounded batch encoding conversion with dry-run previews, ordered per-file partial results, and machine-readable unsupported-rune code point plus line/column locations.
 - Added strict single-file unified-patch editing and opt-in fuzzy edits with explicit similarity thresholds, deterministic work limits, unique-best-match enforcement, and ambiguity-safe failure.
 - Added the transport-independent `audit_encodings`, `fix_mojibake`, and `migrate_to_utf8` MCP prompts.
+- Added the read-only `fingerprint_paths` tool with deterministic two-pass SHA-256 state records, default-on `.gitignore` handling, unconditional `.git` exclusion, no traversal or inclusion of in-root link entries, fail-closed escaping links, concurrent-change detection, and bounded optional entry details.
+- Added `MCP_MAX_FINGERPRINT_ENTRIES` and `MCP_MAX_FINGERPRINT_ENTRY_DETAILS` to bound fingerprint traversal and returned detail records independently.
 
 ### Changed
 
+- Expanded the current unreleased source catalog from 23 to 24 tools while preserving identical stdio and Streamable HTTP schemas and behavior.
 - Credited the original project for the R15 feature set and implementation approaches reviewed, documenting the work as reciprocal exchange of functionality and techniques; the resulting code is reworked for this fork's secure walker, bounded-memory pipeline, durable mutation layer, stable 23-tool catalog, and dual-transport architecture rather than mechanically synchronized.
 - Reframed the project documentation around its independent dual-transport product scope: stdio and native stateful Streamable HTTP now have equal prominence, while the OpenAI Secure MCP Tunnel is documented as one supported stdio deployment rather than the project's sole identity.
 - Added `docs/PROJECT_DIRECTION.md` to define the fork's independent maintenance model, transport boundaries, stable relationship to upstream, and criteria for evaluating cross-project ideas without assuming source synchronization.

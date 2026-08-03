@@ -27,6 +27,12 @@ func TestLoad_DefaultLimits(t *testing.T) {
 	if cfg.Limits.MaxOutputBytes != DefaultMaxOutputBytes {
 		t.Fatalf("MaxOutputBytes = %d, want %d", cfg.Limits.MaxOutputBytes, DefaultMaxOutputBytes)
 	}
+	if cfg.Limits.MaxFingerprintEntries != DefaultMaxFingerprintEntries {
+		t.Fatalf("MaxFingerprintEntries = %d, want %d", cfg.Limits.MaxFingerprintEntries, DefaultMaxFingerprintEntries)
+	}
+	if cfg.Limits.MaxFingerprintEntryDetails != DefaultMaxFingerprintEntryDetails {
+		t.Fatalf("MaxFingerprintEntryDetails = %d, want %d", cfg.Limits.MaxFingerprintEntryDetails, DefaultMaxFingerprintEntryDetails)
+	}
 	if cfg.Limits.MaxSessions != DefaultMaxSessions {
 		t.Fatalf("MaxSessions = %d, want %d", cfg.Limits.MaxSessions, DefaultMaxSessions)
 	}
@@ -41,12 +47,15 @@ func TestLoad_SpecificLimitsOverrideLegacyThreshold(t *testing.T) {
 	t.Setenv(EnvMaxLineBytes, "5000")
 	t.Setenv(EnvMaxBatchFiles, "6")
 	t.Setenv(EnvMaxMatches, "7")
-	t.Setenv(EnvMaxSessions, "8")
+	t.Setenv(EnvMaxFingerprintEntries, "8")
+	t.Setenv(EnvMaxFingerprintEntryDetails, "9")
+	t.Setenv(EnvMaxSessions, "10")
 
 	cfg := Load()
 	if cfg.Limits.MaxFileBytes != 2000 || cfg.Limits.MaxOutputBytes != 3000 ||
 		cfg.Limits.MaxDecodedCharacters != 4000 || cfg.Limits.MaxLineBytes != 5000 ||
-		cfg.Limits.MaxBatchFiles != 6 || cfg.Limits.MaxMatches != 7 || cfg.Limits.MaxSessions != 8 {
+		cfg.Limits.MaxBatchFiles != 6 || cfg.Limits.MaxMatches != 7 ||
+		cfg.Limits.MaxFingerprintEntries != 8 || cfg.Limits.MaxFingerprintEntryDetails != 9 || cfg.Limits.MaxSessions != 10 {
 		t.Fatalf("unexpected limits: %#v", cfg.Limits)
 	}
 }
@@ -65,7 +74,8 @@ func clearLimitEnvironment(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
 		EnvMemoryThreshold, EnvMaxFileBytes, EnvMaxDecodedCharacters, EnvMaxLineBytes,
-		EnvMaxBatchFiles, EnvMaxMatches, EnvMaxOutputBytes, EnvMaxSessions,
+		EnvMaxBatchFiles, EnvMaxMatches, EnvMaxOutputBytes, EnvMaxFingerprintEntries,
+		EnvMaxFingerprintEntryDetails, EnvMaxSessions,
 	} {
 		original, existed := os.LookupEnv(name)
 		if err := os.Unsetenv(name); err != nil {
