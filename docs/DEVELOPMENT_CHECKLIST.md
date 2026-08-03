@@ -160,4 +160,4 @@ Use [PUBLISHING.md](PUBLISHING.md) for the full release procedure. The `2.0.0` p
 - [x] release tag, dated changelog entry, embedded binary version, and Registry version match;
 - [x] all supported platform assets and checksums are verified;
 - [x] release, Registry publication, and live stdio plus authenticated Streamable HTTP smoke tests succeed;
-- [ ] the controlled active rollback succeeds and the published runtime is restored before R14 is closed.
+- [x] the controlled active rollback succeeds and the published runtime is restored before R14 is closed.

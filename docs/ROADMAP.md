@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 remains active only for the controlled active rollback exercise and final deployment handoff.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -29,7 +29,7 @@ Product identity and the fork's independent relationship to upstream are defined
 | R11 | COMPLETE | Separate transport bootstrap from the shared MCP server and tool policies. |
 | R12 | COMPLETE | Approve the Streamable HTTP threat model and security design. |
 | R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
-| R14 | ACTIVE | Complete the controlled active rollback exercise and final handoff after verified 2.0.0 publication and dual-transport deployment. |
+| R14 | COMPLETE | Completed hardening, publication, dual-transport deployment, active rollback, restoration, and final handoff for 2.0.0. |
 | R15 | PLANNED | Improve agent ergonomics and project-aware workflows without weakening transport, memory, mutation, or security guarantees. |
 
 ---
@@ -307,9 +307,9 @@ Tests verified multiple simultaneous HTTP clients, unique sessions, DELETE and i
 
 Finish platform, container, CI, documentation, packaging, migration, and release verification for the first public 2.x release.
 
-## Remaining cleanup items
+## Final deployment verification
 
-- perform the controlled active rollback test, restore the published `2.0.0` runtime, and record the final deployment handoff;
+The controlled active rollback and restoration were completed on 2026-08-03.
 
 ## Checklist
 
@@ -337,13 +337,13 @@ Finish platform, container, CI, documentation, packaging, migration, and release
 - [x] Create and push `v2.0.0` only after all prior gates pass.
 - [x] Verify release binaries, archives, checksums, signatures where available, and MCP Registry publication.
 - [x] Deploy the published 2.0.0 runtime and execute live stdio plus authenticated Streamable HTTP smoke tests.
-- [ ] Execute the controlled active rollback, restore 2.0.0, and record the final handoff.
+- [x] Execute the controlled active rollback, restore 2.0.0, and record the final handoff.
 
 ## Publication record
 
 Published on 2026-08-02. Fork tag `v2.0.0` resolves to commit `1530fbb1eab529a1ef7236b4b3df8ab84a9a0d1d`. The tag workflow passed the complete Linux, Windows, and macOS test matrix, produced six raw binaries, six deterministic platform archives, and `checksums.txt`, and published `io.github.zoster81/mcp-file-tools` version `2.0.0` to the MCP Registry through GitHub OIDC. All 12 published binary/archive checksums were independently verified against the release checksum file. No separate signature assets were emitted by the configured release pipeline.
 
-Operator deployment completed on 2026-08-02. The published Windows amd64 `2.0.0` binary now runs through both the stdio tunnel path and the native loopback Streamable HTTP path. Live verification confirmed the embedded version, HTTP health/readiness, unauthenticated `401`, authenticated session initialization, and the complete 23-tool catalog. The controlled active rollback and restoration exercise remains pending.
+Operator deployment completed on 2026-08-02. The published Windows amd64 `2.0.0` binary now runs through both the stdio tunnel path and the native loopback Streamable HTTP path. Live verification confirmed the embedded version, HTTP health/readiness, unauthenticated `401`, authenticated session initialization, and the complete 23-tool catalog. On 2026-08-03, a controlled active rollback to the retained R10 build verified the complete 23-tool stdio catalog while the later HTTP transport was intentionally absent. The published `2.0.0` runtime was then restored and reverified over stdio and authenticated Streamable HTTP, including the complete tool catalog and expected health, readiness, and authentication responses.
 
 ## Completion gate
 
@@ -355,7 +355,7 @@ Operator deployment completed on 2026-08-02. The published Windows amd64 `2.0.0`
 
 ## Status
 
-Planned. R15 starts only after R14's active rollback and restoration gate is complete.
+Planned. R14 is complete; R15 has not started.
 
 ## Goal
 
