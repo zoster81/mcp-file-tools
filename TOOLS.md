@@ -143,30 +143,40 @@ Write UTF-8 input text using the selected target encoding through the shared doc
 
 ### edit_file
 
-Edit one text file through the shared encoding/BOM-aware document pipeline. Editing and diff generation inherently require full-document state, so the source and any supplied patch are rejected when they exceed `MCP_MAX_FILE_BYTES`. Supply either `edits` or one strict single-file unified `patch`, never both. Edit operations retain exact and whitespace-flexible matching and may opt into bounded fuzzy matching with an explicit similarity threshold; fuzzy edits require one unique best match and fail safely on ambiguity. Returns a git-style unified diff. Non-dry-run edits use the shared synced atomic replacement layer and reject a file that changed after decoding.
+Edit one existing text file through one shared encoding/BOM-aware preparation pipeline. Editing and diff generation require full-document state, so the source, prepared result, and any supplied patch are rejected when they exceed `MCP_MAX_FILE_BYTES`. Supply either `edits` or one strict single-file unified `patch`, never both.
+
+`action` selects one of three modes:
+
+- omitted or `direct`: preserve the historical behavior; prepare and optionally commit in one request;
+- `preview`: prepare the exact encoded result without changing the file, retain it in a bounded process-local cache, and return a 256-bit `previewId`, expiry, diff, encoding metadata, and target/result fingerprints;
+- `apply`: accept only `previewId`, atomically consume it, revalidate path, file identity, target fingerprint, and prepared-result fingerprint, then commit the exact retained bytes through the durable mutation layer.
+
+Every apply attempt is terminal, including conflict, cancellation, encoding-independent write failure, or successful no-op. Unknown, expired, evicted, replayed, or restart-invalidated identifiers return `CONFLICT`. Preview identifiers are never listed or written to ordinary logs. They are process-wide capabilities because every connection already shares the same roots and authorization policy; possession authorizes only the exact prepared mutation.
+
+The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `128`), `MCP_MAX_EDIT_PREVIEW_BYTES` (default `67108864` dynamic retained bytes), and `MCP_EDIT_PREVIEW_TTL_SECONDS` (default `900`). Expired entries are removed before deterministic FIFO eviction. Cache removal closes retained file-identity handles. Preview/apply creates no persistent backup and process restart invalidates all previews.
 
 **Parameters:**
-- `path` (required): Path to the file to edit
-- `edits` (conditionally required): Array of operations with `oldText`, `newText`, and optional `similarity` from `0.50` to `1.0`
-- `patch` (conditionally required): One strict unified diff for the target file; multi-file patches, creation/deletion, unordered/overlapping hunks, and no-newline markers are rejected
-- `dryRun` (optional): If true, returns diff without writing changes (default: false)
-- `encoding` (optional): File encoding (auto-detected if not specified)
-- `forceWritable` (optional): If true, clears read-only flag before editing (default: false — fails on read-only files)
+- `action` (optional): `direct` (default), `preview`, or `apply`
+- `previewId` (required only for `apply`): 64 hexadecimal characters; `apply` accepts no other fields
+- `path` (required for `direct` and `preview`): Existing target file
+- `edits` (conditionally required): Operations with `oldText`, `newText`, and optional `similarity` from `0.50` to `1.0`
+- `patch` (conditionally required): One strict unified diff for the target; multi-file patches, creation/deletion, unordered or overlapping hunks, and no-newline markers are rejected
+- `dryRun` (direct only): Return the prepared diff without writing
+- `encoding` (direct/preview only): File encoding, auto-detected when omitted
+- `forceWritable` (direct/preview only): Clear a read-only flag during commit when explicitly authorized
 
-**Features:**
-- Exact text matching (first occurrence)
-- Whitespace-flexible matching (ignores leading whitespace differences)
-- Opt-in bounded fuzzy matching with deterministic comparison budgets and unique-best-match enforcement
-- Strict single-file unified patch application with exact context/deletion validation and bounded hunk count
-- Preserves original indentation
-- Preserves UTF-8/UTF-16 BOM state explicitly
-- Preserves CRLF or LF line endings for consistently formatted files
-- Skips writes for logical no-op edits, preserving the original bytes across all 24 encodings
-- Rejects unrepresentable replacement text before touching the file
-- Durable atomic replacement with same-directory exclusive staging, file sync, path revalidation, and concurrent-modification detection
-- Fails on read-only files by default (set `forceWritable: true` only when user explicitly requests it)
+**Preparation and commit guarantees:**
+- exact, whitespace-flexible, or opt-in bounded fuzzy matching with one unique best candidate;
+- strict single-file unified-patch parsing and exact context validation;
+- preservation of original encoding, BOM state, and consistent CRLF/LF style;
+- byte-identical logical no-ops across all 24 encodings;
+- rejection of unrepresentable output before mutation;
+- one exact prepared byte sequence shared by preview and apply;
+- target and result SHA-256 `content-v1` fingerprints;
+- stable open-file identity retained through approval, including same-content path-replacement detection;
+- synced same-directory staging, atomic replacement, path revalidation, snapshot conflict detection, and post-commit fingerprint verification.
 
-**Example:**
+**Direct example:**
 ```json
 {
   "path": "/path/to/file.go",
@@ -175,20 +185,46 @@ Edit one text file through the shared encoding/BOM-aware document pipeline. Edit
       "oldText": "func oldName()",
       "newText": "func newName()"
     }
-  ],
-  "dryRun": false
+  ]
 }
 ```
 
-**Response:**
+**Preview example:**
 ```json
 {
-  "diff": "--- /path/to/file.go\n+++ /path/to/file.go\n@@ -1,3 +1,3 @@\n-func oldName()\n+func newName()\n",
-  "readOnlyCleared": true
+  "action": "preview",
+  "path": "/path/to/file.go",
+  "patch": "--- /path/to/file.go\n+++ /path/to/file.go\n@@ -1 +1 @@\n-old\n+new\n"
 }
 ```
 
-The `readOnlyCleared` field indicates if the read-only flag was removed (only present when true).
+**Preview response:**
+```json
+{
+  "action": "preview",
+  "diff": "--- /path/to/file.go\n+++ /path/to/file.go\n@@ -1 +1 @@\n-old\n+new\n",
+  "previewId": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "createdAt": "2026-08-03T21:00:00Z",
+  "expiresAt": "2026-08-03T21:15:00Z",
+  "targetPath": "/path/to/file.go",
+  "targetFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "resultFingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "encoding": "utf-8",
+  "lineEndingStyle": "lf",
+  "changed": true,
+  "applied": false
+}
+```
+
+**Apply example:**
+```json
+{
+  "action": "apply",
+  "previewId": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
+
+A successful apply omits `previewId` so the consumed capability is not re-emitted. `applied: true` means the prepared action completed successfully; `changed` distinguishes a committed byte change from a successful logical no-op. `readOnlyCleared` appears only when the approved commit cleared that flag.
 
 ## Directory Operations
 

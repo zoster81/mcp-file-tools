@@ -1,6 +1,6 @@
 # Verified Change Workflows
 
-This document is the approved design baseline for R16. It defines the intended behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phase 1 is implemented and verified in source: the shared deterministic fingerprint primitive and read-only MCP adapter are complete, while later workflow phases remain pending.
+This document is the approved design baseline for R16. It defines the intended behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1 and 2 are implemented in source: deterministic fingerprints and bounded one-shot `edit_file` preview/apply are complete, while patch packages and structured verification remain pending.
 
 Persistent backup storage and user-managed change review are approved in principle but remain outside the initial R16 implementation until a separate retention and lifecycle design is approved.
 
@@ -90,7 +90,7 @@ A preview request supplies the current edit or patch inputs and returns:
 
 The prepared operation must be stored in a process-local bounded preview cache. The identifier should contain at least 256 bits of cryptographic randomness, must never be listed, and must not be written to ordinary logs. A process restart invalidates all previews.
 
-The cache must have independent bounds for entry count, retained bytes, and lifetime. Expired entries are removed before capacity eviction; remaining eviction must be deterministic. Configuration names and defaults must be finalized with the implementation tests and documented before merge.
+The cache has independent bounds for entry count, dynamic retained bytes, and lifetime: `MCP_MAX_EDIT_PREVIEWS=128`, `MCP_MAX_EDIT_PREVIEW_BYTES=67108864`, and `MCP_EDIT_PREVIEW_TTL_SECONDS=900` by default. Expired entries are removed lazily before deterministic FIFO capacity eviction. Each live preview retains one platform-appropriate open-file identity reference; eviction, expiry, response-limit failure, apply claim, and process exit release it.
 
 ### Apply
 
@@ -102,13 +102,13 @@ Apply accepts the `previewId` rather than a second copy of the edit instructions
 - the current target fingerprint matches the preview precondition;
 - the prepared result still matches the recorded result fingerprint.
 
-The existing durable mutation layer performs the commit. Any conflict, cancellation, or failed apply makes the preview terminal; the client creates a new preview rather than retrying an uncertain capability. Successful application returns the actual post-commit fingerprint and diff metadata.
+The existing durable mutation layer performs the commit. Apply atomically removes the capability before validation, preserves an open file identity until the last pre-commit check, verifies current and prepared `content-v1` fingerprints, then closes the identity reference immediately before durable replacement. Any conflict, cancellation, or failed apply makes the preview terminal; the client creates a new preview rather than retrying an uncertain capability. Successful application returns the actual post-commit fingerprint and diff metadata without re-emitting the consumed token.
 
 A preview token is a narrowly scoped process-local capability. Because all connections already share one process-wide root and authorization policy, the initial design does not add per-session ownership. Possession of the unguessable token plus normal server access authorizes only its exact prepared mutation.
 
 ### Required tests
 
-Cover exact preview/apply, no-op preview, expired and evicted previews, malformed and guessed identifiers, replay, two concurrent apply attempts, file changes between preview and apply, path replacement, encoding/BOM/line-ending preservation, fuzzy ambiguity, patch mismatch, cancellation, write failures, cache limits, restart invalidation, redacted logs, and direct/HTTP equivalence.
+Cover exact preview/apply, no-op preview, expired and evicted previews, malformed and guessed identifiers, replay, two concurrent apply attempts, file changes between preview and apply, same-content path replacement, encoding/BOM/line-ending preservation, fuzzy ambiguity, patch mismatch, cancellation, write failures, count/byte/output cache limits, restart invalidation, redacted logs, and cross-session direct/HTTP application.
 
 ## 3. Declared patch packages
 

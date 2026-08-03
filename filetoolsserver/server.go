@@ -21,7 +21,7 @@ Encoding detection is content-based and never uses filenames or extensions. Unic
 PREFER THESE TOOLS over built-in Read/Write/Grep for file operations when encoding matters:
 - read_text_file: incremental decoding to UTF-8 under MCP_MAX_LINE_BYTES, MCP_MAX_DECODED_CHARACTERS, and MCP_MAX_OUTPUT_BYTES; optional lineNumbers adds absolute 1-based prefixes; ambiguous non-empty input requires explicit encoding
 - write_file: encodes UTF-8 content through the shared document encoder; supports bom=auto|always|never|preserve (default: auto)
-- edit_file: full-document editing with a hard MCP_MAX_FILE_BYTES limit; accepts exact/flexible edits, opt-in bounded unique fuzzy matching, or one strict single-file unified patch; preserves BOM and consistent CRLF/LF style
+- edit_file: backward-compatible direct editing plus bounded one-shot preview/apply; accepts exact/flexible edits, opt-in bounded unique fuzzy matching, or one strict single-file unified patch; preserves encoding, BOM, and consistent CRLF/LF style
 - grep_text_files: deterministic incremental regex search with bounded paging, pattern/filter arrays, content/files/count modes, and optional matches-only text; recursive inputs respect nested .gitignore files by default
 - tree/search_files: deterministic secure traversal that skips entries resolving outside allowed directories and respects nested .gitignore files by default; search sorting remains bounded by maxResults
 - fingerprint_paths: two-pass deterministic SHA-256 state fingerprints for explicit files and directory roots, with canonical relative paths, .git and in-root link exclusion, no link traversal, optional bounded entry details, and concurrent-change detection
@@ -153,8 +153,8 @@ func BuildServer(options ServerOptions) *mcp.Server {
 
 	mcp.AddTool(server, catalogTool("delete_file"), handler.Wrap(logger, "delete_file", h.HandleDeleteFile))
 
-	// WrapContentOnly: returns readable diff text instead of StructuredContent JSON.
-	mcp.AddTool(server, catalogTool("edit_file"), handler.WrapContentOnly(logger, "edit_file", h.HandleEditFile))
+	// edit_file returns readable text plus structured preview/apply metadata.
+	mcp.AddTool(server, catalogTool("edit_file"), handler.Wrap(logger, "edit_file", h.HandleEditFile))
 
 	mcp.AddTool(server, catalogTool("convert_encoding"), handler.Wrap(logger, "convert_encoding", h.HandleConvertEncoding))
 

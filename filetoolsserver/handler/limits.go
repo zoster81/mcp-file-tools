@@ -58,6 +58,27 @@ func (h *Handler) maxFingerprintEntryDetails() int {
 	return config.DefaultMaxFingerprintEntryDetails
 }
 
+func (h *Handler) maxEditPreviews() int {
+	if h != nil && h.config != nil && h.config.Limits.MaxEditPreviews > 0 {
+		return h.config.Limits.MaxEditPreviews
+	}
+	return config.DefaultMaxEditPreviews
+}
+
+func (h *Handler) maxEditPreviewBytes() int64 {
+	if h != nil && h.config != nil && h.config.Limits.MaxEditPreviewBytes > 0 {
+		return h.config.Limits.MaxEditPreviewBytes
+	}
+	return config.DefaultMaxEditPreviewBytes
+}
+
+func (h *Handler) editPreviewTTLSeconds() int {
+	if h != nil && h.config != nil && h.config.Limits.EditPreviewTTLSeconds > 0 {
+		return h.config.Limits.EditPreviewTTLSeconds
+	}
+	return config.DefaultEditPreviewTTLSeconds
+}
+
 func clampBudgetToInt(budget int64) int {
 	maxInt := int64(^uint(0) >> 1)
 	if budget > maxInt {

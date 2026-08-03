@@ -405,7 +405,7 @@ Normal, compatibility, malformed-input, symlink/reparse, `.gitignore`, paging, s
 
 ## Status
 
-Active. Approved on 2026-08-03. The deterministic fingerprint tranche is implemented and verified in source; preview/apply, patch packages, and structured verification remain pending.
+Active. Approved on 2026-08-03. Deterministic fingerprints and bounded one-shot `edit_file` preview/apply are implemented and verified in source; patch packages and structured verification remain pending.
 
 ## Goal
 
@@ -416,7 +416,7 @@ The approved design baseline is [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_W
 ## Approved implementation scope
 
 - [x] Add deterministic streamed fingerprints for explicit files and directory roots through the secure walker.
-- [ ] Add bounded one-shot preview/apply for existing `edit_file` operations, with cryptographically unguessable expiring identifiers, replay prevention, and target/result fingerprint validation.
+- [x] Add bounded one-shot preview/apply for existing `edit_file` operations, with cryptographically unguessable expiring identifiers, replay prevention, and target/result fingerprint validation.
 - [ ] Add a versioned declared patch-package format with inspect, dry-run, apply, and verify actions for bounded edits to existing regular files.
 - [ ] Preflight and stage every patch-package target before the first commit, then report any partial commit precisely without claiming multi-file atomicity or retained rollback.
 - [ ] Add selected structured verification checks with typed arguments, bounded diagnostics, fixed direct executable invocation where required, and no arbitrary shell command.

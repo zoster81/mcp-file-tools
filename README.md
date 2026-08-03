@@ -12,7 +12,7 @@ AI clients see `Настройки` — not `????` or `Íàñòðîéêè`.
 Secure, encoding-aware MCP filesystem service with two first-class transports: local **stdio** and native stateful **MCP Streamable HTTP**. It detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
 
 - **24 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
-- **Agent-oriented repository workflows** — optional read line numbers, paged/multi-mode grep, `.gitignore` traversal, bounded sorting, batch conversion previews, strict patch edits, and ambiguity-safe fuzzy matching.
+- **Agent-oriented repository workflows** — optional read line numbers, paged/multi-mode grep, `.gitignore` traversal, bounded sorting, batch conversion previews, approval-bound one-shot edits, strict patches, and ambiguity-safe fuzzy matching.
 - **24 registered encodings** — Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030, and other legacy text formats.
 - **Fail-closed HTTP service** — bearer authentication on every MCP request, loopback defaults, exact Host/Origin checks, bounded sessions and request resources, no CORS, and explicit TLS/proxy requirements for non-loopback exposure.
 - **Secure filesystem and mutation model** — resolved-root containment, deterministic traversal, bounded streaming, staged writes, practical concurrent-change detection, transactional backups, and no-replace creation.
@@ -57,7 +57,7 @@ The semantic-tag release workflow validates each release tag against a dated cha
 
 R15 is implemented and verified but remains unreleased and undeployed. It adds backward-compatible optional fields to the existing 23-tool catalog plus three transport-independent prompts: `audit_encodings`, `fix_mojibake`, and `migrate_to_utf8`. Recursive read/search workflows respect nested `.gitignore` rules by default, while mutation additions retain the existing full-document size limits, encoding/BOM-aware pipeline, durable staging, and concurrent-change checks.
 
-R16 phase 1 is implemented and verified in source with the read-only `fingerprint_paths` tool, bringing the current catalog to 24 tools. It streams deterministic SHA-256 fingerprints for explicit files and directory roots, excludes unstable platform metadata, `.git` internals, and in-root link entries, never follows links, supports default-on `.gitignore` filtering, detects concurrent state changes through a second complete pass, and bounds both inspected entries and optional per-entry output.
+R16 phases 1 and 2 are implemented in source. The read-only `fingerprint_paths` tool brings the current catalog to 24 tools with deterministic streamed SHA-256 state evidence. `edit_file` now also supports bounded one-shot `preview`/`apply`: a preview retains the exact prepared bytes in a process-local expiring cache, returns pre/post fingerprints and a 256-bit capability, and consumes that capability on every apply attempt. Direct editing remains the default when `action` is omitted.
 
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
@@ -67,7 +67,7 @@ Provides 24 tools for file operations, encoding conversion, state verification, 
 - [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line/output memory and optional absolute line numbers
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
-- [`edit_file`](TOOLS.md#edit_file) - Exact/flexible edits, bounded unique fuzzy matching, or one strict single-file unified patch
+- [`edit_file`](TOOLS.md#edit_file) - Direct edits or bounded one-shot preview/apply with exact/flexible/fuzzy operations and strict unified patches
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with filtering and deterministic name/mtime/size sorting
@@ -119,6 +119,7 @@ This repository has evolved from its original upstream codebase. Compared with t
 - a shared document encoder used by edits, full writes, and encoding conversions, with public `auto`, `always`, `never`, and `preserve` BOM policies plus byte-identical conversion no-op suppression;
 - a deterministic, cancellation-aware secure walker shared by `tree`, `search_files`, `grep_text_files`, and `fingerprint_paths`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
+- a bounded process-local edit preview cache with 256-bit one-shot capabilities, exact prepared bytes, target/result fingerprints, deterministic expiry/eviction, stable file-identity checks, replay prevention, and no persistent backup side effect;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
 - a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing;
@@ -387,7 +388,10 @@ The server can be configured via environment variables:
 | `MCP_MAX_MATCHES` | Server maximum for `grep_text_files.maxMatches`. | `10000` |
 | `MCP_MAX_FINGERPRINT_ENTRIES` | Maximum files plus directories inspected by one `fingerprint_paths` request. | `100000` |
 | `MCP_MAX_FINGERPRINT_ENTRY_DETAILS` | Maximum optional per-entry fingerprint records returned by one request. | `1000` |
-| `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, fingerprint details, and inconsistent-line output budget. | `67108864` |
+| `MCP_MAX_EDIT_PREVIEWS` | Maximum live one-shot `edit_file` previews retained by one server process. | `128` |
+| `MCP_MAX_EDIT_PREVIEW_BYTES` | Aggregate dynamic bytes retained by live edit previews; independent of normal result output. | `67108864` |
+| `MCP_EDIT_PREVIEW_TTL_SECONDS` | Lifetime of one edit preview before lazy expiration and handle cleanup. | `900` |
+| `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, fingerprint details, edit responses, and inconsistent-line output budget. | `67108864` |
 | `MCP_MAX_SESSIONS` | Maximum live native Streamable HTTP sessions. | `128` |
 | `MCP_MEMORY_THRESHOLD` | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`; specific variables take precedence. | unset |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |

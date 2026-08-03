@@ -3,116 +3,27 @@ package handler
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/pmezard/go-difflib/difflib"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
 
-// HandleEditFile applies line-based edits to a text file with encoding support.
-func (h *Handler) HandleEditFile(ctx context.Context, req *mcp.CallToolRequest, input EditFileInput) (*mcp.CallToolResult, EditFileOutput, error) {
-	if len(input.Edits) == 0 && strings.TrimSpace(input.Patch) == "" {
-		return errorResult("edits or patch is required"), EditFileOutput{}, nil
-	}
-	if len(input.Edits) > 0 && strings.TrimSpace(input.Patch) != "" {
-		return errorResult("edits and patch are mutually exclusive"), EditFileOutput{}, nil
-	}
-
-	v := h.ValidatePath(input.Path)
-	if !v.Ok() {
-		return v.Result, EditFileOutput{}, nil
-	}
-
-	document, err := h.readTextDocument(ctx, v.Path, input.Encoding)
+// HandleEditFile applies direct edits or manages one-shot preview/apply actions.
+func (h *Handler) HandleEditFile(ctx context.Context, _ *mcp.CallToolRequest, input EditFileInput) (*mcp.CallToolResult, EditFileOutput, error) {
+	action, err := validateEditActionInput(input)
 	if err != nil {
 		return errorResultFromError(err), EditFileOutput{}, nil
 	}
-
-	originalMode := document.Mode
-	readOnly := isReadOnly(originalMode)
-	forceWritable := input.ForceWritable != nil && *input.ForceWritable // default: false
-	if readOnly && !forceWritable {
-		return errorResult("file is read-only — STOP, do NOT retry and do NOT attempt to change file attributes. Ask the user whether to proceed with forceWritable: true, or skip this file"), EditFileOutput{}, nil
+	switch action {
+	case editActionPreview:
+		return h.handleEditPreview(ctx, input)
+	case editActionApply:
+		return h.handleEditApply(ctx, input.PreviewID)
+	default:
+		return h.handleDirectEdit(ctx, input)
 	}
-
-	if document.LineEndings.Style == LineEndingMixed {
-		slog.Warn("file has mixed line endings", "path", input.Path, "crlf", document.LineEndings.CRLFCount, "lf", document.LineEndings.LFCount)
-	}
-
-	content := ConvertLineEndings(document.Text, LineEndingLF)
-	var modifiedContent string
-	if strings.TrimSpace(input.Patch) != "" {
-		modifiedContent, err = applyUnifiedPatch(content, input.Patch, input.Path, h.maxFileBytes())
-	} else {
-		modifiedContent, err = applyEdits(content, input.Edits)
-	}
-	if err != nil {
-		return errorResultFromError(err), EditFileOutput{}, nil
-	}
-
-	diff := createUnifiedDiff(content, modifiedContent, input.Path)
-	changed := modifiedContent != content
-	readOnlyCleared := false
-
-	if !input.DryRun && changed {
-		contentToWrite := restoreDocumentLineEndings(modifiedContent, document.LineEndings.Style)
-		dataToWrite, err := encodeTextDocument(document, contentToWrite, bomPreserve)
-		if err != nil {
-			return errorResult(fmt.Sprintf("failed to encode file: %v", err)), EditFileOutput{}, nil
-		}
-
-		commit := h.ValidatePath(input.Path)
-		if !commit.Ok() {
-			return commit.Result, EditFileOutput{}, nil
-		}
-		if commit.Path != v.Path {
-			return errorResult("path changed while preparing edit"), EditFileOutput{}, nil
-		}
-
-		writeMode := originalMode
-		expected := document.Snapshot
-		if readOnly {
-			if err := clearReadOnly(commit.Path, originalMode); err != nil {
-				return errorResult(fmt.Sprintf("failed to clear read-only flag: %v", err)), EditFileOutput{}, nil
-			}
-			readOnlyCleared = true
-			writeMode = originalMode | 0200
-			slog.Info("cleared read-only flag", "path", input.Path)
-			refreshed, refreshErr := expected.RefreshMetadata(commit.Path)
-			if refreshErr != nil {
-				if restoreErr := os.Chmod(commit.Path, originalMode); restoreErr != nil {
-					slog.Error("failed to restore read-only mode after snapshot failure", "path", input.Path, "error", restoreErr)
-				}
-				return errorResult(fmt.Sprintf("failed to refresh file snapshot: %v", refreshErr)), EditFileOutput{}, nil
-			}
-			expected = refreshed
-		}
-
-		if err := filesystem.ReplaceFile(commit.Path, dataToWrite, filesystem.ReplaceOptions{
-			Mode:     writeMode,
-			Expected: &expected,
-		}); err != nil {
-			if readOnlyCleared {
-				if restoreErr := os.Chmod(commit.Path, originalMode); restoreErr != nil {
-					slog.Error("failed to restore read-only mode after edit failure", "path", input.Path, "error", restoreErr)
-				}
-			}
-			return errorResult(fmt.Sprintf("failed to write file: %v", err)), EditFileOutput{}, nil
-		}
-	}
-
-	text := diff
-	if readOnlyCleared {
-		text += "\nRead-only flag was cleared."
-	}
-
-	output := EditFileOutput{Diff: diff, ReadOnlyCleared: readOnlyCleared}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: text}},
-	}, output, nil
 }
 
 // applyEdits applies edits sequentially, trying exact then whitespace-flexible match.

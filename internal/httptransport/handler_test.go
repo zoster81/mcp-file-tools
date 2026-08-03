@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -498,6 +499,69 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		} else if serializedFingerprint != expectedFingerprint {
 			t.Fatalf("%s fingerprint result diverged: %s != %s", name, serializedFingerprint, expectedFingerprint)
 		}
+	}
+
+	previewPath := filepath.Join(root, "preview.txt")
+	if err := os.WriteFile(previewPath, []byte("alpha"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	previewResult, err := first.CallTool(ctx, &mcp.CallToolParams{
+		Name: "edit_file",
+		Arguments: map[string]any{
+			"action": "preview",
+			"path":   previewPath,
+			"edits":  []map[string]any{{"oldText": "alpha", "newText": "omega"}},
+		},
+	})
+	if err != nil || previewResult.IsError {
+		t.Fatalf("HTTP edit preview result = %#v err=%v", previewResult, err)
+	}
+	var previewOutput struct {
+		PreviewID string `json:"previewId"`
+		Changed   bool   `json:"changed"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, previewResult.StructuredContent)), &previewOutput); err != nil {
+		t.Fatal(err)
+	}
+	if len(previewOutput.PreviewID) != 64 || !previewOutput.Changed {
+		t.Fatalf("unexpected HTTP edit preview output: %#v", previewOutput)
+	}
+	if data, err := os.ReadFile(previewPath); err != nil || string(data) != "alpha" {
+		t.Fatalf("HTTP preview changed target: %q err=%v", data, err)
+	}
+
+	applyResult, err := direct.CallTool(ctx, &mcp.CallToolParams{
+		Name: "edit_file",
+		Arguments: map[string]any{
+			"action":    "apply",
+			"previewId": previewOutput.PreviewID,
+		},
+	})
+	if err != nil || applyResult.IsError {
+		t.Fatalf("direct edit apply result = %#v err=%v", applyResult, err)
+	}
+	var applyOutput struct {
+		PreviewID string `json:"previewId"`
+		Applied   bool   `json:"applied"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, applyResult.StructuredContent)), &applyOutput); err != nil {
+		t.Fatal(err)
+	}
+	if !applyOutput.Applied || applyOutput.PreviewID != "" {
+		t.Fatalf("unexpected direct edit apply output: %#v", applyOutput)
+	}
+	if data, err := os.ReadFile(previewPath); err != nil || string(data) != "omega" {
+		t.Fatalf("direct apply content: %q err=%v", data, err)
+	}
+	replayResult, err := second.CallTool(ctx, &mcp.CallToolParams{
+		Name: "edit_file",
+		Arguments: map[string]any{
+			"action":    "apply",
+			"previewId": previewOutput.PreviewID,
+		},
+	})
+	if err != nil || !replayResult.IsError || replayResult.Meta[handler.ErrorCodeMetaKey] != handler.ErrCodeConflict {
+		t.Fatalf("HTTP replay result = %#v err=%v", replayResult, err)
 	}
 
 	outside := filepath.Join(filepath.Dir(root), "outside.txt")

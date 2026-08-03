@@ -53,6 +53,32 @@ type FingerprintResult struct {
 	EntriesTruncated bool
 }
 
+// FingerprintRegularFileSnapshot returns the content-v1 aggregate fingerprint
+// for one digest-bearing regular-file snapshot.
+func FingerprintRegularFileSnapshot(snapshot FileSnapshot) (string, error) {
+	if !snapshot.Exists || snapshot.Size < 0 {
+		return "", operation.New(operation.KindInvalidInput, "fingerprint requires an existing regular-file snapshot")
+	}
+	digest, ok := snapshot.ContentDigest()
+	if !ok {
+		return "", operation.New(operation.KindInvalidInput, "fingerprint requires a content digest")
+	}
+	return fingerprintRegularFileAggregate(snapshot.Size, digest), nil
+}
+
+// FingerprintRegularFileData returns the content-v1 aggregate fingerprint for
+// one regular file whose complete bytes are already available.
+func FingerprintRegularFileData(data []byte) string {
+	return fingerprintRegularFileAggregate(int64(len(data)), sha256.Sum256(data))
+}
+
+func fingerprintRegularFileAggregate(size int64, digest [sha256.Size]byte) string {
+	aggregate := sha256.New()
+	writeFingerprintHeader(aggregate, 1, true)
+	writeFingerprintRecord(aggregate, 0, ".", "file", size, digest)
+	return hex.EncodeToString(aggregate.Sum(nil))
+}
+
 // FingerprintPaths hashes explicit regular files and directory roots using
 // deterministic canonical records. A second complete pass must reproduce the
 // same aggregate before success, detecting practical file and directory changes.

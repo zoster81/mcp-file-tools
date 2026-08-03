@@ -166,10 +166,12 @@ type EditOperation struct {
 	Similarity *float64 `json:"similarity,omitempty"`
 }
 
-// EditFileInput applies text replacements with whitespace-flexible matching.
-// Set DryRun to preview changes without writing.
+// EditFileInput performs a direct edit by default, prepares one bounded preview,
+// or applies one previously prepared preview capability.
 type EditFileInput struct {
-	Path          string          `json:"path"`
+	Action        string          `json:"action,omitempty"` // direct (default), preview, apply
+	PreviewID     string          `json:"previewId,omitempty"`
+	Path          string          `json:"path,omitempty"`
 	Edits         []EditOperation `json:"edits,omitempty"`
 	Patch         string          `json:"patch,omitempty"`
 	DryRun        bool            `json:"dryRun,omitempty"`
@@ -178,8 +180,21 @@ type EditFileInput struct {
 }
 
 type EditFileOutput struct {
-	Diff            string `json:"diff"`
-	ReadOnlyCleared bool   `json:"readOnlyCleared,omitempty"` // true if read-only flag was cleared
+	Action            string `json:"action,omitempty"`
+	Diff              string `json:"diff"`
+	ReadOnlyCleared   bool   `json:"readOnlyCleared,omitempty"` // true if read-only flag was cleared
+	PreviewID         string `json:"previewId,omitempty"`
+	CreatedAt         string `json:"createdAt,omitempty"`
+	ExpiresAt         string `json:"expiresAt,omitempty"`
+	TargetPath        string `json:"targetPath,omitempty"`
+	TargetFingerprint string `json:"targetFingerprint,omitempty"`
+	ResultFingerprint string `json:"resultFingerprint,omitempty"`
+	Encoding          string `json:"encoding,omitempty"`
+	HasBOM            bool   `json:"hasBOM,omitempty"`
+	BOMType           string `json:"bomType,omitempty"`
+	LineEndingStyle   string `json:"lineEndingStyle,omitempty"`
+	Changed           bool   `json:"changed"`
+	Applied           bool   `json:"applied"`
 }
 
 type ReadMultipleFilesInput struct {

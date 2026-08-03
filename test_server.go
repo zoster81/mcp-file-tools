@@ -80,6 +80,15 @@ func main() {
 	r11, o11, _ := h.HandleFingerprintPaths(ctx, nil, handler.FingerprintPathsInput{Paths: []string{tempDir}, IncludeEntries: true})
 	check("fingerprint_paths", !r11.IsError && len(o11.Fingerprint) == 64 && o11.FileCount >= 3 && o11.DirectoryCount >= 2 && len(o11.Entries) > 0)
 
+	rPreview, oPreview, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{
+		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello!", NewText: "Hello preview!"}},
+	})
+	previewData, _ := os.ReadFile(testFile)
+	check("edit_file (preview)", !rPreview.IsError && len(oPreview.PreviewID) == 64 && string(previewData) == "Hello!")
+	rApply, oApply, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{Action: "apply", PreviewID: oPreview.PreviewID})
+	appliedData, _ := os.ReadFile(testFile)
+	check("edit_file (apply)", !rApply.IsError && oApply.Applied && string(appliedData) == "Hello preview!")
+
 	// Offset/Limit pagination
 	multiFile := filepath.Join(tempDir, "multi.txt")
 	os.WriteFile(multiFile, []byte("a\nb\nc\nd"), 0644)

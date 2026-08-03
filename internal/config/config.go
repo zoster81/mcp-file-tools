@@ -20,6 +20,9 @@ const (
 	EnvMaxOutputBytes             = "MCP_MAX_OUTPUT_BYTES"
 	EnvMaxFingerprintEntries      = "MCP_MAX_FINGERPRINT_ENTRIES"
 	EnvMaxFingerprintEntryDetails = "MCP_MAX_FINGERPRINT_ENTRY_DETAILS"
+	EnvMaxEditPreviews            = "MCP_MAX_EDIT_PREVIEWS"
+	EnvMaxEditPreviewBytes        = "MCP_MAX_EDIT_PREVIEW_BYTES"
+	EnvEditPreviewTTLSeconds      = "MCP_EDIT_PREVIEW_TTL_SECONDS"
 	EnvMaxSessions                = "MCP_MAX_SESSIONS" // Maximum live native Streamable HTTP sessions.
 
 	DefaultEncoding                   = "utf-8"
@@ -31,6 +34,9 @@ const (
 	DefaultMaxOutputBytes             = int64(64 * 1024 * 1024)
 	DefaultMaxFingerprintEntries      = 100_000
 	DefaultMaxFingerprintEntryDetails = 1_000
+	DefaultMaxEditPreviews            = 128
+	DefaultMaxEditPreviewBytes        = int64(64 * 1024 * 1024)
+	DefaultEditPreviewTTLSeconds      = 15 * 60
 	DefaultMaxSessions                = 128
 )
 
@@ -45,6 +51,9 @@ type Limits struct {
 	MaxOutputBytes             int64
 	MaxFingerprintEntries      int
 	MaxFingerprintEntryDetails int
+	MaxEditPreviews            int
+	MaxEditPreviewBytes        int64
+	EditPreviewTTLSeconds      int
 	MaxSessions                int
 }
 
@@ -68,6 +77,9 @@ func Load() *Config {
 			MaxOutputBytes:             DefaultMaxOutputBytes,
 			MaxFingerprintEntries:      DefaultMaxFingerprintEntries,
 			MaxFingerprintEntryDetails: DefaultMaxFingerprintEntryDetails,
+			MaxEditPreviews:            DefaultMaxEditPreviews,
+			MaxEditPreviewBytes:        DefaultMaxEditPreviewBytes,
+			EditPreviewTTLSeconds:      DefaultEditPreviewTTLSeconds,
 			MaxSessions:                DefaultMaxSessions,
 		},
 	}
@@ -95,6 +107,9 @@ func Load() *Config {
 	cfg.Limits.MaxMatches = intEnvironment(EnvMaxMatches, cfg.Limits.MaxMatches)
 	cfg.Limits.MaxFingerprintEntries = intEnvironment(EnvMaxFingerprintEntries, cfg.Limits.MaxFingerprintEntries)
 	cfg.Limits.MaxFingerprintEntryDetails = intEnvironment(EnvMaxFingerprintEntryDetails, cfg.Limits.MaxFingerprintEntryDetails)
+	cfg.Limits.MaxEditPreviews = intEnvironment(EnvMaxEditPreviews, cfg.Limits.MaxEditPreviews)
+	cfg.Limits.MaxEditPreviewBytes = int64Environment(EnvMaxEditPreviewBytes, cfg.Limits.MaxEditPreviewBytes)
+	cfg.Limits.EditPreviewTTLSeconds = intEnvironment(EnvEditPreviewTTLSeconds, cfg.Limits.EditPreviewTTLSeconds)
 	cfg.Limits.MaxSessions = intEnvironment(EnvMaxSessions, cfg.Limits.MaxSessions)
 	return cfg
 }

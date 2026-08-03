@@ -3,8 +3,10 @@ package handler
 import (
 	"os"
 	"sync"
+	"time"
 
 	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
@@ -22,6 +24,8 @@ type Handler struct {
 	configuredDirs          []string // immutable resolved baseline; always allowed
 	allowedRequestedDirs    []string
 	allowedDirs             []string
+	editPreviews            *editPreviewStore
+	replaceFile             func(string, []byte, filesystem.ReplaceOptions) error
 	mu                      sync.RWMutex
 }
 
@@ -66,6 +70,12 @@ func NewHandler(allowedDirs []string, opts ...Option) *Handler {
 	if h.config == nil {
 		h.config = config.Load()
 	}
+	h.editPreviews = newEditPreviewStore(
+		h.maxEditPreviews(),
+		h.maxEditPreviewBytes(),
+		time.Duration(h.editPreviewTTLSeconds())*time.Second,
+	)
+	h.replaceFile = filesystem.ReplaceFile
 
 	return h
 }

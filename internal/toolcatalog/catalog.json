@@ -186,7 +186,7 @@
     {
       "name": "edit_file",
       "title": "Edit File",
-      "description": "Edit one text file through the shared encoding/BOM-aware document pipeline and synced atomic replacement. Accepts either edits or one strict single-file unified patch. Each edit may opt into bounded fuzzy matching with an explicit similarity threshold; ambiguous best matches fail safely. Files and patch input are bounded by MCP_MAX_FILE_BYTES. Returns a unified diff, rejects concurrent changes, preserves BOM and line endings, and skips logical no-ops. Parameters: path, edits, patch, dryRun, encoding, forceWritable.",
+      "description": "Edit one existing text file through the shared encoding/BOM-aware preparation and durable replacement pipeline. Omitted action performs the backward-compatible direct edit; action=preview stores one exact prepared mutation in a bounded process-local expiring cache and returns an unguessable previewId plus pre/post fingerprints; action=apply accepts only that one-shot previewId. Replay, stale content, path replacement, cancellation, and failed apply consume the capability. Accepts edits or one strict single-file unified patch, including opt-in bounded fuzzy matching. MCP_MAX_FILE_BYTES, MCP_MAX_EDIT_PREVIEWS, MCP_MAX_EDIT_PREVIEW_BYTES, MCP_EDIT_PREVIEW_TTL_SECONDS, and MCP_MAX_OUTPUT_BYTES bound work and retained state. Parameters: action=direct|preview|apply, previewId, path, edits, patch, dryRun, encoding, forceWritable.",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": true,
