@@ -510,34 +510,52 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expectedPatchPackage string
+	packageManifest := map[string]any{
+		"formatVersion":        "patch-package-v1",
+		"fingerprintAlgorithm": "sha256",
+		"fingerprintMode":      "content-v1",
+		"targets": []map[string]any{{
+			"path":                path,
+			"expectedFingerprint": fingerprintOutput.Fingerprint,
+			"encoding":            "cp1251",
+			"edits":               []map[string]any{{"oldText": "Привет", "newText": "Здравствуйте"}},
+		}},
+	}
+	var expectedInspect string
 	for name, session := range map[string]*mcp.ClientSession{"http": first, "direct": direct} {
-		packageResult, err := session.CallTool(ctx, &mcp.CallToolParams{
-			Name: "patch_package",
-			Arguments: map[string]any{
-				"action": "dryRun",
-				"manifest": map[string]any{
-					"formatVersion":        "patch-package-v1",
-					"fingerprintAlgorithm": "sha256",
-					"fingerprintMode":      "content-v1",
-					"targets": []map[string]any{{
-						"path":                path,
-						"expectedFingerprint": fingerprintOutput.Fingerprint,
-						"encoding":            "cp1251",
-						"edits":               []map[string]any{{"oldText": "Привет", "newText": "Здравствуйте"}},
-					}},
-				},
-			},
+		inspectResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "patch_package",
+			Arguments: map[string]any{"action": "inspect", "manifest": packageManifest},
 		})
-		if err != nil || packageResult.IsError {
-			t.Fatalf("%s patch package result = %#v err=%v", name, packageResult, err)
+		if err != nil || inspectResult.IsError {
+			t.Fatalf("%s patch package inspect result = %#v err=%v", name, inspectResult, err)
 		}
-		serializedPackage := marshalJSON(t, packageResult.StructuredContent)
-		if expectedPatchPackage == "" {
-			expectedPatchPackage = serializedPackage
-		} else if serializedPackage != expectedPatchPackage {
-			t.Fatalf("%s patch package result diverged: %s != %s", name, serializedPackage, expectedPatchPackage)
+		serialized := marshalJSON(t, inspectResult.StructuredContent)
+		if expectedInspect == "" {
+			expectedInspect = serialized
+		} else if serialized != expectedInspect {
+			t.Fatalf("%s patch package inspect diverged: %s != %s", name, serialized, expectedInspect)
 		}
+	}
+
+	packageResult, err := first.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "patch_package",
+		Arguments: map[string]any{"action": "dryRun", "manifest": packageManifest},
+	})
+	if err != nil || packageResult.IsError {
+		t.Fatalf("HTTP patch package dryRun result = %#v err=%v", packageResult, err)
+	}
+	var packagePreview struct {
+		PreviewID string `json:"previewId"`
+		Results   []struct {
+			ResultFingerprint string `json:"resultFingerprint"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, packageResult.StructuredContent)), &packagePreview); err != nil {
+		t.Fatal(err)
+	}
+	if len(packagePreview.PreviewID) != 64 || len(packagePreview.Results) != 1 || len(packagePreview.Results[0].ResultFingerprint) != 64 {
+		t.Fatalf("unexpected package preview: %#v", packagePreview)
 	}
 	readAfterPackage, err := os.ReadFile(path)
 	if err != nil {
@@ -545,6 +563,66 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 	}
 	if !bytes.Equal(readAfterPackage, packageOriginal) {
 		t.Fatal("patch package dryRun changed the CP1251 fixture")
+	}
+
+	packageApply, err := direct.CallTool(ctx, &mcp.CallToolParams{
+		Name: "patch_package",
+		Arguments: map[string]any{
+			"action":    "apply",
+			"previewId": packagePreview.PreviewID,
+		},
+	})
+	if err != nil || packageApply.IsError {
+		t.Fatalf("direct patch package apply result = %#v err=%v", packageApply, err)
+	}
+	var packageApplyOutput struct {
+		Applied   bool   `json:"applied"`
+		PreviewID string `json:"previewId"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, packageApply.StructuredContent)), &packageApplyOutput); err != nil {
+		t.Fatal(err)
+	}
+	if !packageApplyOutput.Applied || packageApplyOutput.PreviewID != "" {
+		t.Fatalf("unexpected package apply output: %#v", packageApplyOutput)
+	}
+	packageReplay, err := second.CallTool(ctx, &mcp.CallToolParams{
+		Name: "patch_package",
+		Arguments: map[string]any{
+			"action":    "apply",
+			"previewId": packagePreview.PreviewID,
+		},
+	})
+	if err != nil || !packageReplay.IsError || packageReplay.Meta[handler.ErrorCodeMetaKey] != handler.ErrCodeConflict {
+		t.Fatalf("HTTP package replay result = %#v err=%v", packageReplay, err)
+	}
+
+	verifyManifest := map[string]any{
+		"formatVersion":        "patch-package-v1",
+		"fingerprintAlgorithm": "sha256",
+		"fingerprintMode":      "content-v1",
+		"targets": []map[string]any{{
+			"path":                      path,
+			"expectedFingerprint":       fingerprintOutput.Fingerprint,
+			"expectedResultFingerprint": packagePreview.Results[0].ResultFingerprint,
+			"encoding":                  "cp1251",
+			"edits":                     []map[string]any{{"oldText": "Привет", "newText": "Здравствуйте"}},
+		}},
+	}
+	var expectedVerify string
+	for name, session := range map[string]*mcp.ClientSession{"http": second, "direct": direct} {
+		verifyResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "patch_package",
+			Arguments: map[string]any{"action": "verify", "manifest": verifyManifest},
+		})
+		if err != nil || verifyResult.IsError {
+			t.Fatalf("%s patch package verify result = %#v err=%v", name, verifyResult, err)
+		}
+		serialized := marshalJSON(t, verifyResult.StructuredContent)
+		if expectedVerify == "" {
+			expectedVerify = serialized
+		} else if serialized != expectedVerify {
+			t.Fatalf("%s patch package verify diverged: %s != %s", name, serialized, expectedVerify)
+		}
 	}
 
 	previewPath := filepath.Join(root, "preview.txt")

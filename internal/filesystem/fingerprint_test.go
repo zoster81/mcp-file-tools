@@ -16,6 +16,34 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+func TestCaptureRegularFileSnapshotBounded(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "target.bin")
+	data := []byte("alpha\x00beta\n")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := CaptureRegularFileSnapshotBounded(context.Background(), path, int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprint, err := FingerprintRegularFileSnapshot(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fingerprint != FingerprintRegularFileData(data) {
+		t.Fatalf("bounded fingerprint = %s, want %s", fingerprint, FingerprintRegularFileData(data))
+	}
+	if _, err := CaptureRegularFileSnapshotBounded(context.Background(), path, int64(len(data)-1)); operation.KindOf(err) != operation.KindLimit {
+		t.Fatalf("oversized error=%v kind=%s", err, operation.KindOf(err))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := CaptureRegularFileSnapshotBounded(ctx, path, int64(len(data))); operation.KindOf(err) != operation.KindCancelled {
+		t.Fatalf("cancelled error=%v kind=%s", err, operation.KindOf(err))
+	}
+}
+
 func TestFingerprintRegularFileContentDigestMatchesDataFingerprint(t *testing.T) {
 	data := []byte("alpha\x00beta\n")
 	digest := sha256.Sum256(data)

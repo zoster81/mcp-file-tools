@@ -14,7 +14,7 @@ These prompt concepts and the implementation approaches reviewed are credited to
 
 Reusable domain failures carry transport-independent typed categories for invalid input or paths, access denial, symlink escapes, missing files, permissions, encoding, conflicts, cancellation, limits, and filesystem failures. Every failed MCP tool call preserves human-readable text and adds a stable machine-readable code at `_meta.errorCode`. `read_multiple_files.results[].errorCode` uses the same vocabulary.
 
-Stable codes are `INVALID_INPUT`, `INVALID_PATH`, `ACCESS_DENIED`, `SYMLINK_ESCAPE`, `NOT_FOUND`, `PERMISSION`, `ENCODING`, `ENCODING_AMBIGUOUS`, `CONFLICT`, `CANCELLED`, `LIMIT`, `IO_ERROR`, `INTERNAL_ERROR`, and the fallback `OPERATION_FAILED`. Successful results omit error codes. See [docs/MIGRATION_2.0.md](docs/MIGRATION_2.0.md).
+Stable codes are `INVALID_INPUT`, `INVALID_PATH`, `ACCESS_DENIED`, `SYMLINK_ESCAPE`, `NOT_FOUND`, `PERMISSION`, `ENCODING`, `ENCODING_AMBIGUOUS`, `CONFLICT`, `PARTIAL_COMMIT`, `CANCELLED`, `LIMIT`, `IO_ERROR`, `INTERNAL_ERROR`, and the fallback `OPERATION_FAILED`. `PARTIAL_COMMIT` is reserved for a package apply whose final state includes at least one committed or unclassifiable target. Successful results omit error codes. See [docs/MIGRATION_2.0.md](docs/MIGRATION_2.0.md).
 
 ## File Operations
 
@@ -228,27 +228,47 @@ A successful apply omits `previewId` so the consumed capability is not re-emitte
 
 ### patch_package
 
-Validate or dry-run a strict versioned package of coordinated edits to existing regular files. The initial R16 implementation supports `inspect` and `dryRun` only; neither action writes files, stages commits, creates backups, or returns a rollback point. Package `apply` and `verify` remain pending.
+Run a strict versioned package of coordinated edits to existing regular files. The four actions are `inspect`, `dryRun`, `apply`, and `verify`. The workflow preserves the package's declared order and encoding/BOM/line-ending behavior, but it does **not** claim atomic multi-file commit or automatic rollback.
 
-The input and every nested manifest object reject unknown JSON fields. `formatVersion` must be `patch-package-v1`, `fingerprintAlgorithm` must be `sha256`, and `fingerprintMode` must be `content-v1`. Targets remain in manifest order and must use unique normalized paths that resolve to distinct filesystem objects; duplicate spellings, symlink aliases, junction aliases, and hard links are rejected.
+The input and every nested manifest object reject unknown JSON fields. `formatVersion` must be `patch-package-v1`, `fingerprintAlgorithm` must be `sha256`, and `fingerprintMode` must be `content-v1`. Targets must use unique normalized paths resolving to distinct filesystem objects; duplicate spellings, symlink aliases, junction aliases, and hard links are rejected. Creation, deletion, movement, renaming, and `/dev/null` patches are unsupported.
 
 Each target declares:
 
 - one existing regular-file `path` inside an allowed root;
 - the exact current `expectedFingerprint` from `fingerprint_paths` or another `content-v1` result;
-- optional `expectedResultFingerprint` for the prepared bytes;
+- optional `expectedResultFingerprint`; it is checked during `dryRun` when supplied and is required by `verify`;
 - exactly one of `edits` or one strict single-file unified `patch`;
 - optional `encoding` and `forceWritable`, with the same semantics as `edit_file`.
 
-`inspect` validates the manifest, limits, paths, file types, aliases, edit shapes, fuzzy thresholds, and patch structure without reading target contents. `dryRun` additionally retains one bounded stable file-identity reference per target, obtains a coherent package-wide pre-state, verifies every declared precondition, prepares every result through the shared encoding/BOM/line-ending-aware edit pipeline, and performs final identity plus package-wide fingerprint verification before success. It returns ordered per-target diffs and metadata plus `patch-package-aggregate-v1` before/after fingerprints. Any stale target, changed target, ambiguous edit, unrepresentable output, alias, cancellation, or incomplete verification fails the complete dry run; no target is modified.
+**Actions:**
+
+- `inspect`: validates structure, limits, paths, file types, aliases, edit shapes, fuzzy thresholds, patch structure, and declared algorithms without reading target contents.
+- `dryRun`: obtains a coherent package-wide pre-state, retains one stable file identity per target, prepares the exact result bytes through the shared edit pipeline, verifies final unchanged source state, and returns diffs plus aggregate pre/post fingerprints. It also stores the exact prepared package in a bounded process-local cache and returns a 256-bit `previewId`.
+- `apply`: accepts only `previewId`. The capability is atomically consumed before validation, so replay, conflict, cancellation, staging failure, commit failure, and success are all terminal. Every target is revalidated with bounded digest snapshots and every changed result is durably staged before the first commit. Commits then occur in manifest order, followed by a coherent two-pass final fingerprint verification across all targets before success. No modified manifest is accepted and no automatic rollback is attempted.
+- `verify`: requires `expectedResultFingerprint` for every target, reads current fingerprints, and returns ordered per-target matches plus expected and actual aggregate fingerprints. A mismatch returns `CONFLICT` with structured results.
+
+Package preview identifiers are process-wide capabilities because every connection already shares the same roots and authorization policy. They are never listed or written to normal logs. Restart invalidates them. Expired entries are removed before deterministic FIFO eviction, and every removal closes retained file identities.
+
+**Partial-commit contract:**
+
+All changed outputs are staged before the first commit, but filesystem replacement remains per file. If a failure occurs after a target may have been replaced, the server stops and re-fingerprints every target with a bounded best-effort classification:
+
+- `committed`: current bytes match the prepared result;
+- `unchanged`: current bytes match the approved pre-state;
+- `unknown`: neither state can be proven or the target could not be inspected conclusively.
+
+When at least one target is committed or unknown, the MCP error code is `PARTIAL_COMMIT`. The structured response includes `failedIndex`, `failedPath`, the underlying `failureCode`, bounded `failureMessage`, counts, per-target states, and actual fingerprints where available. The server does not call this transactional and does not create or use a persistent rollback store.
 
 **Limits:**
 
 - `MCP_MAX_BATCH_FILES` bounds target count;
-- `MCP_MAX_FILE_BYTES` bounds every source, patch, and prepared file; each target accepts at most 1000 edit operations;
-- `MCP_MAX_PATCH_PACKAGE_BYTES` bounds the semantic JSON manifest (default `16777216`);
-- `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES` bounds aggregate retained prepared bytes, diffs, paths, and metadata (default `67108864`);
-- `MCP_MAX_OUTPUT_BYTES` bounds combined structured and text output.
+- `MCP_MAX_FILE_BYTES` bounds every source, patch, prepared file, apply revalidation snapshot, and post-commit verification pass; each target accepts at most 1000 edit operations;
+- `MCP_MAX_PATCH_PACKAGE_BYTES` bounds semantic manifest JSON (default `16777216`);
+- `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES` bounds aggregate retained preparation state during one dry run (default `67108864`);
+- `MCP_MAX_PATCH_PACKAGE_PREVIEWS` bounds live package capabilities per process (default `16`);
+- `MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES` bounds bytes retained by all live package capabilities (default `134217728`);
+- `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS` bounds capability lifetime (default `900`);
+- `MCP_MAX_OUTPUT_BYTES` bounds combined structured and text output, including worst-case partial-state diagnostics.
 
 **Dry-run example:**
 
@@ -281,26 +301,25 @@ Each target declares:
 }
 ```
 
-**Response shape:**
+The successful dry-run response includes:
 
 ```json
 {
   "action": "dryRun",
   "formatVersion": "patch-package-v1",
-  "label": "Rename two helpers",
-  "fingerprintAlgorithm": "sha256",
-  "fingerprintMode": "content-v1",
   "aggregateMode": "patch-package-aggregate-v1",
   "aggregateBeforeFingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "aggregateAfterFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "previewId": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "createdAt": "2026-08-04T00:00:00Z",
+  "expiresAt": "2026-08-04T00:15:00Z",
   "targetCount": 2,
   "changedCount": 2,
-  "unchangedCount": 0,
   "results": [
     {
       "index": 0,
       "path": "/project/a.go",
-      "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "state": "prepared",
       "actualFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "resultFingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "diff": "...",
@@ -312,7 +331,44 @@ Each target declares:
 }
 ```
 
-The aggregate fingerprint binds manifest order, Unicode-NFC slash-normalized declared paths, and the ordered per-target `content-v1` fingerprints. It is package evidence, not a claim that a future multi-file apply can be atomic.
+**Apply example:**
+
+```json
+{
+  "action": "apply",
+  "previewId": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
+
+A successful apply omits the consumed identifier and reports `applied: true`, `committedCount`, `unchangedCount`, `actualAggregateFingerprint`, and per-target `committed` or `unchanged` states.
+
+**Verify example:**
+
+```json
+{
+  "action": "verify",
+  "manifest": {
+    "formatVersion": "patch-package-v1",
+    "fingerprintAlgorithm": "sha256",
+    "fingerprintMode": "content-v1",
+    "targets": [
+      {
+        "path": "/project/a.go",
+        "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expectedResultFingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "edits": [
+          {
+            "oldText": "func oldA()",
+            "newText": "func newA()"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The aggregate fingerprint binds manifest order, Unicode-NFC slash-normalized declared paths, and ordered per-target `content-v1` fingerprints. It is reproducible package evidence, not a multi-file atomicity guarantee.
 
 ## Directory Operations
 

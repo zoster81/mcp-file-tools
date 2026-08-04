@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"os"
 	"sync"
 	"time"
@@ -18,16 +19,21 @@ const (
 
 // Handler handles all file tool operations
 type Handler struct {
-	config                   *config.Config
-	executionPolicy          *ExecutionPolicy
-	configuredRequestedDirs  []string // immutable lexical baseline; always allowed
-	configuredDirs           []string // immutable resolved baseline; always allowed
-	allowedRequestedDirs     []string
-	allowedDirs              []string
-	editPreviews             *editPreviewStore
-	replaceFile              func(string, []byte, filesystem.ReplaceOptions) error
-	patchPackageAfterPrepare func() error
-	mu                       sync.RWMutex
+	config                         *config.Config
+	executionPolicy                *ExecutionPolicy
+	configuredRequestedDirs        []string // immutable lexical baseline; always allowed
+	configuredDirs                 []string // immutable resolved baseline; always allowed
+	allowedRequestedDirs           []string
+	allowedDirs                    []string
+	editPreviews                   *editPreviewStore
+	patchPackagePreviews           *patchPackagePreviewStore
+	patchPackageStageReplacement   func(context.Context, string, []byte, os.FileMode) (*filesystem.StagedReplacement, error)
+	patchPackageCommitReplacement  func(int, *filesystem.StagedReplacement, filesystem.ReplaceOptions) (bool, error)
+	patchPackageCleanupReplacement func(*filesystem.StagedReplacement) error
+	replaceFile                    func(string, []byte, filesystem.ReplaceOptions) error
+	patchPackageAfterPrepare       func() error
+	patchPackageAfterStage         func() error
+	mu                             sync.RWMutex
 }
 
 // Option is a functional option for configuring Handler
@@ -77,6 +83,14 @@ func NewHandler(allowedDirs []string, opts ...Option) *Handler {
 		time.Duration(h.editPreviewTTLSeconds())*time.Second,
 	)
 	h.replaceFile = filesystem.ReplaceFile
+	h.patchPackagePreviews = newPatchPackagePreviewStore(
+		h.maxPatchPackagePreviews(),
+		h.maxPatchPackagePreviewBytes(),
+		time.Duration(h.patchPackagePreviewTTLSeconds())*time.Second,
+	)
+	h.patchPackageStageReplacement = stagePatchPackageReplacement
+	h.patchPackageCommitReplacement = commitPatchPackageReplacement
+	h.patchPackageCleanupReplacement = func(staged *filesystem.StagedReplacement) error { return staged.Cleanup() }
 
 	return h
 }

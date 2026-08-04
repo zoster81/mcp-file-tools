@@ -93,6 +93,27 @@ func (h *Handler) maxPatchPackagePreparedBytes() int64 {
 	return config.DefaultMaxPatchPackagePreparedBytes
 }
 
+func (h *Handler) maxPatchPackagePreviews() int {
+	if h != nil && h.config != nil && h.config.Limits.MaxPatchPackagePreviews > 0 {
+		return h.config.Limits.MaxPatchPackagePreviews
+	}
+	return config.DefaultMaxPatchPackagePreviews
+}
+
+func (h *Handler) maxPatchPackagePreviewBytes() int64 {
+	if h != nil && h.config != nil && h.config.Limits.MaxPatchPackagePreviewBytes > 0 {
+		return h.config.Limits.MaxPatchPackagePreviewBytes
+	}
+	return config.DefaultMaxPatchPackagePreviewBytes
+}
+
+func (h *Handler) patchPackagePreviewTTLSeconds() int {
+	if h != nil && h.config != nil && h.config.Limits.PatchPackagePreviewTTLSeconds > 0 {
+		return h.config.Limits.PatchPackagePreviewTTLSeconds
+	}
+	return config.DefaultPatchPackagePreviewTTLSeconds
+}
+
 func clampBudgetToInt(budget int64) int {
 	maxInt := int64(^uint(0) >> 1)
 	if budget > maxInt {

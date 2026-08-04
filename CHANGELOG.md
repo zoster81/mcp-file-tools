@@ -17,8 +17,9 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added `MCP_MAX_FINGERPRINT_ENTRIES` and `MCP_MAX_FINGERPRINT_ENTRY_DETAILS` to bound fingerprint traversal and returned detail records independently.
 - Added bounded one-shot `edit_file` preview/apply with 256-bit process-local capabilities, exact retained result bytes, target/result fingerprints, deterministic expiry/eviction, stable file-identity checks, replay prevention, cross-session transport use, and no persistent backup side effect.
 - Added `MCP_MAX_EDIT_PREVIEWS`, `MCP_MAX_EDIT_PREVIEW_BYTES`, and `MCP_EDIT_PREVIEW_TTL_SECONDS` to bound preview count, dynamic retained bytes, and lifetime independently.
-- Added the strict `patch_package` tool with versioned `patch-package-v1` manifests, unknown-field rejection, ordered existing-file targets, hard-link/alias rejection, `inspect` and non-mutating `dryRun` actions, declared pre/post fingerprints, shared encoding-aware preparation, final package-wide state verification, and aggregate before/after evidence.
-- Added `MCP_MAX_PATCH_PACKAGE_BYTES` and `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES` to bound semantic package input and aggregate prepared state independently.
+- Added the strict `patch_package` tool with versioned `patch-package-v1` manifests, unknown-field rejection, ordered existing-file targets, hard-link/alias rejection, `inspect`, one-shot `dryRun`/`apply`, and read-only `verify`, declared pre/post fingerprints, shared encoding-aware preparation, all-target durable staging before manifest-order commits, final package-wide state evidence, replay prevention, and explicit committed/unchanged/unknown classification.
+- Added `PARTIAL_COMMIT` structured errors for package apply failures that leave at least one committed or unclassifiable target, including bounded failure metadata and per-target actual fingerprints without claiming automatic rollback or multi-file atomicity.
+- Added `MCP_MAX_PATCH_PACKAGE_BYTES`, `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES`, `MCP_MAX_PATCH_PACKAGE_PREVIEWS`, `MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES`, and `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS` to bound semantic input, per-dry-run preparation, live capabilities, retained bytes, and capability lifetime independently.
 
 ### Changed
 

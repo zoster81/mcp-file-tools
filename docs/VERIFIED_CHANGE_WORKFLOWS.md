@@ -1,6 +1,6 @@
 # Verified Change Workflows
 
-This document is the approved design baseline for R16. It defines the intended behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1–3 are implemented in source: deterministic fingerprints, bounded one-shot `edit_file` preview/apply, and strict `patch-package-v1` inspect/dry-run are complete, while package apply/verify and structured verification remain pending.
+This document is the approved design baseline for R16. It defines the intended behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1–4 are implemented in source: deterministic fingerprints, bounded one-shot `edit_file` preview/apply, and complete strict `patch-package-v1` inspect/dry-run/apply/verify are complete, while structured verification remains pending.
 
 Persistent backup storage and user-managed change review are approved in principle but remain outside the initial R16 implementation until a separate retention and lifecycle design is approved.
 
@@ -134,31 +134,25 @@ The input and every nested manifest object reject unknown JSON fields. The curre
 ### Actions
 
 - `inspect` **implemented**: validate structure, semantic input size, target count, paths, existing regular-file types, duplicate or aliased targets, edit shapes, fuzzy thresholds, strict patch structure, and declared algorithms without reading target contents.
-- `dryRun` **implemented**: retain one stable open-file identity per bounded target, obtain a coherent package-wide pre-state, verify every declared fingerprint, prepare each exact result through the shared edit pipeline, enforce aggregate prepared/output limits, perform final identity and package-wide state verification, and return bounded ordered per-file diffs plus `patch-package-aggregate-v1` before/after fingerprints. No source file is changed.
-- `apply` **pending**: consume the exact dry-run package preview, revalidate every precondition, stage all outputs, then commit in deterministic manifest order.
-- `verify` **pending**: compare current target fingerprints with the package's expected post-state and return per-file plus aggregate results.
+- `dryRun` **implemented**: retain one stable open-file identity per bounded target, obtain a coherent package-wide pre-state, verify every declared fingerprint, prepare each exact result through the shared edit pipeline, enforce aggregate prepared/output limits, perform final identity and package-wide state verification, return ordered diffs plus `patch-package-aggregate-v1` evidence, and store the exact package behind a bounded expiring 256-bit capability. No source file is changed.
+- `apply` **implemented**: atomically consume the exact dry-run capability, reject a resubmitted manifest, revalidate paths, identities, bounded current snapshots, prepared bytes, and read-only authorization, durably stage every changed output before the first commit, commit in deterministic manifest order, then require a coherent two-pass final fingerprint verification before success. Every apply attempt is terminal.
+- `verify` **implemented**: require `expectedResultFingerprint` for every target, compare current `content-v1` fingerprints, and return per-file plus expected/actual aggregate results. Mismatch returns structured `CONFLICT`.
 
-Package apply must not reaccept a modified manifest. It should use the same one-shot preview capability model as `edit_file`.
+The package cache is process-local and independent from edit previews. Its defaults are `MCP_MAX_PATCH_PACKAGE_PREVIEWS=16`, `MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES=134217728`, and `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS=900`. Expired entries are removed before deterministic FIFO eviction. Capability removal, response-limit failure, claim, and process exit release all retained identities.
 
-Current limits are `MCP_MAX_BATCH_FILES` for target count, `MCP_MAX_FILE_BYTES` per source/patch/result, `MCP_MAX_PATCH_PACKAGE_BYTES=16777216` for semantic manifest input, `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES=67108864` for aggregate retained preparation state, and `MCP_MAX_OUTPUT_BYTES` for combined structured/text output. The dry-run aggregate binds manifest order, canonical declared paths, and ordered per-target `content-v1` fingerprints; it is evidence, not an atomicity claim.
+Current limits also include `MCP_MAX_BATCH_FILES` for target count, `MCP_MAX_FILE_BYTES` per source/patch/result, `MCP_MAX_PATCH_PACKAGE_BYTES=16777216` for semantic manifest input, `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES=67108864` for per-request preparation state, and `MCP_MAX_OUTPUT_BYTES` for combined structured/text output including worst-case partial-state diagnostics. The aggregate binds manifest order, canonical declared paths, and ordered per-target `content-v1` fingerprints; it is evidence, not an atomicity claim.
 
 ### Partial-commit contract
 
 All targets must pass parsing, path validation, fingerprint validation, preparation, and staging before the first commit. The initial R16 package does not promise automatic rollback because persistent backup and recovery policy remains a separate design gate.
 
-If a commit fails after earlier files were committed, the operation must stop and return a stable `PARTIAL_COMMIT` result containing bounded, machine-readable lists of:
+If a failure occurs after a target may have been committed, the operation stops and performs a bounded best-effort fingerprint classification. Targets are reported as `committed` when current bytes equal the prepared result, `unchanged` when current bytes equal the approved pre-state, or `unknown` otherwise. A result containing any committed or unknown target uses stable `PARTIAL_COMMIT` metadata and includes the failed index/path, underlying failure code/message, counts, and actual fingerprints where available.
 
-- files confirmed committed;
-- files confirmed unchanged;
-- the file whose commit failed;
-- files whose final state could not be conclusively classified;
-- actual post-operation fingerprints where available.
-
-Documentation must describe this limitation prominently. The implementation must not call the operation atomic or transactional across files.
+This also handles filesystem APIs that can report an error after replacement, such as a directory-sync failure: classification relies on actual fingerprints rather than assuming that an error means no mutation. The implementation does not call the operation atomic or transactional and does not attempt automatic rollback.
 
 ### Required tests
 
-Implemented inspect/dry-run tests cover malformed and unknown-field manifests, unsupported versions/algorithms/modes, duplicate paths, hard-link aliases, path escapes, stale fingerprints, content changes and same-content path replacement after preparation, strict patch rejection, UTF-16 BOM/CRLF preservation, CP1251 direct/HTTP equivalence, count/manifest/prepared/output limits, cancellation, deterministic result order, and byte-identical preservation of every target. Apply/verify tests for staging failures, deterministic commit order, injected failures, partial-state classification, and exact post-state verification remain pending.
+Implemented tests cover malformed and unknown-field manifests, unsupported versions/algorithms/modes, duplicate paths, hard-link aliases, path escapes, stale fingerprints, same-content path replacement, strict patches, UTF-16 BOM/CRLF and CP1251 preservation, force-writable approval, no-op metadata preservation, count/manifest/preparation/cache/output limits, bounded snapshot hashing, expiry, eviction, restart invalidation, redacted tokens, cancellation before, during, and after staging, cleanup failures, concurrent claim, all-target staging, deterministic commit order, injected failure at every commit position, post-replacement error classification, external changes during final verification, exact and mismatched verification, cross-session HTTP/direct apply/replay/verify, and byte-identical preservation before commit.
 
 ## 4. Structured verification
 

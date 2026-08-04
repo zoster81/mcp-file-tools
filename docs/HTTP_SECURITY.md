@@ -42,7 +42,7 @@ The security design protects:
 - the operating-system identity and permissions of the server process;
 - execution capability when `run_script` or `shell` is enabled;
 - bearer credentials and TLS private keys;
-- session identifiers, one-shot edit preview capabilities, and in-flight MCP messages;
+- session identifiers, one-shot edit and patch-package preview capabilities, and in-flight MCP messages;
 - server availability, memory, goroutines, file descriptors, and process slots;
 - logs, which must not become a secondary store of secrets or file contents.
 
@@ -341,7 +341,7 @@ Logs must not contain:
 - Authorization headers or bearer tokens;
 - cookies;
 - TLS private material;
-- complete session IDs, event IDs, or edit preview capability identifiers;
+- complete session IDs, event IDs, or edit/package preview capability identifiers;
 - query strings;
 - request or response bodies;
 - tool arguments, script arguments, shell commands, file contents, or diffs;

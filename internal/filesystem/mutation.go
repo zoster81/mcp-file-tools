@@ -171,8 +171,15 @@ func (snapshot FileSnapshot) Verify(path string) (err error) {
 	}
 
 	hasher := sha256.New()
-	if _, err := io.Copy(hasher, file); err != nil {
+	written, err := io.CopyN(hasher, file, snapshot.Size)
+	if err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return fmt.Errorf("%w: content truncated for %s", ErrConcurrentModification, path)
+		}
 		return err
+	}
+	if written != snapshot.Size {
+		return fmt.Errorf("%w: verified %d of %d bytes for %s", ErrConcurrentModification, written, snapshot.Size, path)
 	}
 	if !bytes.Equal(hasher.Sum(nil), snapshot.digest[:]) {
 		return fmt.Errorf("%w: content differs for %s", ErrConcurrentModification, path)

@@ -37,31 +37,44 @@ type validatedPatchPackageTarget struct {
 	info                      os.FileInfo
 }
 
-// HandlePatchPackage validates or prepares a bounded multi-file edit package.
-// The initial R16 tranche exposes inspect and dryRun only; neither action writes.
+// HandlePatchPackage validates, prepares, applies, or verifies a bounded
+// multi-file edit package.
 func (h *Handler) HandlePatchPackage(ctx context.Context, _ *mcp.CallToolRequest, input PatchPackageInput) (*mcp.CallToolResult, PatchPackageOutput, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	action := strings.TrimSpace(input.Action)
-	if action != patchPackageActionInspect && action != patchPackageActionDryRun {
-		err := operation.New(operation.KindInvalidInput, "action must be inspect or dryRun")
+	action, err := validatePatchPackageActionInput(input)
+	if err != nil {
 		return errorResultFromError(err), PatchPackageOutput{}, nil
+	}
+	if action == patchPackageActionApply {
+		return h.handlePatchPackageApply(ctx, input.PreviewID)
 	}
 
 	targets, err := h.validatePatchPackageManifest(ctx, input.Manifest)
 	if err != nil {
 		return errorResultFromError(err), PatchPackageOutput{}, nil
 	}
-	if action == patchPackageActionInspect {
-		output := patchPackageBaseOutput(action, input.Manifest, targets)
-		text := fmt.Sprintf("Patch package inspected: %d existing regular-file targets are structurally valid.", len(targets))
-		if err := h.checkPatchPackageResponseLimit(output, text); err != nil {
-			return errorResultFromError(err), PatchPackageOutput{}, nil
-		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, output, nil
+	switch action {
+	case patchPackageActionInspect:
+		return h.handlePatchPackageInspect(input.Manifest, targets)
+	case patchPackageActionVerify:
+		return h.handlePatchPackageVerify(ctx, input.Manifest, targets)
+	default:
+		return h.handlePatchPackageDryRun(ctx, input.Manifest, targets)
 	}
+}
 
+func (h *Handler) handlePatchPackageInspect(manifest PatchPackageManifest, targets []validatedPatchPackageTarget) (*mcp.CallToolResult, PatchPackageOutput, error) {
+	output := patchPackageBaseOutput(patchPackageActionInspect, manifest, targets)
+	text := fmt.Sprintf("Patch package inspected: %d existing regular-file targets are structurally valid.", len(targets))
+	if err := h.checkPatchPackageResponseLimit(output, text); err != nil {
+		return errorResultFromError(err), PatchPackageOutput{}, nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, output, nil
+}
+
+func (h *Handler) handlePatchPackageDryRun(ctx context.Context, manifest PatchPackageManifest, targets []validatedPatchPackageTarget) (*mcp.CallToolResult, PatchPackageOutput, error) {
 	identities, err := openPatchPackageIdentities(targets)
 	if err != nil {
 		return errorResultFromError(err), PatchPackageOutput{}, nil
@@ -79,7 +92,7 @@ func (h *Handler) HandlePatchPackage(ctx context.Context, _ *mcp.CallToolRequest
 		}
 	}
 
-	output := patchPackageBaseOutput(action, input.Manifest, targets)
+	preparedTargets := make([]preparedPatchPackageTarget, len(targets))
 	resultFingerprints := make([]string, len(targets))
 	var preparedBytes int64
 	for index, target := range targets {
@@ -120,27 +133,16 @@ func (h *Handler) HandlePatchPackage(ctx context.Context, _ *mcp.CallToolRequest
 			err := operation.New(operation.KindLimit, fmt.Sprintf("patch package prepared state exceeds limit %d bytes", h.maxPatchPackagePreparedBytes()))
 			return errorResultFromError(err), PatchPackageOutput{}, nil
 		}
-
+		preparedTargets[index] = preparedPatchPackageTarget{
+			index:                     index,
+			requestedPath:             target.declared.Path,
+			resolvedPath:              target.resolvedPath,
+			canonicalManifestPath:     target.canonicalManifestPath,
+			expectedFingerprint:       target.expectedFingerprint,
+			expectedResultFingerprint: target.expectedResultFingerprint,
+			prepared:                  prepared,
+		}
 		resultFingerprints[index] = prepared.resultFingerprint
-		output.Results[index] = PatchPackageTargetResult{
-			Index:                     index,
-			Path:                      target.declared.Path,
-			ExpectedFingerprint:       target.expectedFingerprint,
-			ActualFingerprint:         prepared.targetFingerprint,
-			ExpectedResultFingerprint: target.expectedResultFingerprint,
-			ResultFingerprint:         prepared.resultFingerprint,
-			Diff:                      prepared.diff,
-			Encoding:                  prepared.encoding,
-			HasBOM:                    prepared.hasBOM,
-			BOMType:                   prepared.bomType,
-			LineEndingStyle:           prepared.lineEndingStyle,
-			Changed:                   prepared.changed,
-		}
-		if prepared.changed {
-			output.ChangedCount++
-		} else {
-			output.UnchangedCount++
-		}
 	}
 
 	if h.patchPackageAfterPrepare != nil {
@@ -167,11 +169,37 @@ func (h *Handler) HandlePatchPackage(ctx context.Context, _ *mcp.CallToolRequest
 		}
 	}
 
-	output.AggregateMode = patchPackageAggregateModeV1
-	output.AggregateBeforeFingerprint = patchPackageAggregate(targets, before)
-	output.AggregateAfterFingerprint = patchPackageAggregate(targets, resultFingerprints)
+	preparedPackage := preparedPatchPackage{
+		formatVersion:              manifest.FormatVersion,
+		label:                      manifest.Label,
+		fingerprintAlgorithm:       manifest.FingerprintAlgorithm,
+		fingerprintMode:            manifest.FingerprintMode,
+		aggregateMode:              patchPackageAggregateModeV1,
+		aggregateBeforeFingerprint: patchPackageAggregate(targets, before),
+		aggregateAfterFingerprint:  patchPackageAggregate(targets, resultFingerprints),
+		targets:                    preparedTargets,
+	}
+	retainedPackageBytes, err := preparedPackage.retainedBytes()
+	if err != nil {
+		return errorResultFromError(err), PatchPackageOutput{}, nil
+	}
+	if retainedPackageBytes > h.maxPatchPackagePreparedBytes() {
+		err := operation.New(operation.KindLimit, fmt.Sprintf("patch package prepared state exceeds limit %d bytes", h.maxPatchPackagePreparedBytes()))
+		return errorResultFromError(err), PatchPackageOutput{}, nil
+	}
+	for index := range preparedPackage.targets {
+		preparedPackage.targets[index].prepared.identityFile = identities[index]
+		identities[index] = nil
+	}
+	preview, err := h.patchPackagePreviews.put(preparedPackage)
+	if err != nil {
+		preparedPackage.close()
+		return errorResultFromError(err), PatchPackageOutput{}, nil
+	}
+	output := patchPackageOutputFromPreview(preview, patchPackageActionDryRun)
 	text := patchPackageDryRunText(output)
 	if err := h.checkPatchPackageResponseLimit(output, text); err != nil {
+		h.patchPackagePreviews.discard(preview.id)
 		return errorResultFromError(err), PatchPackageOutput{}, nil
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, output, nil
@@ -337,38 +365,49 @@ func closePatchPackageIdentities(identities []*filesystem.FileIdentity) {
 }
 
 func (h *Handler) capturePatchPackageFingerprints(ctx context.Context, targets []validatedPatchPackageTarget) ([]string, error) {
-	paths := make([]string, len(targets))
-	for index := range targets {
-		paths[index] = targets[index].resolvedPath
-	}
-	result, err := filesystem.FingerprintPaths(ctx, paths, filesystem.FingerprintOptions{
-		ResolvedAllowedDirs: h.ResolvedAllowedDirs(),
-		RespectGitignore:    false,
-		IncludeEntries:      true,
-		MaxEntries:          len(paths),
-		MaxEntryDetails:     len(paths),
-	})
+	first, err := h.capturePatchPackageFingerprintsOnce(ctx, targets)
 	if err != nil {
 		return nil, err
 	}
-	if len(result.Entries) != len(paths) {
-		return nil, operation.New(operation.KindConflict, "patch package fingerprint details are incomplete")
-	}
-	fingerprints := make([]string, len(paths))
-	for _, entry := range result.Entries {
-		if entry.RootIndex < 0 || entry.RootIndex >= len(paths) || entry.Type != "file" || entry.Path != "." {
-			return nil, operation.New(operation.KindConflict, "patch package fingerprint details are inconsistent")
+	second, err := h.capturePatchPackageFingerprintsOnce(ctx, targets)
+	if err != nil {
+		switch operation.KindOf(err) {
+		case operation.KindCancelled, operation.KindSymlinkEscape:
+			return nil, err
+		default:
+			return nil, operation.Wrap(operation.KindConflict, "verify_patch_package_fingerprints", "", err)
 		}
-		fingerprint, err := filesystem.FingerprintRegularFileContentDigest(entry.Size, entry.SHA256)
+	}
+	for index := range first {
+		if first[index] != second[index] {
+			return nil, operation.New(operation.KindConflict, fmt.Sprintf("patch package target %d changed during fingerprint capture", index))
+		}
+	}
+	return first, nil
+}
+
+func (h *Handler) capturePatchPackageFingerprintsOnce(ctx context.Context, targets []validatedPatchPackageTarget) ([]string, error) {
+	fingerprints := make([]string, len(targets))
+	for index, target := range targets {
+		if err := ctx.Err(); err != nil {
+			return nil, operation.Wrap(operation.KindCancelled, "capture_patch_package_fingerprints", target.resolvedPath, err)
+		}
+		requestedPath := target.declared.Path
+		if requestedPath == "" {
+			requestedPath = target.resolvedPath
+		}
+		validation := h.ValidatePath(requestedPath)
+		if !validation.Ok() {
+			return nil, validation.Err
+		}
+		if target.resolvedPath != "" && validation.Path != target.resolvedPath {
+			return nil, operation.New(operation.KindConflict, fmt.Sprintf("patch package target %d path changed during fingerprint capture", index))
+		}
+		fingerprint, err := filesystem.FingerprintRegularFilePathBounded(ctx, validation.Path, h.maxFileBytes())
 		if err != nil {
 			return nil, err
 		}
-		fingerprints[entry.RootIndex] = fingerprint
-	}
-	for index, fingerprint := range fingerprints {
-		if fingerprint == "" {
-			return nil, operation.New(operation.KindConflict, fmt.Sprintf("patch package target %d fingerprint is unavailable", index))
-		}
+		fingerprints[index] = fingerprint
 	}
 	return fingerprints, nil
 }
@@ -396,8 +435,8 @@ func patchPackageBaseOutput(action string, manifest PatchPackageManifest, target
 
 func patchPackageDryRunText(output PatchPackageOutput) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "Patch package dry run prepared %d targets (%d changed, %d unchanged).\nAggregate before: %s\nAggregate after: %s",
-		output.TargetCount, output.ChangedCount, output.UnchangedCount, output.AggregateBeforeFingerprint, output.AggregateAfterFingerprint)
+	fmt.Fprintf(&builder, "Patch package dry run prepared %d targets (%d changed, %d unchanged).\nPreview ID: %s\nExpires: %s\nAggregate before: %s\nAggregate after: %s",
+		output.TargetCount, output.ChangedCount, output.UnchangedCount, output.PreviewID, output.ExpiresAt, output.AggregateBeforeFingerprint, output.AggregateAfterFingerprint)
 	for _, result := range output.Results {
 		fmt.Fprintf(&builder, "\n\n[%d] %s", result.Index, result.Path)
 		if result.Diff != "" {
@@ -458,12 +497,20 @@ func patchPackagePathKey(path string) string {
 }
 
 func patchPackageAggregate(targets []validatedPatchPackageTarget, fingerprints []string) string {
+	canonical := make([]string, len(targets))
+	for index := range targets {
+		canonical[index] = targets[index].canonicalManifestPath
+	}
+	return patchPackageAggregateCanonical(canonical, fingerprints)
+}
+
+func patchPackageAggregateCanonical(canonicalPaths, fingerprints []string) string {
 	aggregate := sha256.New()
 	_, _ = aggregate.Write([]byte("mcp-file-tools:patch-package:aggregate-v1\x00"))
-	writePatchPackageUint64(aggregate, uint64(len(targets)))
-	for index, target := range targets {
+	writePatchPackageUint64(aggregate, uint64(len(canonicalPaths)))
+	for index, canonicalPath := range canonicalPaths {
 		writePatchPackageUint64(aggregate, uint64(index))
-		writePatchPackageString(aggregate, target.canonicalManifestPath)
+		writePatchPackageString(aggregate, canonicalPath)
 		decoded, _ := hex.DecodeString(fingerprints[index])
 		_, _ = aggregate.Write(decoded)
 	}

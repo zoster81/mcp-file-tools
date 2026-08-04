@@ -57,7 +57,7 @@ The semantic-tag release workflow validates each release tag against a dated cha
 
 R15 is implemented and verified but remains unreleased and undeployed. It adds backward-compatible optional fields to the existing 23-tool catalog plus three transport-independent prompts: `audit_encodings`, `fix_mojibake`, and `migrate_to_utf8`. Recursive read/search workflows respect nested `.gitignore` rules by default, while mutation additions retain the existing full-document size limits, encoding/BOM-aware pipeline, durable staging, and concurrent-change checks.
 
-R16 phases 1–3 are implemented in source. `fingerprint_paths` provides deterministic streamed SHA-256 state evidence, `edit_file` adds bounded one-shot `preview`/`apply`, and the new `patch_package` tool brings the current catalog to 25 tools with strict `patch-package-v1` `inspect` and `dryRun` workflows. A package validates a bounded ordered set of existing regular files, rejects aliases, checks declared content fingerprints, prepares encoding/BOM/line-ending-preserving results, and returns per-target diffs plus aggregate pre/post fingerprints without writing or creating backups. Package apply and verify remain pending.
+R16 phases 1–4 are implemented in source. `fingerprint_paths` provides deterministic streamed SHA-256 state evidence, `edit_file` adds bounded one-shot `preview`/`apply`, and `patch_package` exposes strict `patch-package-v1` `inspect`, `dryRun`, `apply`, and `verify` workflows. Package dry runs retain exact prepared bytes behind bounded expiring capabilities; apply stages every changed target before deterministic manifest-order commits and reports committed, unchanged, or unknown states with `PARTIAL_COMMIT` when necessary. Verify compares declared post-state fingerprints. Package operations create no persistent backup and do not claim multi-file atomicity or automatic rollback.
 
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
@@ -68,7 +68,7 @@ Provides 25 tools for file operations, encoding conversion, state verification, 
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
 - [`edit_file`](TOOLS.md#edit_file) - Direct edits or bounded one-shot preview/apply with exact/flexible/fuzzy operations and strict unified patches
-- [`patch_package`](TOOLS.md#patch_package) - Inspect or dry-run bounded declared multi-file edits with exact fingerprints and aggregate evidence
+- [`patch_package`](TOOLS.md#patch_package) - Inspect, preview, apply, and verify bounded declared multi-file edits with one-shot capabilities and explicit partial-state evidence
 - [`copy_file`](TOOLS.md#copy_file) - Copy a file to a new location
 - [`delete_file`](TOOLS.md#delete_file) - Delete a file
 - [`list_directory`](TOOLS.md#list_directory) - Browse directories with filtering and deterministic name/mtime/size sorting
@@ -121,7 +121,7 @@ This repository has evolved from its original upstream codebase. Compared with t
 - a deterministic, cancellation-aware secure walker shared by `tree`, `search_files`, `grep_text_files`, and `fingerprint_paths`, including native Windows junction/reparse-point resolution and protection for deeply nested missing paths behind escaping links;
 - a shared atomic mutation layer for write, edit, conversion, line-ending, BOM, copy, move, and delete operations, with synced staging, transactional backups, no-replace destination commits, cleanup, and practical concurrent-modification detection;
 - a bounded process-local edit preview cache with 256-bit one-shot capabilities, exact prepared bytes, target/result fingerprints, deterministic expiry/eviction, stable file-identity checks, replay prevention, and no persistent backup side effect;
-- a strict `patch-package-v1` inspect/dry-run workflow for bounded ordered existing-file edits, with unknown-field rejection, alias and hard-link detection, shared encoding-aware preparation, coherent pre/post fingerprints, and no mutation or backup side effect;
+- a strict `patch-package-v1` inspect/dry-run/apply/verify workflow for bounded ordered existing-file edits, with unknown-field rejection, alias and hard-link detection, one-shot capabilities, shared encoding-aware preparation, all-target staging, deterministic commits, explicit partial-state evidence, and no persistent backup or automatic rollback;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
 - a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing;
@@ -395,6 +395,9 @@ The server can be configured via environment variables:
 | `MCP_EDIT_PREVIEW_TTL_SECONDS` | Lifetime of one edit preview before lazy expiration and handle cleanup. | `900` |
 | `MCP_MAX_PATCH_PACKAGE_BYTES` | Maximum encoded semantic size of one `patch-package-v1` manifest. | `16777216` |
 | `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES` | Aggregate retained prepared bytes, diffs, paths, and metadata during one package dry run. | `67108864` |
+| `MCP_MAX_PATCH_PACKAGE_PREVIEWS` | Maximum live one-shot package previews retained by one server process. | `16` |
+| `MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES` | Aggregate bytes retained by live package previews. | `134217728` |
+| `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS` | Lifetime of one package preview before lazy expiration and identity cleanup. | `900` |
 | `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, fingerprint details, edit/package responses, and inconsistent-line output budget. | `67108864` |
 | `MCP_MAX_SESSIONS` | Maximum live native Streamable HTTP sessions. | `128` |
 | `MCP_MEMORY_THRESHOLD` | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`; specific variables take precedence. | unset |

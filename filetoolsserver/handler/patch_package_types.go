@@ -9,10 +9,12 @@ import (
 
 const PatchPackageFormatV1 = "patch-package-v1"
 
-// PatchPackageInput validates or prepares one versioned multi-file edit package.
+// PatchPackageInput validates, prepares, applies, or verifies one versioned
+// multi-file edit package. Apply accepts only previewId.
 type PatchPackageInput struct {
-	Action   string               `json:"action"`
-	Manifest PatchPackageManifest `json:"manifest"`
+	Action    string               `json:"action"`
+	PreviewID string               `json:"previewId,omitempty"`
+	Manifest  PatchPackageManifest `json:"manifest,omitempty"`
 }
 
 // UnmarshalJSON rejects unknown fields anywhere in the public package input.
@@ -51,10 +53,11 @@ type PatchPackageTarget struct {
 	ForceWritable             *bool           `json:"forceWritable,omitempty"`
 }
 
-// PatchPackageTargetResult reports one validated or prepared target in manifest order.
+// PatchPackageTargetResult reports one target in manifest order.
 type PatchPackageTargetResult struct {
 	Index                     int    `json:"index"`
 	Path                      string `json:"path"`
+	State                     string `json:"state,omitempty"`
 	ExpectedFingerprint       string `json:"expectedFingerprint"`
 	ActualFingerprint         string `json:"actualFingerprint,omitempty"`
 	ExpectedResultFingerprint string `json:"expectedResultFingerprint,omitempty"`
@@ -65,9 +68,14 @@ type PatchPackageTargetResult struct {
 	BOMType                   string `json:"bomType,omitempty"`
 	LineEndingStyle           string `json:"lineEndingStyle,omitempty"`
 	Changed                   bool   `json:"changed"`
+	Applied                   bool   `json:"applied"`
+	Verified                  bool   `json:"verified"`
+	ReadOnlyCleared           bool   `json:"readOnlyCleared,omitempty"`
+	ErrorCode                 string `json:"errorCode,omitempty"`
+	Error                     string `json:"error,omitempty"`
 }
 
-// PatchPackageOutput is returned by inspect and dryRun actions.
+// PatchPackageOutput reports inspect, dryRun, apply, and verify actions.
 type PatchPackageOutput struct {
 	Action                     string                     `json:"action"`
 	FormatVersion              string                     `json:"formatVersion"`
@@ -77,9 +85,23 @@ type PatchPackageOutput struct {
 	AggregateMode              string                     `json:"aggregateMode,omitempty"`
 	AggregateBeforeFingerprint string                     `json:"aggregateBeforeFingerprint,omitempty"`
 	AggregateAfterFingerprint  string                     `json:"aggregateAfterFingerprint,omitempty"`
+	ActualAggregateFingerprint string                     `json:"actualAggregateFingerprint,omitempty"`
+	PreviewID                  string                     `json:"previewId,omitempty"`
+	CreatedAt                  string                     `json:"createdAt,omitempty"`
+	ExpiresAt                  string                     `json:"expiresAt,omitempty"`
 	TargetCount                int                        `json:"targetCount"`
 	ChangedCount               int                        `json:"changedCount"`
+	CommittedCount             int                        `json:"committedCount"`
 	UnchangedCount             int                        `json:"unchangedCount"`
+	MismatchCount              int                        `json:"mismatchCount"`
+	UnknownCount               int                        `json:"unknownCount"`
+	Applied                    bool                       `json:"applied"`
+	Verified                   bool                       `json:"verified"`
+	PartialCommit              bool                       `json:"partialCommit"`
+	FailedIndex                *int                       `json:"failedIndex,omitempty"`
+	FailedPath                 string                     `json:"failedPath,omitempty"`
+	FailureCode                string                     `json:"failureCode,omitempty"`
+	FailureMessage             string                     `json:"failureMessage,omitempty"`
 	Results                    []PatchPackageTargetResult `json:"results"`
 }
 

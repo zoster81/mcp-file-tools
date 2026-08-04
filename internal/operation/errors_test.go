@@ -99,6 +99,9 @@ func TestKindStringIsStable(t *testing.T) {
 	if got, want := KindEncodingOutput.String(), "encoding_output"; got != want {
 		t.Fatalf("KindEncodingOutput.String() = %q, want %q", got, want)
 	}
+	if got, want := KindPartialCommit.String(), "partial_commit"; got != want {
+		t.Fatalf("KindPartialCommit.String() = %q, want %q", got, want)
+	}
 	if got, want := Kind(255).String(), "unknown"; got != want {
 		t.Fatalf("unknown Kind.String() = %q, want %q", got, want)
 	}

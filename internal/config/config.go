@@ -10,57 +10,66 @@ import (
 )
 
 const (
-	EnvDefaultEncoding              = "MCP_DEFAULT_ENCODING"
-	EnvMemoryThreshold              = "MCP_MEMORY_THRESHOLD" // Deprecated 1.x fallback for file/output limits.
-	EnvMaxFileBytes                 = "MCP_MAX_FILE_BYTES"
-	EnvMaxDecodedCharacters         = "MCP_MAX_DECODED_CHARACTERS"
-	EnvMaxLineBytes                 = "MCP_MAX_LINE_BYTES"
-	EnvMaxBatchFiles                = "MCP_MAX_BATCH_FILES"
-	EnvMaxMatches                   = "MCP_MAX_MATCHES"
-	EnvMaxOutputBytes               = "MCP_MAX_OUTPUT_BYTES"
-	EnvMaxFingerprintEntries        = "MCP_MAX_FINGERPRINT_ENTRIES"
-	EnvMaxFingerprintEntryDetails   = "MCP_MAX_FINGERPRINT_ENTRY_DETAILS"
-	EnvMaxEditPreviews              = "MCP_MAX_EDIT_PREVIEWS"
-	EnvMaxEditPreviewBytes          = "MCP_MAX_EDIT_PREVIEW_BYTES"
-	EnvEditPreviewTTLSeconds        = "MCP_EDIT_PREVIEW_TTL_SECONDS"
-	EnvMaxPatchPackageBytes         = "MCP_MAX_PATCH_PACKAGE_BYTES"
-	EnvMaxPatchPackagePreparedBytes = "MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES"
-	EnvMaxSessions                  = "MCP_MAX_SESSIONS" // Maximum live native Streamable HTTP sessions.
+	EnvDefaultEncoding               = "MCP_DEFAULT_ENCODING"
+	EnvMemoryThreshold               = "MCP_MEMORY_THRESHOLD" // Deprecated 1.x fallback for file/output limits.
+	EnvMaxFileBytes                  = "MCP_MAX_FILE_BYTES"
+	EnvMaxDecodedCharacters          = "MCP_MAX_DECODED_CHARACTERS"
+	EnvMaxLineBytes                  = "MCP_MAX_LINE_BYTES"
+	EnvMaxBatchFiles                 = "MCP_MAX_BATCH_FILES"
+	EnvMaxMatches                    = "MCP_MAX_MATCHES"
+	EnvMaxOutputBytes                = "MCP_MAX_OUTPUT_BYTES"
+	EnvMaxFingerprintEntries         = "MCP_MAX_FINGERPRINT_ENTRIES"
+	EnvMaxFingerprintEntryDetails    = "MCP_MAX_FINGERPRINT_ENTRY_DETAILS"
+	EnvMaxEditPreviews               = "MCP_MAX_EDIT_PREVIEWS"
+	EnvMaxEditPreviewBytes           = "MCP_MAX_EDIT_PREVIEW_BYTES"
+	EnvEditPreviewTTLSeconds         = "MCP_EDIT_PREVIEW_TTL_SECONDS"
+	EnvMaxPatchPackageBytes          = "MCP_MAX_PATCH_PACKAGE_BYTES"
+	EnvMaxPatchPackagePreparedBytes  = "MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES"
+	EnvMaxPatchPackagePreviews       = "MCP_MAX_PATCH_PACKAGE_PREVIEWS"
+	EnvMaxPatchPackagePreviewBytes   = "MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES"
+	EnvPatchPackagePreviewTTLSeconds = "MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS"
+	EnvMaxSessions                   = "MCP_MAX_SESSIONS" // Maximum live native Streamable HTTP sessions.
 
-	DefaultEncoding                     = "utf-8"
-	DefaultMaxFileBytes                 = int64(64 * 1024 * 1024)
-	DefaultMaxDecodedCharacters         = 16 * 1024 * 1024
-	DefaultMaxLineBytes                 = 16 * 1024 * 1024
-	DefaultMaxBatchFiles                = 256
-	DefaultMaxMatches                   = 10_000
-	DefaultMaxOutputBytes               = int64(64 * 1024 * 1024)
-	DefaultMaxFingerprintEntries        = 100_000
-	DefaultMaxFingerprintEntryDetails   = 1_000
-	DefaultMaxEditPreviews              = 128
-	DefaultMaxEditPreviewBytes          = int64(64 * 1024 * 1024)
-	DefaultEditPreviewTTLSeconds        = 15 * 60
-	DefaultMaxPatchPackageBytes         = int64(16 * 1024 * 1024)
-	DefaultMaxPatchPackagePreparedBytes = int64(64 * 1024 * 1024)
-	DefaultMaxSessions                  = 128
+	DefaultEncoding                      = "utf-8"
+	DefaultMaxFileBytes                  = int64(64 * 1024 * 1024)
+	DefaultMaxDecodedCharacters          = 16 * 1024 * 1024
+	DefaultMaxLineBytes                  = 16 * 1024 * 1024
+	DefaultMaxBatchFiles                 = 256
+	DefaultMaxMatches                    = 10_000
+	DefaultMaxOutputBytes                = int64(64 * 1024 * 1024)
+	DefaultMaxFingerprintEntries         = 100_000
+	DefaultMaxFingerprintEntryDetails    = 1_000
+	DefaultMaxEditPreviews               = 128
+	DefaultMaxEditPreviewBytes           = int64(64 * 1024 * 1024)
+	DefaultEditPreviewTTLSeconds         = 15 * 60
+	DefaultMaxPatchPackageBytes          = int64(16 * 1024 * 1024)
+	DefaultMaxPatchPackagePreparedBytes  = int64(64 * 1024 * 1024)
+	DefaultMaxPatchPackagePreviews       = 16
+	DefaultMaxPatchPackagePreviewBytes   = int64(128 * 1024 * 1024)
+	DefaultPatchPackagePreviewTTLSeconds = 15 * 60
+	DefaultMaxSessions                   = 128
 )
 
 // Limits contains server-wide hard limits. Request-level limits may be lower
 // but must never exceed these values.
 type Limits struct {
-	MaxFileBytes                 int64
-	MaxDecodedCharacters         int
-	MaxLineBytes                 int
-	MaxBatchFiles                int
-	MaxMatches                   int
-	MaxOutputBytes               int64
-	MaxFingerprintEntries        int
-	MaxFingerprintEntryDetails   int
-	MaxEditPreviews              int
-	MaxEditPreviewBytes          int64
-	EditPreviewTTLSeconds        int
-	MaxPatchPackageBytes         int64
-	MaxPatchPackagePreparedBytes int64
-	MaxSessions                  int
+	MaxFileBytes                  int64
+	MaxDecodedCharacters          int
+	MaxLineBytes                  int
+	MaxBatchFiles                 int
+	MaxMatches                    int
+	MaxOutputBytes                int64
+	MaxFingerprintEntries         int
+	MaxFingerprintEntryDetails    int
+	MaxEditPreviews               int
+	MaxEditPreviewBytes           int64
+	EditPreviewTTLSeconds         int
+	MaxPatchPackageBytes          int64
+	MaxPatchPackagePreparedBytes  int64
+	MaxPatchPackagePreviews       int
+	MaxPatchPackagePreviewBytes   int64
+	PatchPackagePreviewTTLSeconds int
+	MaxSessions                   int
 }
 
 // Config holds server configuration loaded from environment variables.
@@ -75,20 +84,23 @@ func Load() *Config {
 	cfg := &Config{
 		DefaultEncoding: DefaultEncoding,
 		Limits: Limits{
-			MaxFileBytes:                 DefaultMaxFileBytes,
-			MaxDecodedCharacters:         DefaultMaxDecodedCharacters,
-			MaxLineBytes:                 DefaultMaxLineBytes,
-			MaxBatchFiles:                DefaultMaxBatchFiles,
-			MaxMatches:                   DefaultMaxMatches,
-			MaxOutputBytes:               DefaultMaxOutputBytes,
-			MaxFingerprintEntries:        DefaultMaxFingerprintEntries,
-			MaxFingerprintEntryDetails:   DefaultMaxFingerprintEntryDetails,
-			MaxEditPreviews:              DefaultMaxEditPreviews,
-			MaxEditPreviewBytes:          DefaultMaxEditPreviewBytes,
-			EditPreviewTTLSeconds:        DefaultEditPreviewTTLSeconds,
-			MaxPatchPackageBytes:         DefaultMaxPatchPackageBytes,
-			MaxPatchPackagePreparedBytes: DefaultMaxPatchPackagePreparedBytes,
-			MaxSessions:                  DefaultMaxSessions,
+			MaxFileBytes:                  DefaultMaxFileBytes,
+			MaxDecodedCharacters:          DefaultMaxDecodedCharacters,
+			MaxLineBytes:                  DefaultMaxLineBytes,
+			MaxBatchFiles:                 DefaultMaxBatchFiles,
+			MaxMatches:                    DefaultMaxMatches,
+			MaxOutputBytes:                DefaultMaxOutputBytes,
+			MaxFingerprintEntries:         DefaultMaxFingerprintEntries,
+			MaxFingerprintEntryDetails:    DefaultMaxFingerprintEntryDetails,
+			MaxEditPreviews:               DefaultMaxEditPreviews,
+			MaxEditPreviewBytes:           DefaultMaxEditPreviewBytes,
+			EditPreviewTTLSeconds:         DefaultEditPreviewTTLSeconds,
+			MaxPatchPackageBytes:          DefaultMaxPatchPackageBytes,
+			MaxPatchPackagePreparedBytes:  DefaultMaxPatchPackagePreparedBytes,
+			MaxPatchPackagePreviews:       DefaultMaxPatchPackagePreviews,
+			MaxPatchPackagePreviewBytes:   DefaultMaxPatchPackagePreviewBytes,
+			PatchPackagePreviewTTLSeconds: DefaultPatchPackagePreviewTTLSeconds,
+			MaxSessions:                   DefaultMaxSessions,
 		},
 	}
 
@@ -120,6 +132,9 @@ func Load() *Config {
 	cfg.Limits.EditPreviewTTLSeconds = intEnvironment(EnvEditPreviewTTLSeconds, cfg.Limits.EditPreviewTTLSeconds)
 	cfg.Limits.MaxPatchPackageBytes = int64Environment(EnvMaxPatchPackageBytes, cfg.Limits.MaxPatchPackageBytes)
 	cfg.Limits.MaxPatchPackagePreparedBytes = int64Environment(EnvMaxPatchPackagePreparedBytes, cfg.Limits.MaxPatchPackagePreparedBytes)
+	cfg.Limits.MaxPatchPackagePreviews = intEnvironment(EnvMaxPatchPackagePreviews, cfg.Limits.MaxPatchPackagePreviews)
+	cfg.Limits.MaxPatchPackagePreviewBytes = int64Environment(EnvMaxPatchPackagePreviewBytes, cfg.Limits.MaxPatchPackagePreviewBytes)
+	cfg.Limits.PatchPackagePreviewTTLSeconds = intEnvironment(EnvPatchPackagePreviewTTLSeconds, cfg.Limits.PatchPackagePreviewTTLSeconds)
 	cfg.Limits.MaxSessions = intEnvironment(EnvMaxSessions, cfg.Limits.MaxSessions)
 	return cfg
 }

@@ -48,6 +48,15 @@ func TestLoad_DefaultLimits(t *testing.T) {
 	if cfg.Limits.MaxPatchPackagePreparedBytes != DefaultMaxPatchPackagePreparedBytes {
 		t.Fatalf("MaxPatchPackagePreparedBytes = %d, want %d", cfg.Limits.MaxPatchPackagePreparedBytes, DefaultMaxPatchPackagePreparedBytes)
 	}
+	if cfg.Limits.MaxPatchPackagePreviews != DefaultMaxPatchPackagePreviews {
+		t.Fatalf("MaxPatchPackagePreviews = %d, want %d", cfg.Limits.MaxPatchPackagePreviews, DefaultMaxPatchPackagePreviews)
+	}
+	if cfg.Limits.MaxPatchPackagePreviewBytes != DefaultMaxPatchPackagePreviewBytes {
+		t.Fatalf("MaxPatchPackagePreviewBytes = %d, want %d", cfg.Limits.MaxPatchPackagePreviewBytes, DefaultMaxPatchPackagePreviewBytes)
+	}
+	if cfg.Limits.PatchPackagePreviewTTLSeconds != DefaultPatchPackagePreviewTTLSeconds {
+		t.Fatalf("PatchPackagePreviewTTLSeconds = %d, want %d", cfg.Limits.PatchPackagePreviewTTLSeconds, DefaultPatchPackagePreviewTTLSeconds)
+	}
 	if cfg.Limits.MaxSessions != DefaultMaxSessions {
 		t.Fatalf("MaxSessions = %d, want %d", cfg.Limits.MaxSessions, DefaultMaxSessions)
 	}
@@ -69,7 +78,10 @@ func TestLoad_SpecificLimitsOverrideLegacyThreshold(t *testing.T) {
 	t.Setenv(EnvEditPreviewTTLSeconds, "12")
 	t.Setenv(EnvMaxPatchPackageBytes, "13000")
 	t.Setenv(EnvMaxPatchPackagePreparedBytes, "14000")
-	t.Setenv(EnvMaxSessions, "15")
+	t.Setenv(EnvMaxPatchPackagePreviews, "15")
+	t.Setenv(EnvMaxPatchPackagePreviewBytes, "16000")
+	t.Setenv(EnvPatchPackagePreviewTTLSeconds, "17")
+	t.Setenv(EnvMaxSessions, "18")
 
 	cfg := Load()
 	if cfg.Limits.MaxFileBytes != 2000 || cfg.Limits.MaxOutputBytes != 3000 ||
@@ -78,7 +90,9 @@ func TestLoad_SpecificLimitsOverrideLegacyThreshold(t *testing.T) {
 		cfg.Limits.MaxFingerprintEntries != 8 || cfg.Limits.MaxFingerprintEntryDetails != 9 ||
 		cfg.Limits.MaxEditPreviews != 10 || cfg.Limits.MaxEditPreviewBytes != 11000 ||
 		cfg.Limits.EditPreviewTTLSeconds != 12 || cfg.Limits.MaxPatchPackageBytes != 13000 ||
-		cfg.Limits.MaxPatchPackagePreparedBytes != 14000 || cfg.Limits.MaxSessions != 15 {
+		cfg.Limits.MaxPatchPackagePreparedBytes != 14000 || cfg.Limits.MaxPatchPackagePreviews != 15 ||
+		cfg.Limits.MaxPatchPackagePreviewBytes != 16000 || cfg.Limits.PatchPackagePreviewTTLSeconds != 17 ||
+		cfg.Limits.MaxSessions != 18 {
 		t.Fatalf("unexpected limits: %#v", cfg.Limits)
 	}
 }
@@ -100,6 +114,7 @@ func clearLimitEnvironment(t *testing.T) {
 		EnvMaxBatchFiles, EnvMaxMatches, EnvMaxOutputBytes, EnvMaxFingerprintEntries,
 		EnvMaxFingerprintEntryDetails, EnvMaxEditPreviews, EnvMaxEditPreviewBytes,
 		EnvEditPreviewTTLSeconds, EnvMaxPatchPackageBytes, EnvMaxPatchPackagePreparedBytes,
+		EnvMaxPatchPackagePreviews, EnvMaxPatchPackagePreviewBytes, EnvPatchPackagePreviewTTLSeconds,
 		EnvMaxSessions,
 	} {
 		original, existed := os.LookupEnv(name)

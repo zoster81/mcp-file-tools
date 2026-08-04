@@ -72,6 +72,77 @@ func FingerprintRegularFileData(data []byte) string {
 	return fingerprintRegularFileAggregate(int64(len(data)), sha256.Sum256(data))
 }
 
+// CaptureRegularFileSnapshotBounded streams exactly the regular file size
+// observed when the read session opens. It rejects oversized input before
+// reading and reports practical concurrent changes as conflicts.
+func CaptureRegularFileSnapshotBounded(ctx context.Context, path string, maxBytes int64) (snapshot FileSnapshot, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if maxBytes <= 0 {
+		return FileSnapshot{}, operation.New(operation.KindInvalidInput, "maximum fingerprint file bytes must be positive")
+	}
+	if err := ctx.Err(); err != nil {
+		return FileSnapshot{}, operation.Wrap(operation.KindCancelled, "fingerprint_regular_file", path, err)
+	}
+	session, err := OpenReadSession(path)
+	if err != nil {
+		return FileSnapshot{}, err
+	}
+	defer func() {
+		if closeErr := session.Close(); closeErr != nil {
+			err = errors.Join(err, operation.WrapFilesystem("close_fingerprint_file", path, closeErr))
+		}
+	}()
+	if session.Size() > maxBytes {
+		return FileSnapshot{}, operation.New(operation.KindLimit, fmt.Sprintf("file size %d exceeds limit %d", session.Size(), maxBytes))
+	}
+	if err := session.Start(0); err != nil {
+		return FileSnapshot{}, err
+	}
+
+	buffer := make([]byte, 128*1024)
+	remaining := session.Size()
+	for remaining > 0 {
+		if err := ctx.Err(); err != nil {
+			return FileSnapshot{}, operation.Wrap(operation.KindCancelled, "fingerprint_regular_file", path, err)
+		}
+		readSize := int64(len(buffer))
+		if remaining < readSize {
+			readSize = remaining
+		}
+		read, readErr := session.Read(buffer[:int(readSize)])
+		remaining -= int64(read)
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return FileSnapshot{}, operation.Wrap(operation.KindConflict, "fingerprint_regular_file", path, ErrIncompleteRead)
+			}
+			return FileSnapshot{}, readErr
+		}
+		if read == 0 {
+			return FileSnapshot{}, operation.Wrap(operation.KindConflict, "fingerprint_regular_file", path, ErrIncompleteRead)
+		}
+	}
+	snapshot, err = session.Finish()
+	if err != nil {
+		if errors.Is(err, ErrConcurrentModification) || errors.Is(err, ErrIncompleteRead) {
+			return FileSnapshot{}, operation.Wrap(operation.KindConflict, "fingerprint_regular_file", path, err)
+		}
+		return FileSnapshot{}, err
+	}
+	return snapshot, nil
+}
+
+// FingerprintRegularFilePathBounded returns the content-v1 fingerprint of one
+// bounded, digest-bearing regular-file snapshot.
+func FingerprintRegularFilePathBounded(ctx context.Context, path string, maxBytes int64) (string, error) {
+	snapshot, err := CaptureRegularFileSnapshotBounded(ctx, path, maxBytes)
+	if err != nil {
+		return "", err
+	}
+	return FingerprintRegularFileSnapshot(snapshot)
+}
+
 // FingerprintRegularFileContentDigest converts a regular file's byte length and
 // raw SHA-256 content digest into the same content-v1 fingerprint used elsewhere.
 func FingerprintRegularFileContentDigest(size int64, contentSHA256 string) (string, error) {

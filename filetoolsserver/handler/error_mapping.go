@@ -48,6 +48,8 @@ func mapOperationError(err error, path string) operationErrorMapping {
 		mapping.BatchCode = ErrCodeInvalidInput
 	case operation.KindConflict:
 		mapping.BatchCode = ErrCodeConflict
+	case operation.KindPartialCommit:
+		mapping.BatchCode = ErrCodePartialCommit
 	case operation.KindCancelled:
 		mapping.BatchCode = ErrCodeCancelled
 		mapping.Message = "operation cancelled"

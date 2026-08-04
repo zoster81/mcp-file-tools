@@ -92,13 +92,26 @@ func main() {
 		},
 	})
 	packageData, _ := os.ReadFile(testFile)
-	check("patch_package (dryRun)", !rPackageFingerprint.IsError && !rPackage.IsError && oPackage.TargetCount == 1 && oPackage.ChangedCount == 1 && string(packageData) == "Hello!")
+	check("patch_package (dryRun)", !rPackageFingerprint.IsError && !rPackage.IsError && len(oPackage.PreviewID) == 64 && oPackage.TargetCount == 1 && oPackage.ChangedCount == 1 && string(packageData) == "Hello!")
+	rPackageApply, oPackageApply, _ := h.HandlePatchPackage(ctx, nil, handler.PatchPackageInput{Action: "apply", PreviewID: oPackage.PreviewID})
+	packageAppliedData, _ := os.ReadFile(testFile)
+	check("patch_package (apply)", !rPackageApply.IsError && oPackageApply.Applied && string(packageAppliedData) == "Hello package!")
+	packageManifest := handler.PatchPackageManifest{
+		FormatVersion: handler.PatchPackageFormatV1, FingerprintAlgorithm: "sha256", FingerprintMode: "content-v1",
+		Targets: []handler.PatchPackageTarget{{
+			Path: testFile, ExpectedFingerprint: oPackageFingerprint.Fingerprint,
+			ExpectedResultFingerprint: oPackage.Results[0].ResultFingerprint,
+			Edits:                     []handler.EditOperation{{OldText: "Hello!", NewText: "Hello package!"}},
+		}},
+	}
+	rPackageVerify, oPackageVerify, _ := h.HandlePatchPackage(ctx, nil, handler.PatchPackageInput{Action: "verify", Manifest: packageManifest})
+	check("patch_package (verify)", !rPackageVerify.IsError && oPackageVerify.Verified)
 
 	rPreview, oPreview, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{
-		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello!", NewText: "Hello preview!"}},
+		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello package!", NewText: "Hello preview!"}},
 	})
 	previewData, _ := os.ReadFile(testFile)
-	check("edit_file (preview)", !rPreview.IsError && len(oPreview.PreviewID) == 64 && string(previewData) == "Hello!")
+	check("edit_file (preview)", !rPreview.IsError && len(oPreview.PreviewID) == 64 && string(previewData) == "Hello package!")
 	rApply, oApply, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{Action: "apply", PreviewID: oPreview.PreviewID})
 	appliedData, _ := os.ReadFile(testFile)
 	check("edit_file (apply)", !rApply.IsError && oApply.Applied && string(appliedData) == "Hello preview!")

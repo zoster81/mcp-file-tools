@@ -29,13 +29,14 @@ Single-tool errors expose the code at `_meta.errorCode`. `read_multiple_files.re
 - `ENCODING`
 - `ENCODING_AMBIGUOUS`
 - `CONFLICT`
+- `PARTIAL_COMMIT` (unreleased R16 package-apply extension after the published 2.0.0 baseline)
 - `CANCELLED`
 - `LIMIT`
 - `IO_ERROR`
 - `INTERNAL_ERROR`
 - `OPERATION_FAILED`
 
-`OPERATION_FAILED` is the fallback for errors that do not yet have a more specific domain category. Successful results do not include an error code.
+`PARTIAL_COMMIT` means a `patch_package` apply stopped with at least one target proven committed or left unclassifiable; inspect the structured per-target states before taking further action. `OPERATION_FAILED` is the fallback for errors that do not yet have a more specific domain category. Successful results do not include an error code.
 
 ## Configurable limits
 

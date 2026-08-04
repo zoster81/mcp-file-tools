@@ -405,7 +405,7 @@ Normal, compatibility, malformed-input, symlink/reparse, `.gitignore`, paging, s
 
 ## Status
 
-Active. Approved on 2026-08-03. Deterministic fingerprints, bounded one-shot `edit_file` preview/apply, and `patch-package-v1` inspect/dry-run are implemented and verified in source; package apply/verify and structured verification remain pending.
+Active. Approved on 2026-08-03. Deterministic fingerprints, bounded one-shot `edit_file` preview/apply, and complete `patch-package-v1` inspect/dry-run/apply/verify are implemented and verified in source; structured verification remains pending.
 
 ## Goal
 
@@ -418,7 +418,7 @@ The approved design baseline is [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_W
 - [x] Add deterministic streamed fingerprints for explicit files and directory roots through the secure walker.
 - [x] Add bounded one-shot preview/apply for existing `edit_file` operations, with cryptographically unguessable expiring identifiers, replay prevention, and target/result fingerprint validation.
 - [x] Add a versioned declared patch-package format with strict inspect and non-mutating dry-run actions for bounded edits to existing regular files.
-- [ ] Add one-shot patch-package apply and verify, preflight and stage every target before the first commit, and report any partial commit precisely without claiming multi-file atomicity or retained rollback.
+- [x] Add one-shot patch-package apply and verify, preflight and stage every target before the first commit, and report committed, unchanged, or unknown final states with `PARTIAL_COMMIT` without claiming multi-file atomicity or retained rollback.
 - [ ] Add selected structured verification checks with typed arguments, bounded diagnostics, fixed direct executable invocation where required, and no arbitrary shell command.
 - [ ] Keep schemas, limits, error metadata, prompts, and behavior equivalent over stdio and stateful Streamable HTTP.
 - [ ] Complete focused TDD, adversarial path/cache/replay/partial-commit tests, full regression, race, static-analysis, vulnerability, manual MCP, catalog, documentation, and repository checks.
