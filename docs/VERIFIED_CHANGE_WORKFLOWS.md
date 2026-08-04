@@ -2,7 +2,7 @@
 
 This document is the approved and completed design baseline for R16. It defines the implemented behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1–5 are implemented and verified in source: deterministic fingerprints, bounded one-shot `edit_file` preview/apply, complete strict `patch-package-v1` inspect/dry-run/apply/verify, and typed `verify_state` checks.
 
-Persistent backup storage and user-managed change review are approved in principle but remain outside the initial R16 implementation until a separate retention and lifecycle design is approved.
+Persistent backup storage and user-managed change review remain outside R16 itself. Their separate lifecycle design was approved as R17 on 2026-08-04, and phased implementation is tracked independently in R18.
 
 ## Goals
 
@@ -187,30 +187,20 @@ Arbitrary executables, user-supplied command strings, compound commands, package
 
 Implemented tests cover valid and malformed JSON, unsupported encodings, UTF-16 BOM/CRLF, trailing whitespace and bounded diagnostics, fingerprint matches and mismatches, strict unknown fields and invalid unions, non-repositories, relative path escapes, escaping symlink aliases, literal Git paths beginning with option-like text and containing spaces/metacharacters, missing Git, timeout, cancellation, output limits, filtered environment variables, deterministic result ordering, shared fingerprint behavior, direct/HTTP equivalence, manual MCP smoke, and the complete repository verification gates.
 
-## 5. Deferred persistent backup and change-review design gate
+## 5. Approved persistent backup follow-on design
 
-Persistent backups are approved in principle but must not be implemented as incidental `.bak` files or an unbounded side effect of edit/apply.
+The follow-on lifecycle is maintained in [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md). Maintainers approved its ten decisions as R17 on 2026-08-04, and R18 now implements that contract in separate reviewable phases rather than extending R16 incidentally.
 
-A separate design review must decide at least:
+R18 phase 1 adds only the disabled-by-default internal store foundation: strict path separation, protected-root denial, owner-only permissions, one platform-native lifetime writer lock, an immutable versioned descriptor, and an empty layout. It does not capture bytes, create manifests, expose a public backup tool, or change any R16 mutation schema.
 
-- dedicated backup-store location and allowed-root relationship;
-- content-addressed deduplication and integrity verification;
-- global byte quota, per-target version limit, maximum object and manifest counts;
-- age-based retention and manually pinned backups;
-- manifest/index format and crash-consistent updates;
-- dry-run and apply phases for garbage collection;
-- safe restore through its own preview/apply and current-state fingerprint checks;
-- secret handling, restrictive permissions, logging rules, and deletion expectations;
-- orphan-object recovery, corrupted-index behavior, and interrupted cleanup;
-- behavior when quota is exhausted before a mutation;
-- whether backups are enabled by default or require explicit opt-in.
-
-Until that design is approved:
+Until the later R18 mutation-integration phases are implemented:
 
 - R16 preview/apply creates no persistent backup;
 - patch packages provide no retained rollback point;
 - change review is limited to the approved preview diff and returned pre/post fingerprints;
 - existing tool-specific backup behavior remains unchanged and must not be generalized accidentally.
+
+Every later phase must preserve the approved dedicated store, content-addressed objects, immutable manifests, derived index, quotas, explicit retention and pinning, restore safety backup, dry-run/apply GC, secret-handling, crash-recovery, disabled-by-default policy, separate `.bak` behavior, and no-automatic-rollback decisions.
 
 ## Implementation sequence
 
@@ -220,7 +210,7 @@ Until that design is approved:
 4. Implement package apply and verify with the explicit partial-commit contract.
 5. Add the initial structured verification checks. **Implemented.**
 6. Run the complete R16 compatibility, race, security, catalog, transport-equivalence, documentation, and repository verification gates.
-7. Hold a separate backup lifecycle brainstorming and design review before adding persistent backup storage, restore, garbage collection, or package rollback.
+7. Hold and approve a separate backup lifecycle design before adding persistent backup storage, restore, garbage collection, or package rollback. **Completed as R17; implementation is tracked in R18.**
 
 ## R16 completion gate
 
@@ -233,4 +223,4 @@ R16 may be marked complete only when:
 - all new caches, manifests, inputs, outputs, diagnostics, and execution time are bounded;
 - schemas, errors, documentation, catalog metadata, and behavior are equivalent over stdio and Streamable HTTP;
 - focused, adversarial, full regression, race, static-analysis, vulnerability, manual MCP, and repository consistency checks pass;
-- no persistent backup store or retention policy is introduced without the separate approved design.
+- R16 introduces no persistent backup store or retention policy; later work is governed by the separately approved R17 design and R18 roadmap.

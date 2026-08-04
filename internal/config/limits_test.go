@@ -115,7 +115,9 @@ func clearLimitEnvironment(t *testing.T) {
 		EnvMaxFingerprintEntryDetails, EnvMaxEditPreviews, EnvMaxEditPreviewBytes,
 		EnvEditPreviewTTLSeconds, EnvMaxPatchPackageBytes, EnvMaxPatchPackagePreparedBytes,
 		EnvMaxPatchPackagePreviews, EnvMaxPatchPackagePreviewBytes, EnvPatchPackagePreviewTTLSeconds,
-		EnvMaxSessions,
+		EnvMaxSessions, EnvBackupStoreDir, EnvBackupMaxTotalBytes, EnvBackupMaxObjectBytes,
+		EnvBackupMaxManifests, EnvBackupMaxVersionsPerTarget, EnvBackupMaxPinned,
+		EnvBackupRetentionDays, EnvBackupPlanTTLSeconds,
 	} {
 		original, existed := os.LookupEnv(name)
 		if err := os.Unsetenv(name); err != nil {

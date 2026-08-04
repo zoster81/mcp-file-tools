@@ -21,6 +21,8 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added `PARTIAL_COMMIT` structured errors for package apply failures that leave at least one committed or unclassifiable target, including bounded failure metadata and per-target actual fingerprints without claiming automatic rollback or multi-file atomicity.
 - Added `MCP_MAX_PATCH_PACKAGE_BYTES`, `MCP_MAX_PATCH_PACKAGE_PREPARED_BYTES`, `MCP_MAX_PATCH_PACKAGE_PREVIEWS`, `MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES`, and `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS` to bound semantic input, per-dry-run preparation, live capabilities, retained bytes, and capability lifetime independently.
 - Added the read-only `verify_state` tool with strict ordered JSON, text-format, fixed direct `git diff --check`, and shared fingerprint checks; failed expectations remain structured non-error results while operational failures retain stable per-check codes. Git uses no shell or execution feature flag, accepts only validated literal relative pathspecs, disables external diff/textconv and ambient Git configuration, filters inherited environment variables, and bounds timeout, output, diagnostics, paths, lines, and file input.
+- Approved the R17 persistent-backup lifecycle and added the R18 phase-1 store foundation: disabled-by-default configuration, strict canonical non-overlapping path validation, owner-only Windows DACL or Unix mode/owner enforcement, one platform-native lifetime writer lock, immutable `backup-store-v1` descriptor, versioned empty layout, and ordinary-tool denial for the internal root.
+- Added `MCP_BACKUP_STORE_DIR` plus bounded total-byte, object-byte, manifest, per-target-version, pinned, retention, and plan-lifetime configuration with approved defaults and hard maxima. Configuring the store currently initializes no backup objects or manifests and exposes no backup-management action.
 
 ### Changed
 
@@ -30,6 +32,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Reframed the project documentation around its independent dual-transport product scope: stdio and native stateful Streamable HTTP now have equal prominence, while the OpenAI Secure MCP Tunnel is documented as one supported stdio deployment rather than the project's sole identity.
 - Added `docs/PROJECT_DIRECTION.md` to define the fork's independent maintenance model, transport boundaries, stable relationship to upstream, and criteria for evaluating cross-project ideas without assuming source synchronization.
 - Recorded successful live deployment of the published Windows amd64 `2.0.0` binary through both stdio and authenticated Streamable HTTP, including health/readiness, unauthenticated rejection, session initialization, and complete 23-tool catalog verification.
+- Extended the process-wide root model with protected internal directories so configured or later dynamic public roots cannot expose the dedicated backup store; invalid, permissive, malformed, unexpectedly populated, or concurrently locked stores fail startup without logging their paths.
 
 ## 2.0.0 - 2026-08-02
 

@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 is complete in source and remains unreleased. R16 is the active design and implementation milestone.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phase 1 adds only the disabled-by-default store foundation.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -32,6 +32,8 @@ Product identity and the fork's independent relationship to upstream are defined
 | R14 | COMPLETE | Completed hardening, publication, dual-transport deployment, active rollback, restoration, and final handoff for 2.0.0. |
 | R15 | COMPLETE | Added attributed agent-ergonomics and project-aware workflows while preserving transport, memory, mutation, and security guarantees. |
 | R16 | COMPLETE | Added verified change workflows through deterministic fingerprints, one-shot edit preview/apply, declared patch packages, and structured verification. |
+| R17 | COMPLETE | Approved the bounded persistent-backup lifecycle, security boundary, quotas, restore safety, explicit GC, and non-rollback decisions. |
+| R18 | ACTIVE | Implement the approved persistent-backup subsystem in phased, failure-injected, cross-platform increments. |
 
 ---
 
@@ -461,3 +463,68 @@ Until that gate is approved:
 ## Completion gate
 
 R16 is complete only when the requirements and tests in [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_WORKFLOWS.md) pass, all caches and outputs are bounded, stale or replayed approvals fail closed, package partial state is reported accurately, structured checks accept no arbitrary command strings, and no persistent backup system has been introduced without its separate approved design.
+
+---
+
+# R17 — Persistent backup lifecycle design
+
+## Status
+
+Completed on 2026-08-04. The approved contract is [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md).
+
+## Goal
+
+Define a safe, bounded, crash-consistent persistent backup subsystem that can protect future approval-bound mutations and support user-reviewed restore and garbage collection without weakening allowed-root security, durable mutation semantics, transport equivalence, or current compatibility.
+
+## Design checklist
+
+- [x] Separate the store from public allowed directories and identify it as a new operator-configured internal authority.
+- [x] Define one-writer process locking and reject overlapping, aliased, linked, or reparse-backed store paths.
+- [x] Define immutable SHA-256 content-addressed objects and immutable manifests as the durable source of truth.
+- [x] Keep the index derived and rebuildable rather than a single authoritative mutable database.
+- [x] Define conservative total-byte, object, manifest, per-target, pin, retention, plan, output, and time limits.
+- [x] Require quota reservation and durable object-plus-manifest capture before a protected target mutation begins.
+- [x] Keep backup policy explicit, disabled by default, and bound into edit or package approval capabilities.
+- [x] Define restore preview/apply with exact-byte verification, stale-target rejection, and mandatory safety backup of an existing current target.
+- [x] Define deterministic garbage-collection dry-run/apply with generation checks, manifest-first removal, reference counting, and no background deletion.
+- [x] Define startup recovery, structural corruption behavior, quick/full audit, orphan and trash handling, and explicit secure-deletion limitations.
+- [x] Define security, crash-injection, quota, restore, GC, concurrency, cross-platform, transport-equivalence, fuzz, build, and release verification requirements.
+- [x] Review and explicitly approve all ten lifecycle decisions.
+- [x] Create a separate phased implementation milestone with focused TDD and no incidental `.bak` migration.
+
+## Completion record
+
+Maintainers accepted all ten decisions on 2026-08-04: a dedicated non-overlapping store, one writer, disabled-by-default approval-bound backups, immutable objects and manifests with a derived index, the documented quotas and retention defaults, original-target restore with mandatory safety backup, explicit GC dry-run/apply, deferred application-managed encryption and secure deletion guarantees, unchanged adjacent `.bak` behavior, and no automatic patch-package rollback. The design was completed before runtime implementation began.
+
+---
+
+# R18 — Persistent backup implementation
+
+## Status
+
+Active. Implementation follows the approved [persistent backup lifecycle](PERSISTENT_BACKUP_LIFECYCLE.md) in independently reviewable phases. The public source catalog remains at 26 tools until a later reviewed phase deliberately adds the planned management surface.
+
+## Goal
+
+Implement durable exact-byte capture, bounded metadata management, approval-bound mutation protection, safe restore, and explicit garbage collection without weakening the existing root, encoding, memory, mutation, transport, or error contracts.
+
+## Implementation phases
+
+- [x] Phase 1 — Add disabled-by-default configuration, approved defaults and hard maxima, a dedicated canonical non-overlapping store root, owner-only permissions, a platform-native lifetime writer lock, immutable `backup-store-v1` descriptor, empty versioned layout, fail-closed structural validation, and protected-root denial for ordinary tools.
+- [ ] Phase 2 — Add immutable SHA-256 object capture, immutable checksummed manifests, quota reservations, derived index rebuild, bounded startup recovery, and quick/full internal audit primitives.
+- [ ] Phase 3 — Add the read-only `backup_store` status/list/inspect/audit surface with bounded cursors, redacted metadata, catalog/schema tests, and stdio/HTTP equivalence.
+- [ ] Phase 4 — Bind `backupPolicy: "required"` into `edit_file` preview/apply and durably capture the approved pre-state before mutation.
+- [ ] Phase 5 — Add package-wide reservation and all-target backup capture before the first `patch_package` commit while preserving explicit `PARTIAL_COMMIT` semantics and no automatic rollback.
+- [ ] Phase 6 — Add original-target restore preview/apply with exact object verification, stale-target rejection, and mandatory safety backup of an existing target.
+- [ ] Phase 7 — Add generation-bound GC dry-run/apply, immutable pin-at-creation semantics, manifest-first removal, reference-counted object deletion, trash recovery, and no background deletion.
+- [ ] Complete failure injection, fuzzing, race, static-analysis, vulnerability, documentation, transport-equivalence, six-target build, native runtime smoke, and release gates for the full subsystem.
+
+## Phase 1 behavior
+
+`MCP_BACKUP_STORE_DIR` remains unset by default. When configured in phase 1, startup validates or creates an empty internal store, restricts it to the process identity, acquires one exclusive lifetime lock, validates the immutable descriptor and expected empty layout, and excludes the store from every ordinary filesystem root. Relative, filesystem-root, overlapping, aliased, symlinked, junction-backed, reparse-backed, special-file, unexpectedly populated, malformed, unsupported, permissively owned, or concurrently locked stores fail startup without exposing their paths.
+
+Phase 1 does not capture target bytes, write backup manifests, reserve quota, expose a management tool, change edit or package schemas, restore targets, garbage-collect data, migrate `.bak` files, add encryption keys, or claim rollback.
+
+## Completion gate
+
+R18 is complete only when every phase is implemented and reviewed, live manifests can never reference missing durable objects by intentional ordering, required mutations cannot start before durable backup capture, restore always preserves an existing current state, GC cannot remove a referenced object, all state and outputs remain bounded, ordinary tools cannot access the store, and the complete cross-platform and release verification matrix passes.

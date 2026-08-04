@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -64,5 +65,31 @@ func TestRunCommandRejectsHTTPWithoutTokenBeforeStartup(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "MCP_HTTP_TOKEN") {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunCommandRejectsOverlappingBackupStoreBeforeStartup(t *testing.T) {
+	publicRoot := t.TempDir()
+	storeDir := filepath.Join(publicRoot, "backups")
+	values := map[string]string{
+		"MCP_BACKUP_STORE_DIR": storeDir,
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := runCommand(context.Background(), []string{publicRoot}, &stdout, &stderr, func(name string) string {
+		return values[name]
+	})
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "backup store") || !strings.Contains(stderr.String(), "overlap") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), storeDir) || strings.Contains(stderr.String(), publicRoot) {
+		t.Fatalf("stderr exposed a configured path: %q", stderr.String())
 	}
 }

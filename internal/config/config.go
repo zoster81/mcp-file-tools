@@ -30,6 +30,15 @@ const (
 	EnvPatchPackagePreviewTTLSeconds = "MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS"
 	EnvMaxSessions                   = "MCP_MAX_SESSIONS" // Maximum live native Streamable HTTP sessions.
 
+	EnvBackupStoreDir             = "MCP_BACKUP_STORE_DIR"
+	EnvBackupMaxTotalBytes        = "MCP_BACKUP_MAX_TOTAL_BYTES"
+	EnvBackupMaxObjectBytes       = "MCP_BACKUP_MAX_OBJECT_BYTES"
+	EnvBackupMaxManifests         = "MCP_BACKUP_MAX_MANIFESTS"
+	EnvBackupMaxVersionsPerTarget = "MCP_BACKUP_MAX_VERSIONS_PER_TARGET"
+	EnvBackupMaxPinned            = "MCP_BACKUP_MAX_PINNED"
+	EnvBackupRetentionDays        = "MCP_BACKUP_RETENTION_DAYS"
+	EnvBackupPlanTTLSeconds       = "MCP_BACKUP_PLAN_TTL_SECONDS"
+
 	DefaultEncoding                      = "utf-8"
 	DefaultMaxFileBytes                  = int64(64 * 1024 * 1024)
 	DefaultMaxDecodedCharacters          = 16 * 1024 * 1024
@@ -48,6 +57,22 @@ const (
 	DefaultMaxPatchPackagePreviewBytes   = int64(128 * 1024 * 1024)
 	DefaultPatchPackagePreviewTTLSeconds = 15 * 60
 	DefaultMaxSessions                   = 128
+
+	DefaultBackupMaxTotalBytes        = int64(1024 * 1024 * 1024)
+	DefaultBackupMaxObjectBytes       = int64(64 * 1024 * 1024)
+	DefaultBackupMaxManifests         = 10_000
+	DefaultBackupMaxVersionsPerTarget = 32
+	DefaultBackupMaxPinned            = 256
+	DefaultBackupRetentionDays        = 30
+	DefaultBackupPlanTTLSeconds       = 15 * 60
+
+	HardMaxBackupTotalBytes        = int64(1 << 40) // 1 TiB.
+	HardMaxBackupObjectBytes       = int64(1 << 30) // 1 GiB.
+	HardMaxBackupManifests         = 1_000_000
+	HardMaxBackupVersionsPerTarget = 10_000
+	HardMaxBackupPinned            = 100_000
+	HardMaxBackupRetentionDays     = 3650
+	HardMaxBackupPlanTTLSeconds    = 24 * 60 * 60
 )
 
 // Limits contains server-wide hard limits. Request-level limits may be lower
@@ -72,15 +97,48 @@ type Limits struct {
 	MaxSessions                   int
 }
 
+// BackupLimits bounds the future persistent backup store independently from
+// request output and source-file limits.
+type BackupLimits struct {
+	MaxTotalBytes        int64
+	MaxObjectBytes       int64
+	MaxManifests         int
+	MaxVersionsPerTarget int
+	MaxPinned            int
+	RetentionDays        int
+	PlanTTLSeconds       int
+}
+
+// BackupConfig contains the disabled-by-default persistent store configuration.
+type BackupConfig struct {
+	StoreDir string
+	Limits   BackupLimits
+}
+
+// Enabled reports whether an operator explicitly configured a store directory.
+func (cfg BackupConfig) Enabled() bool {
+	return cfg.StoreDir != ""
+}
+
 // Config holds server configuration loaded from environment variables.
 type Config struct {
 	// DefaultEncoding is used for newly created files when no encoding is supplied.
 	DefaultEncoding string
 	Limits          Limits
+	Backup          BackupConfig
 }
 
-// Load reads configuration from environment variables with conservative defaults.
+// Load reads configuration from the process environment with conservative defaults.
 func Load() *Config {
+	return LoadFromEnvironment(os.Getenv)
+}
+
+// LoadFromEnvironment reads configuration through getenv. It is used by the
+// command bootstrap so tests and embedders can supply an isolated environment.
+func LoadFromEnvironment(getenv func(string) string) *Config {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
 	cfg := &Config{
 		DefaultEncoding: DefaultEncoding,
 		Limits: Limits{
@@ -102,9 +160,21 @@ func Load() *Config {
 			PatchPackagePreviewTTLSeconds: DefaultPatchPackagePreviewTTLSeconds,
 			MaxSessions:                   DefaultMaxSessions,
 		},
+		Backup: BackupConfig{
+			StoreDir: getenv(EnvBackupStoreDir),
+			Limits: BackupLimits{
+				MaxTotalBytes:        DefaultBackupMaxTotalBytes,
+				MaxObjectBytes:       DefaultBackupMaxObjectBytes,
+				MaxManifests:         DefaultBackupMaxManifests,
+				MaxVersionsPerTarget: DefaultBackupMaxVersionsPerTarget,
+				MaxPinned:            DefaultBackupMaxPinned,
+				RetentionDays:        DefaultBackupRetentionDays,
+				PlanTTLSeconds:       DefaultBackupPlanTTLSeconds,
+			},
+		},
 	}
 
-	if enc := os.Getenv(EnvDefaultEncoding); enc != "" {
+	if enc := getenv(EnvDefaultEncoding); enc != "" {
 		if _, ok := encoding.Get(enc); ok {
 			cfg.DefaultEncoding = enc
 		} else {
@@ -114,40 +184,48 @@ func Load() *Config {
 
 	// Keep the 1.x threshold as a compatibility fallback. Specific 2.0 limits
 	// below take precedence when both are configured.
-	if legacy, ok := positiveInt64Environment(EnvMemoryThreshold); ok {
+	if legacy, ok := positiveInt64Environment(getenv, EnvMemoryThreshold); ok {
 		cfg.Limits.MaxFileBytes = legacy
 		cfg.Limits.MaxOutputBytes = legacy
 	}
 
-	cfg.Limits.MaxFileBytes = int64Environment(EnvMaxFileBytes, cfg.Limits.MaxFileBytes)
-	cfg.Limits.MaxOutputBytes = int64Environment(EnvMaxOutputBytes, cfg.Limits.MaxOutputBytes)
-	cfg.Limits.MaxDecodedCharacters = intEnvironment(EnvMaxDecodedCharacters, cfg.Limits.MaxDecodedCharacters)
-	cfg.Limits.MaxLineBytes = intEnvironment(EnvMaxLineBytes, cfg.Limits.MaxLineBytes)
-	cfg.Limits.MaxBatchFiles = intEnvironment(EnvMaxBatchFiles, cfg.Limits.MaxBatchFiles)
-	cfg.Limits.MaxMatches = intEnvironment(EnvMaxMatches, cfg.Limits.MaxMatches)
-	cfg.Limits.MaxFingerprintEntries = intEnvironment(EnvMaxFingerprintEntries, cfg.Limits.MaxFingerprintEntries)
-	cfg.Limits.MaxFingerprintEntryDetails = intEnvironment(EnvMaxFingerprintEntryDetails, cfg.Limits.MaxFingerprintEntryDetails)
-	cfg.Limits.MaxEditPreviews = intEnvironment(EnvMaxEditPreviews, cfg.Limits.MaxEditPreviews)
-	cfg.Limits.MaxEditPreviewBytes = int64Environment(EnvMaxEditPreviewBytes, cfg.Limits.MaxEditPreviewBytes)
-	cfg.Limits.EditPreviewTTLSeconds = intEnvironment(EnvEditPreviewTTLSeconds, cfg.Limits.EditPreviewTTLSeconds)
-	cfg.Limits.MaxPatchPackageBytes = int64Environment(EnvMaxPatchPackageBytes, cfg.Limits.MaxPatchPackageBytes)
-	cfg.Limits.MaxPatchPackagePreparedBytes = int64Environment(EnvMaxPatchPackagePreparedBytes, cfg.Limits.MaxPatchPackagePreparedBytes)
-	cfg.Limits.MaxPatchPackagePreviews = intEnvironment(EnvMaxPatchPackagePreviews, cfg.Limits.MaxPatchPackagePreviews)
-	cfg.Limits.MaxPatchPackagePreviewBytes = int64Environment(EnvMaxPatchPackagePreviewBytes, cfg.Limits.MaxPatchPackagePreviewBytes)
-	cfg.Limits.PatchPackagePreviewTTLSeconds = intEnvironment(EnvPatchPackagePreviewTTLSeconds, cfg.Limits.PatchPackagePreviewTTLSeconds)
-	cfg.Limits.MaxSessions = intEnvironment(EnvMaxSessions, cfg.Limits.MaxSessions)
+	cfg.Limits.MaxFileBytes = int64Environment(getenv, EnvMaxFileBytes, cfg.Limits.MaxFileBytes)
+	cfg.Limits.MaxOutputBytes = int64Environment(getenv, EnvMaxOutputBytes, cfg.Limits.MaxOutputBytes)
+	cfg.Limits.MaxDecodedCharacters = intEnvironment(getenv, EnvMaxDecodedCharacters, cfg.Limits.MaxDecodedCharacters)
+	cfg.Limits.MaxLineBytes = intEnvironment(getenv, EnvMaxLineBytes, cfg.Limits.MaxLineBytes)
+	cfg.Limits.MaxBatchFiles = intEnvironment(getenv, EnvMaxBatchFiles, cfg.Limits.MaxBatchFiles)
+	cfg.Limits.MaxMatches = intEnvironment(getenv, EnvMaxMatches, cfg.Limits.MaxMatches)
+	cfg.Limits.MaxFingerprintEntries = intEnvironment(getenv, EnvMaxFingerprintEntries, cfg.Limits.MaxFingerprintEntries)
+	cfg.Limits.MaxFingerprintEntryDetails = intEnvironment(getenv, EnvMaxFingerprintEntryDetails, cfg.Limits.MaxFingerprintEntryDetails)
+	cfg.Limits.MaxEditPreviews = intEnvironment(getenv, EnvMaxEditPreviews, cfg.Limits.MaxEditPreviews)
+	cfg.Limits.MaxEditPreviewBytes = int64Environment(getenv, EnvMaxEditPreviewBytes, cfg.Limits.MaxEditPreviewBytes)
+	cfg.Limits.EditPreviewTTLSeconds = intEnvironment(getenv, EnvEditPreviewTTLSeconds, cfg.Limits.EditPreviewTTLSeconds)
+	cfg.Limits.MaxPatchPackageBytes = int64Environment(getenv, EnvMaxPatchPackageBytes, cfg.Limits.MaxPatchPackageBytes)
+	cfg.Limits.MaxPatchPackagePreparedBytes = int64Environment(getenv, EnvMaxPatchPackagePreparedBytes, cfg.Limits.MaxPatchPackagePreparedBytes)
+	cfg.Limits.MaxPatchPackagePreviews = intEnvironment(getenv, EnvMaxPatchPackagePreviews, cfg.Limits.MaxPatchPackagePreviews)
+	cfg.Limits.MaxPatchPackagePreviewBytes = int64Environment(getenv, EnvMaxPatchPackagePreviewBytes, cfg.Limits.MaxPatchPackagePreviewBytes)
+	cfg.Limits.PatchPackagePreviewTTLSeconds = intEnvironment(getenv, EnvPatchPackagePreviewTTLSeconds, cfg.Limits.PatchPackagePreviewTTLSeconds)
+	cfg.Limits.MaxSessions = intEnvironment(getenv, EnvMaxSessions, cfg.Limits.MaxSessions)
+
+	cfg.Backup.Limits.MaxTotalBytes = boundedInt64Environment(getenv, EnvBackupMaxTotalBytes, cfg.Backup.Limits.MaxTotalBytes, HardMaxBackupTotalBytes)
+	cfg.Backup.Limits.MaxObjectBytes = boundedInt64Environment(getenv, EnvBackupMaxObjectBytes, cfg.Backup.Limits.MaxObjectBytes, HardMaxBackupObjectBytes)
+	cfg.Backup.Limits.MaxManifests = boundedIntEnvironment(getenv, EnvBackupMaxManifests, cfg.Backup.Limits.MaxManifests, HardMaxBackupManifests)
+	cfg.Backup.Limits.MaxVersionsPerTarget = boundedIntEnvironment(getenv, EnvBackupMaxVersionsPerTarget, cfg.Backup.Limits.MaxVersionsPerTarget, HardMaxBackupVersionsPerTarget)
+	cfg.Backup.Limits.MaxPinned = boundedIntEnvironment(getenv, EnvBackupMaxPinned, cfg.Backup.Limits.MaxPinned, HardMaxBackupPinned)
+	cfg.Backup.Limits.RetentionDays = boundedIntEnvironment(getenv, EnvBackupRetentionDays, cfg.Backup.Limits.RetentionDays, HardMaxBackupRetentionDays)
+	cfg.Backup.Limits.PlanTTLSeconds = boundedIntEnvironment(getenv, EnvBackupPlanTTLSeconds, cfg.Backup.Limits.PlanTTLSeconds, HardMaxBackupPlanTTLSeconds)
 	return cfg
 }
 
-func int64Environment(name string, fallback int64) int64 {
-	if value, ok := positiveInt64Environment(name); ok {
+func int64Environment(getenv func(string) string, name string, fallback int64) int64 {
+	if value, ok := positiveInt64Environment(getenv, name); ok {
 		return value
 	}
 	return fallback
 }
 
-func intEnvironment(name string, fallback int) int {
-	value := os.Getenv(name)
+func intEnvironment(getenv func(string) string, name string, fallback int) int {
+	value := getenv(name)
 	if value == "" {
 		return fallback
 	}
@@ -159,8 +237,29 @@ func intEnvironment(name string, fallback int) int {
 	return int(parsed)
 }
 
-func positiveInt64Environment(name string) (int64, bool) {
-	value := os.Getenv(name)
+func boundedInt64Environment(getenv func(string) string, name string, fallback, maximum int64) int64 {
+	value, ok := positiveInt64Environment(getenv, name)
+	if !ok {
+		return fallback
+	}
+	if value > maximum {
+		slog.Warn("environment value exceeds hard maximum, using fallback", "name", name, "value", value, "maximum", maximum, "fallback", fallback)
+		return fallback
+	}
+	return value
+}
+
+func boundedIntEnvironment(getenv func(string) string, name string, fallback, maximum int) int {
+	value := intEnvironment(getenv, name, fallback)
+	if value > maximum {
+		slog.Warn("environment value exceeds hard maximum, using fallback", "name", name, "value", value, "maximum", maximum, "fallback", fallback)
+		return fallback
+	}
+	return value
+}
+
+func positiveInt64Environment(getenv func(string) string, name string) (int64, bool) {
+	value := getenv(name)
 	if value == "" {
 		return 0, false
 	}

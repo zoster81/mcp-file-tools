@@ -65,13 +65,14 @@ func catalogTool(name string) *mcp.Tool {
 // ServerOptions contains process-wide MCP server policy. Every connection to
 // the returned server shares the same configured directories and tool policy.
 type ServerOptions struct {
-	Version            string
-	AllowedDirectories []string
-	Logger             *slog.Logger
-	Config             *config.Config
-	ExecutionPolicy    *handler.ExecutionPolicy
-	EnableClientRoots  bool
-	LifecycleContext   context.Context
+	Version              string
+	AllowedDirectories   []string
+	ProtectedDirectories []string
+	Logger               *slog.Logger
+	Config               *config.Config
+	ExecutionPolicy      *handler.ExecutionPolicy
+	EnableClientRoots    bool
+	LifecycleContext     context.Context
 }
 
 // BuildServer creates the shared MCP server without starting a transport.
@@ -89,7 +90,10 @@ func BuildServer(options ServerOptions) *mcp.Server {
 		lifecycleCtx = context.Background()
 	}
 
-	handlerOptions := []handler.Option{handler.WithConfig(cfg)}
+	handlerOptions := []handler.Option{
+		handler.WithConfig(cfg),
+		handler.WithProtectedDirectories(options.ProtectedDirectories),
+	}
 	if options.ExecutionPolicy != nil {
 		handlerOptions = append(handlerOptions, handler.WithExecutionPolicy(*options.ExecutionPolicy))
 	}

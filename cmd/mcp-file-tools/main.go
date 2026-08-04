@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/zoster81/mcp-file-tools/filetoolsserver"
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/config"
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
@@ -52,26 +53,50 @@ func runCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		slog.Debug("normalized allowed directories", "dirs", normalized)
 	}
 
-	applicationConfig := config.Load()
+	applicationConfig := config.LoadFromEnvironment(getenv)
 	selection, err := selectRunner(options.transport, getenv, applicationConfig.Limits.MaxSessions)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 		return 1
 	}
+	var store *backupstore.Store
+	protectedDirectories := []string(nil)
+	if applicationConfig.Backup.Enabled() {
+		store, err = backupstore.Open(backupstore.Options{
+			Directory:                applicationConfig.Backup.StoreDir,
+			PublicAllowedDirectories: options.allowedDirectories,
+		})
+		if err != nil {
+			fmt.Fprintf(stderr, "Error: %v\n", err)
+			return 1
+		}
+		protectedDirectories = []string{store.Root()}
+	}
+
 	server := filetoolsserver.BuildServer(filetoolsserver.ServerOptions{
-		Version:            version,
-		AllowedDirectories: normalized,
-		Config:             applicationConfig,
-		ExecutionPolicy:    selection.executionPolicy,
-		EnableClientRoots:  selection.enableClientRoots,
-		LifecycleContext:   ctx,
+		Version:              version,
+		AllowedDirectories:   normalized,
+		ProtectedDirectories: protectedDirectories,
+		Config:               applicationConfig,
+		ExecutionPolicy:      selection.executionPolicy,
+		EnableClientRoots:    selection.enableClientRoots,
+		LifecycleContext:     ctx,
 	})
 
-	if err := selection.runner.Run(ctx, server); err != nil {
-		if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+	runErr := selection.runner.Run(ctx, server)
+	var closeErr error
+	if store != nil {
+		closeErr = store.Close()
+	}
+	if runErr != nil {
+		if ctx.Err() != nil && errors.Is(runErr, ctx.Err()) && closeErr == nil {
 			return 0
 		}
-		fmt.Fprintf(stderr, "Server error: %v\n", err)
+		fmt.Fprintf(stderr, "Server error: %v\n", errors.Join(runErr, closeErr))
+		return 1
+	}
+	if closeErr != nil {
+		fmt.Fprintf(stderr, "Server error: backup store lock could not be released\n")
 		return 1
 	}
 	return 0

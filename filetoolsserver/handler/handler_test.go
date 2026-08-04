@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -97,5 +100,34 @@ func TestHasConfiguredDirectoriesIgnoresDynamicRoots(t *testing.T) {
 	configured := NewHandler([]string{t.TempDir()})
 	if !configured.HasConfiguredDirectories() {
 		t.Fatal("configured process did not report its authoritative baseline")
+	}
+}
+
+func TestProtectedDirectoriesRemainInaccessible(t *testing.T) {
+	publicRoot := t.TempDir()
+	protected := filepath.Join(publicRoot, "internal-backups")
+	h := NewHandler([]string{publicRoot}, WithProtectedDirectories([]string{protected}))
+
+	_, err := h.validatePath(filepath.Join(protected, "store.json"))
+	if err == nil {
+		t.Fatal("protected path unexpectedly validated")
+	}
+	if operation.KindOf(err) != operation.KindAccessDenied {
+		t.Fatalf("error kind = %s, want access_denied: %v", operation.KindOf(err), err)
+	}
+	if errors.Is(err, ErrPathRequired) {
+		t.Fatalf("protected-path error was mapped as an input error: %v", err)
+	}
+}
+
+func TestDynamicRootsCannotOverlapProtectedDirectories(t *testing.T) {
+	protected := t.TempDir()
+	h := NewHandler(nil, WithProtectedDirectories([]string{protected}))
+
+	if got := h.MergeAllowedDirectories([]string{protected}); len(got) != 0 {
+		t.Fatalf("protected dynamic root was retained: %v", got)
+	}
+	if got := h.MergeAllowedDirectories([]string{filepath.Dir(protected)}); len(got) != 0 {
+		t.Fatalf("ancestor of protected root was retained: %v", got)
 	}
 }

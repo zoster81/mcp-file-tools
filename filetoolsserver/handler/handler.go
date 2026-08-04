@@ -3,12 +3,14 @@ package handler
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/zoster81/mcp-file-tools/internal/config"
 	"github.com/zoster81/mcp-file-tools/internal/execution"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/mcp-file-tools/internal/operation"
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
@@ -26,6 +28,8 @@ type Handler struct {
 	configuredDirs                 []string // immutable resolved baseline; always allowed
 	allowedRequestedDirs           []string
 	allowedDirs                    []string
+	protectedRequestedDirs         []string // immutable internal roots denied to public tools
+	protectedDirs                  []string // resolved internal roots denied to public tools
 	editPreviews                   *editPreviewStore
 	patchPackagePreviews           *patchPackagePreviewStore
 	patchPackageStageReplacement   func(context.Context, string, []byte, os.FileMode) (*filesystem.StagedReplacement, error)
@@ -59,6 +63,14 @@ func WithExecutionPolicy(policy ExecutionPolicy) Option {
 	}
 }
 
+// WithProtectedDirectories configures internal process roots that ordinary file
+// tools must never expose, even if a dynamic MCP root later overlaps them.
+func WithProtectedDirectories(dirs []string) Option {
+	return func(h *Handler) {
+		h.protectedRequestedDirs, h.protectedDirs = normalizeAllowedDirectorySets(dirs)
+	}
+}
+
 // NewHandler creates a new Handler with allowed directories and optional configuration.
 // If no config is provided via WithConfig, default configuration is used.
 func NewHandler(allowedDirs []string, opts ...Option) *Handler {
@@ -67,16 +79,15 @@ func NewHandler(allowedDirs []string, opts ...Option) *Handler {
 	// directory aliases without allowing an external link to become an entry point.
 	configuredRequestedDirs, configuredDirs := normalizeAllowedDirectorySets(allowedDirs)
 
-	h := &Handler{
-		configuredRequestedDirs: configuredRequestedDirs,
-		configuredDirs:          configuredDirs,
-		allowedRequestedDirs:    mergeUniqueDirectories(configuredRequestedDirs, configuredDirs),
-		allowedDirs:             append([]string(nil), configuredDirs...),
-	}
-
+	h := &Handler{}
 	for _, opt := range opts {
 		opt(h)
 	}
+	configuredRequestedDirs, configuredDirs = h.filterProtectedDirectorySets(configuredRequestedDirs, configuredDirs)
+	h.configuredRequestedDirs = configuredRequestedDirs
+	h.configuredDirs = configuredDirs
+	h.allowedRequestedDirs = mergeUniqueDirectories(configuredRequestedDirs, configuredDirs)
+	h.allowedDirs = append([]string(nil), configuredDirs...)
 	if h.config == nil {
 		h.config = config.Load()
 	}
@@ -119,6 +130,7 @@ func (h *Handler) UpdateAllowedDirectories(newDirs []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	requested, resolved := normalizeAllowedDirectorySets(newDirs)
+	requested, resolved = h.filterProtectedDirectorySets(requested, resolved)
 	h.allowedRequestedDirs = mergeUniqueDirectories(requested, resolved)
 	h.allowedDirs = resolved
 }
@@ -138,6 +150,7 @@ func (h *Handler) MergeAllowedDirectories(newDirs []string) []string {
 	defer h.mu.Unlock()
 
 	normalizedRequestedDirs, normalizedNewDirs := normalizeAllowedDirectorySets(newDirs)
+	normalizedRequestedDirs, normalizedNewDirs = h.filterProtectedDirectorySets(normalizedRequestedDirs, normalizedNewDirs)
 	h.allowedRequestedDirs = mergeUniqueDirectories(
 		h.configuredRequestedDirs,
 		h.configuredDirs,
@@ -191,11 +204,52 @@ func mergeUniqueDirectories(groups ...[]string) []string {
 	return merged
 }
 
-// validatePath validates a path against allowed directories
+func (h *Handler) filterProtectedDirectorySets(requested, resolved []string) ([]string, []string) {
+	if len(h.protectedRequestedDirs) == 0 && len(h.protectedDirs) == 0 {
+		return requested, resolved
+	}
+	protectedDirectories := mergeUniqueDirectories(h.protectedRequestedDirs, h.protectedDirs)
+	filteredRequested := make([]string, 0, len(requested))
+	filteredResolved := make([]string, 0, len(resolved))
+	for index := 0; index < len(requested) && index < len(resolved); index++ {
+		blocked := false
+		for _, candidate := range []string{requested[index], resolved[index]} {
+			for _, protected := range protectedDirectories {
+				if security.PathsOverlap(candidate, protected) {
+					blocked = true
+					break
+				}
+			}
+			if blocked {
+				break
+			}
+		}
+		if !blocked {
+			filteredRequested = append(filteredRequested, requested[index])
+			filteredResolved = append(filteredResolved, resolved[index])
+		}
+	}
+	return filteredRequested, filteredResolved
+}
+
+// validatePath validates a path against allowed directories and rejects every
+// protected internal root after both lexical and resolved checks.
 func (h *Handler) validatePath(path string) (string, error) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return security.ValidatePathWithAllowedDirectories(path, h.allowedRequestedDirs, h.allowedDirs)
+	validated, err := security.ValidatePathWithAllowedDirectories(path, h.allowedRequestedDirs, h.allowedDirs)
+	if err != nil {
+		return "", err
+	}
+	requested := path
+	if absolute, absoluteErr := filepath.Abs(security.ExpandHome(path)); absoluteErr == nil {
+		requested = absolute
+	}
+	if security.IsPathWithinAllowedDirectories(requested, h.protectedRequestedDirs) ||
+		security.IsPathWithinAllowedDirectories(validated, h.protectedDirs) {
+		return "", operation.New(operation.KindAccessDenied, "access denied - path reserved for internal storage")
+	}
+	return validated, nil
 }
 
 // getFileMode returns the file's current permissions, or DefaultFileMode if file doesn't exist.

@@ -19,6 +19,41 @@ type AllowedDirectorySet struct {
 	Resolved  []string
 }
 
+// PathsEqual reports whether two absolute paths are equal under platform path
+// normalization and case semantics.
+func PathsEqual(first, second string) bool {
+	if first == "" || second == "" || strings.Contains(first, "\x00") || strings.Contains(second, "\x00") {
+		return false
+	}
+	first = filepath.Clean(first)
+	second = filepath.Clean(second)
+	if !filepath.IsAbs(first) || !filepath.IsAbs(second) {
+		return false
+	}
+	return pathsEqual(normalizePath(first), normalizePath(second))
+}
+
+// PathsOverlap reports whether two absolute paths are equal or one contains the
+// other using platform path comparison and real component boundaries.
+func PathsOverlap(first, second string) bool {
+	if first == "" || second == "" || strings.Contains(first, "\x00") || strings.Contains(second, "\x00") ||
+		!filepath.IsAbs(filepath.Clean(first)) || !filepath.IsAbs(filepath.Clean(second)) {
+		return false
+	}
+	first = normalizePath(first)
+	second = normalizePath(second)
+	return pathsEqual(first, second) || pathContains(first, second) || pathContains(second, first)
+}
+
+func pathContains(parent, child string) bool {
+	separator := string(filepath.Separator)
+	prefix := parent
+	if !strings.HasSuffix(prefix, separator) {
+		prefix += separator
+	}
+	return pathHasPrefix(child, prefix)
+}
+
 func IsPathWithinAllowedDirectories(absolutePath string, allowedDirs []string) bool {
 	if absolutePath == "" || len(allowedDirs) == 0 {
 		return false
