@@ -31,7 +31,7 @@ Product identity and the fork's independent relationship to upstream are defined
 | R13 | COMPLETE | Implement and verify native MCP Streamable HTTP while preserving stdio. |
 | R14 | COMPLETE | Completed hardening, publication, dual-transport deployment, active rollback, restoration, and final handoff for 2.0.0. |
 | R15 | COMPLETE | Added attributed agent-ergonomics and project-aware workflows while preserving transport, memory, mutation, and security guarantees. |
-| R16 | ACTIVE | Add verified change workflows through deterministic fingerprints, one-shot edit preview/apply, declared patch packages, and structured verification. |
+| R16 | COMPLETE | Added verified change workflows through deterministic fingerprints, one-shot edit preview/apply, declared patch packages, and structured verification. |
 
 ---
 
@@ -405,7 +405,7 @@ Normal, compatibility, malformed-input, symlink/reparse, `.gitignore`, paging, s
 
 ## Status
 
-Active. Approved on 2026-08-03. Deterministic fingerprints, bounded one-shot `edit_file` preview/apply, and complete `patch-package-v1` inspect/dry-run/apply/verify are implemented and verified in source; structured verification remains pending.
+Completed on 2026-08-04. Deterministic fingerprints, bounded one-shot `edit_file` preview/apply, complete `patch-package-v1` inspect/dry-run/apply/verify, and typed `verify_state` checks are implemented and verified in source. The milestone remains unreleased and undeployed.
 
 ## Goal
 
@@ -419,9 +419,9 @@ The approved design baseline is [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_W
 - [x] Add bounded one-shot preview/apply for existing `edit_file` operations, with cryptographically unguessable expiring identifiers, replay prevention, and target/result fingerprint validation.
 - [x] Add a versioned declared patch-package format with strict inspect and non-mutating dry-run actions for bounded edits to existing regular files.
 - [x] Add one-shot patch-package apply and verify, preflight and stage every target before the first commit, and report committed, unchanged, or unknown final states with `PARTIAL_COMMIT` without claiming multi-file atomicity or retained rollback.
-- [ ] Add selected structured verification checks with typed arguments, bounded diagnostics, fixed direct executable invocation where required, and no arbitrary shell command.
-- [ ] Keep schemas, limits, error metadata, prompts, and behavior equivalent over stdio and stateful Streamable HTTP.
-- [ ] Complete focused TDD, adversarial path/cache/replay/partial-commit tests, full regression, race, static-analysis, vulnerability, manual MCP, catalog, documentation, and repository checks.
+- [x] Add selected structured verification checks with typed arguments, bounded diagnostics, fixed direct Git invocation, filtered environment, and no arbitrary shell command.
+- [x] Keep schemas, limits, error metadata, prompts, and behavior equivalent over stdio and stateful Streamable HTTP.
+- [x] Complete focused TDD, adversarial path/cache/replay/partial-commit tests, full regression, race, static-analysis, vulnerability, manual MCP, catalog, documentation, and repository checks.
 
 ## Deferred but approved work
 

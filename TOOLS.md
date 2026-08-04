@@ -1,6 +1,6 @@
 # Tools Reference
 
-The authoritative 25-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
+The authoritative 26-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
 
 ## Guided Prompts
 
@@ -568,6 +568,96 @@ Directory roots use deterministic lexical traversal, exclude `.git` directories 
     }
   ],
   "entriesTruncated": true
+}
+```
+
+### verify_state
+
+Run an ordered batch of read-only verification checks through one strict schema. The tool does not require `MCP_ENABLE_EXECUTION`, never accepts a command string, and never invokes a shell. A failed expectation is a normal result with `passed: false`; an operational problem such as an inaccessible path, ambiguous encoding, missing Git executable, cancellation, or a limit violation is reported in that check's `errorCode` and increments `errorCount`.
+
+Each item in `checks` must contain `type` plus exactly one matching object:
+
+- `json`: validates the syntax of one decoded JSON file. `path` is required and `encoding` is optional. The raw and decoded document are bounded by `MCP_MAX_FILE_BYTES`.
+- `text`: validates one decoded text file. `path` is required; optional expectations are `encoding`, `bom=any|none|present|utf-8|utf-16-le|utf-16-be`, `lineEndings=any|lf|crlf|mixed|none`, and `trailingWhitespace=any|none|present`. Trailing-space diagnostics are capped at 1000 records.
+- `gitDiff`: runs a fixed direct `git diff --check` invocation in `repositoryRoot`, with literal pathspecs, fsmonitor disabled, no external diff/textconv helpers, and optional `paths` placed after `--`. Absolute or escaping paths are rejected. `timeoutSeconds` defaults to 30 and cannot exceed 60.
+- `fingerprint`: compares the shared `content-v1` aggregate for ordered `paths` with `expectedFingerprint`; optional `respectGitignore` has the same default-on behavior as `fingerprint_paths`.
+
+Git receives closed stdin, bounded stdout/stderr, cancellation and process-tree termination, a filtered environment, disabled prompts, optional locks and lazy fetches, disabled system/global configuration, fixed locale, and no external diff or text-conversion helpers. The repository root is path- and identity-revalidated immediately before launch. This reduces but cannot eliminate the final path-based process-launch race.
+
+`MCP_MAX_BATCH_FILES` bounds the number of checks and each nested path list, `MCP_MAX_LINE_BYTES` bounds decoded lines, `MCP_MAX_FINGERPRINT_ENTRIES` bounds fingerprint traversal, and `MCP_MAX_OUTPUT_BYTES` bounds the complete structured and text response.
+
+**Example:**
+
+```json
+{
+  "checks": [
+    {
+      "type": "json",
+      "json": {
+        "path": "/project/config.json",
+        "encoding": "utf-8"
+      }
+    },
+    {
+      "type": "text",
+      "text": {
+        "path": "/project/legacy.data",
+        "encoding": "utf-16-le",
+        "bom": "utf-16-le",
+        "lineEndings": "crlf",
+        "trailingWhitespace": "none"
+      }
+    },
+    {
+      "type": "gitDiff",
+      "gitDiff": {
+        "repositoryRoot": "/project",
+        "paths": ["README.md", "src/main.go"],
+        "timeoutSeconds": 30
+      }
+    },
+    {
+      "type": "fingerprint",
+      "fingerprint": {
+        "paths": ["/project/src"],
+        "expectedFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    }
+  ]
+}
+```
+
+**Response summary:**
+
+```json
+{
+  "passed": false,
+  "checkCount": 4,
+  "passedCount": 2,
+  "failedCount": 1,
+  "errorCount": 1,
+  "results": [
+    {
+      "index": 0,
+      "type": "json",
+      "passed": true,
+      "encoding": "utf-8"
+    },
+    {
+      "index": 2,
+      "type": "gitDiff",
+      "passed": false,
+      "exitCode": 2,
+      "stdout": "README.md:12: trailing whitespace."
+    },
+    {
+      "index": 3,
+      "type": "fingerprint",
+      "passed": false,
+      "errorCode": "SYMLINK_ESCAPE",
+      "error": "..."
+    }
+  ]
 }
 ```
 

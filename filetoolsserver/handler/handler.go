@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/mcp-file-tools/internal/execution"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
@@ -30,6 +31,8 @@ type Handler struct {
 	patchPackageStageReplacement   func(context.Context, string, []byte, os.FileMode) (*filesystem.StagedReplacement, error)
 	patchPackageCommitReplacement  func(int, *filesystem.StagedReplacement, filesystem.ReplaceOptions) (bool, error)
 	patchPackageCleanupReplacement func(*filesystem.StagedReplacement) error
+	verifyGitExecutable            func() (string, error)
+	verifyGitRun                   func(context.Context, verificationGitRequest) (execution.Result, error)
 	replaceFile                    func(string, []byte, filesystem.ReplaceOptions) error
 	patchPackageAfterPrepare       func() error
 	patchPackageAfterStage         func() error
@@ -91,6 +94,8 @@ func NewHandler(allowedDirs []string, opts ...Option) *Handler {
 	h.patchPackageStageReplacement = stagePatchPackageReplacement
 	h.patchPackageCommitReplacement = commitPatchPackageReplacement
 	h.patchPackageCleanupReplacement = func(staged *filesystem.StagedReplacement) error { return staged.Cleanup() }
+	h.verifyGitExecutable = findVerificationGit
+	h.verifyGitRun = h.runVerificationGit
 
 	return h
 }

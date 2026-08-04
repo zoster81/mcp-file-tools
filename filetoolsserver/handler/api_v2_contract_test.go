@@ -24,6 +24,8 @@ func TestV2PublicJSONTagsUseCamelCase(t *testing.T) {
 		FingerprintPathsInput{}, FingerprintPathsOutput{}, FingerprintEntry{},
 		EditFileInput{}, EditFileOutput{}, EditOperation{},
 		PatchPackageInput{}, PatchPackageManifest{}, PatchPackageTarget{}, PatchPackageTargetResult{}, PatchPackageOutput{},
+		VerifyStateInput{}, VerificationCheck{}, JSONVerificationCheck{}, TextVerificationCheck{}, GitDiffVerificationCheck{},
+		FingerprintVerificationCheck{}, VerificationDiagnostic{}, VerifyStateResult{}, VerifyStateOutput{},
 		ReadMultipleFilesInput{}, ReadMultipleFilesOutput{}, FileReadResult{},
 		TreeInput{}, TreeOutput{}, DeleteFileInput{}, DeleteFileOutput{}, CopyFileInput{}, CopyFileOutput{},
 		ConvertEncodingInput{}, ConvertEncodingOutput{}, GrepInput{}, GrepOutput{}, GrepMatch{},

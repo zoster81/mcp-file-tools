@@ -13,7 +13,7 @@ R12 approved this design before implementation. R13 implements it with the pinne
 The HTTP transport must:
 
 - prevent unauthenticated access to configured filesystem roots and optional execution tools;
-- preserve the same 25-tool unreleased source catalog, allowed-directory checks, encoding behavior, limits, and error mapping as stdio;
+- preserve the same 26-tool unreleased source catalog, allowed-directory checks, encoding behavior, limits, and error mapping as stdio;
 - prevent browser-origin attacks, DNS rebinding, token leakage, session hijacking, and untrusted proxy spoofing;
 - bound request bodies, headers, concurrent requests, sessions, idle lifetime, and shutdown time;
 - keep credentials, session identifiers, tool arguments, file contents, and sensitive paths out of HTTP logs;
@@ -65,7 +65,7 @@ MCP client
     -> bearer authentication
     -> rate, concurrency, body, and session admission
     -> MCP Streamable HTTP handler
-    -> shared MCP server and 25 tools
+    -> shared MCP server and 26 tools
     -> allowed-root and execution policy
     -> local filesystem and operating system
 ```

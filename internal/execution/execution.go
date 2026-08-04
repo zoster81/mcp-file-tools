@@ -31,6 +31,7 @@ type Request struct {
 	WorkingDirectory string
 	TimeoutSeconds   int
 	OutputLimitBytes int
+	Environment      []string
 }
 
 // Result is the common structured output returned by execution tools.
@@ -52,6 +53,7 @@ type Plan struct {
 	cwd         string
 	timeout     time.Duration
 	outputLimit int
+	environment []string
 }
 
 // Prepare validates process-level invariants without applying tool-specific
@@ -86,6 +88,7 @@ func Prepare(request Request) (Plan, error) {
 		cwd:         cwd,
 		timeout:     timeout,
 		outputLimit: outputLimit,
+		environment: append([]string(nil), request.Environment...),
 	}, nil
 }
 
@@ -152,6 +155,9 @@ func (plan Plan) Run(parent context.Context, revalidate func() error) (Result, e
 	stderr := newLimitedBuffer(plan.outputLimit)
 	cmd := exec.Command(plan.program, plan.args...)
 	cmd.Dir = plan.cwd
+	if plan.environment != nil {
+		cmd.Env = append([]string(nil), plan.environment...)
+	}
 	cmd.Stdin = nil
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr

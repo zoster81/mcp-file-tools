@@ -1,6 +1,6 @@
 # Verified Change Workflows
 
-This document is the approved design baseline for R16. It defines the intended behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1–4 are implemented in source: deterministic fingerprints, bounded one-shot `edit_file` preview/apply, and complete strict `patch-package-v1` inspect/dry-run/apply/verify are complete, while structured verification remains pending.
+This document is the approved and completed design baseline for R16. It defines the implemented behavior, security boundaries, sequencing, and completion gates for deterministic fingerprints, edit preview/apply, declared patch packages, and structured verification. Phases 1–5 are implemented and verified in source: deterministic fingerprints, bounded one-shot `edit_file` preview/apply, complete strict `patch-package-v1` inspect/dry-run/apply/verify, and typed `verify_state` checks.
 
 Persistent backup storage and user-managed change review are approved in principle but remain outside the initial R16 implementation until a separate retention and lifecycle design is approved.
 
@@ -31,7 +31,7 @@ The initial R16 scope does not include:
 All R16 operations must:
 
 - use the existing allowed-root, symlink, junction, reparse-point, and missing-ancestor validation;
-- preserve all existing tools; the reviewed R16 additions currently expose `fingerprint_paths` and `patch_package`, bringing the unreleased source catalog to 25 tools while the published 2.0.0 baseline remains 23;
+- preserve all existing tools; the reviewed R16 additions expose `fingerprint_paths`, `patch_package`, and `verify_state`, bringing the unreleased source catalog to 26 tools while the published 2.0.0 baseline remains 23;
 - expose identical schemas and behavior through stdio and stateful Streamable HTTP;
 - use stable typed error codes and bounded diagnostic output;
 - reject oversized input before expensive parsing, hashing, diffing, or staging;
@@ -162,14 +162,14 @@ Structured verification replaces fragile shell command strings with allowlisted 
 
 ### Initial approved checks
 
-The first implementation tranche should remain filesystem- and repository-adjacent:
+The implemented `verify_state` tool remains filesystem- and repository-adjacent and supports one ordered bounded batch of:
 
-- JSON parsing for explicit files;
+- JSON parsing for explicit decoded files;
 - text-format checks for explicit files, including selected encoding, BOM, line-ending, and trailing-whitespace expectations;
-- `git diff --check` for an explicit repository root and optional explicit paths, invoked directly without a shell;
+- fixed direct `git diff --check` for an explicit repository root and optional literal relative paths, invoked without a shell;
 - fingerprint comparison through the shared fingerprint primitive rather than a duplicate hashing implementation.
 
-The exact public shape may be one bounded batch-verification tool or a small number of narrowly scoped tools. The final choice must minimize catalog growth while keeping schemas clear and independently permissionable.
+A failed expectation is returned as `passed=false`; an operational problem uses a stable per-check `errorCode`. The single batch tool minimizes catalog growth while preserving a strict discriminated union and deterministic result order.
 
 Arbitrary executables, user-supplied command strings, compound commands, package-manager operations, generic test runners, and language-specific build orchestration are outside the initial R16 scope.
 
@@ -185,7 +185,7 @@ Arbitrary executables, user-supplied command strings, compound commands, package
 
 ### Required tests
 
-Cover valid and malformed JSON, unsupported encodings, BOM and mixed-line-ending cases, trailing whitespace, Git repositories and non-repositories, paths containing spaces and metacharacters, command-injection attempts, missing Git, timeout, cancellation, oversized diagnostics, path escapes, symlink aliases, deterministic result ordering, and direct/HTTP equivalence.
+Implemented tests cover valid and malformed JSON, unsupported encodings, UTF-16 BOM/CRLF, trailing whitespace and bounded diagnostics, fingerprint matches and mismatches, strict unknown fields and invalid unions, non-repositories, relative path escapes, escaping symlink aliases, literal Git paths beginning with option-like text and containing spaces/metacharacters, missing Git, timeout, cancellation, output limits, filtered environment variables, deterministic result ordering, shared fingerprint behavior, direct/HTTP equivalence, manual MCP smoke, and the complete repository verification gates.
 
 ## 5. Deferred persistent backup and change-review design gate
 
@@ -218,7 +218,7 @@ Until that design is approved:
 2. Add bounded preview storage and one-shot preview/apply to existing-file edits.
 3. Define the versioned patch-package manifest and implement inspect plus dry-run.
 4. Implement package apply and verify with the explicit partial-commit contract.
-5. Add the initial structured verification checks.
+5. Add the initial structured verification checks. **Implemented.**
 6. Run the complete R16 compatibility, race, security, catalog, transport-equivalence, documentation, and repository verification gates.
 7. Hold a separate backup lifecycle brainstorming and design review before adding persistent backup storage, restore, garbage collection, or package rollback.
 

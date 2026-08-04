@@ -100,6 +100,16 @@
       }
     },
     {
+      "name": "verify_state",
+      "title": "Verify State",
+      "description": "Run one bounded ordered batch of read-only typed checks. Supported checks are JSON syntax for one explicit file, text-format expectations for encoding/BOM/line endings/trailing whitespace, fixed direct git diff --check for one validated repository root plus optional literal relative paths, and content-v1 fingerprint comparison through the shared secure fingerprint primitive. Check failures are returned as passed=false; operational failures use stable per-result errorCode values. Git is invoked without a shell, with fixed arguments, literal pathspecs, disabled external diff/textconv, filtered environment, bounded output, cancellation, and timeout. MCP_MAX_BATCH_FILES, MCP_MAX_FILE_BYTES, MCP_MAX_LINE_BYTES, MCP_MAX_FINGERPRINT_ENTRIES, and MCP_MAX_OUTPUT_BYTES bound work and results. Parameters: checks.",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "detect_line_endings",
       "title": "Detect Line Endings",
       "description": "Incrementally detect line ending style (crlf/lf/mixed/none) after decoding any registered encoding. MCP_MAX_LINE_BYTES bounds lines and MCP_MAX_OUTPUT_BYTES bounds minority line numbers. Empty files are UTF-8; ambiguous non-empty input requires an explicit encoding. Parameters: path, encoding.",

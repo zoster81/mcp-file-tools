@@ -377,7 +377,7 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s list tools: %v", name, err)
 		}
-		if len(tools.Tools) != 25 {
+		if len(tools.Tools) != 26 {
 			t.Fatalf("%s tool count = %d", name, len(tools.Tools))
 		}
 		serializedTools := marshalJSON(t, tools.Tools)
@@ -622,6 +622,42 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 			expectedVerify = serialized
 		} else if serialized != expectedVerify {
 			t.Fatalf("%s patch package verify diverged: %s != %s", name, serialized, expectedVerify)
+		}
+	}
+
+	verifyJSONPath := filepath.Join(root, "verify.json")
+	if err := os.WriteFile(verifyJSONPath, []byte("{\"ok\":true}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	verifyStateArgs := map[string]any{"checks": []map[string]any{
+		{
+			"type": "json",
+			"json": map[string]any{"path": verifyJSONPath, "encoding": "utf-8"},
+		},
+		{
+			"type": "text",
+			"text": map[string]any{
+				"path": path, "encoding": "cp1251", "bom": "none", "lineEndings": "none", "trailingWhitespace": "none",
+			},
+		},
+		{
+			"type": "fingerprint",
+			"fingerprint": map[string]any{
+				"paths": []string{path}, "expectedFingerprint": packagePreview.Results[0].ResultFingerprint,
+			},
+		},
+	}}
+	var expectedVerifyState string
+	for name, session := range map[string]*mcp.ClientSession{"http": first, "direct": direct} {
+		verifyStateResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "verify_state", Arguments: verifyStateArgs})
+		if err != nil || verifyStateResult.IsError {
+			t.Fatalf("%s verify_state result = %#v err=%v", name, verifyStateResult, err)
+		}
+		serialized := marshalJSON(t, verifyStateResult.StructuredContent)
+		if expectedVerifyState == "" {
+			expectedVerifyState = serialized
+		} else if serialized != expectedVerifyState {
+			t.Fatalf("%s verify_state diverged: %s != %s", name, serialized, expectedVerifyState)
 		}
 	}
 

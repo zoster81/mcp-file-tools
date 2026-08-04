@@ -107,6 +107,15 @@ func main() {
 	rPackageVerify, oPackageVerify, _ := h.HandlePatchPackage(ctx, nil, handler.PatchPackageInput{Action: "verify", Manifest: packageManifest})
 	check("patch_package (verify)", !rPackageVerify.IsError && oPackageVerify.Verified)
 
+	verifyJSON := filepath.Join(tempDir, "verify.json")
+	os.WriteFile(verifyJSON, []byte("{\"ok\":true}\n"), 0644)
+	rVerifyState, oVerifyState, _ := h.HandleVerifyState(ctx, nil, handler.VerifyStateInput{Checks: []handler.VerificationCheck{
+		{Type: handler.VerifyCheckJSON, JSON: &handler.JSONVerificationCheck{Path: verifyJSON, Encoding: "utf-8"}},
+		{Type: handler.VerifyCheckText, Text: &handler.TextVerificationCheck{Path: testFile, Encoding: "utf-8", BOM: "none", LineEndings: "none", TrailingWhitespace: "none"}},
+		{Type: handler.VerifyCheckFingerprint, Fingerprint: &handler.FingerprintVerificationCheck{Paths: []string{testFile}, ExpectedFingerprint: oPackage.Results[0].ResultFingerprint}},
+	}})
+	check("verify_state", !rVerifyState.IsError && oVerifyState.Passed && oVerifyState.PassedCount == 3)
+
 	rPreview, oPreview, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{
 		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello package!", NewText: "Hello preview!"}},
 	})

@@ -12,16 +12,19 @@ import (
 
 func TestPrepareDefaultsAndCopiesArguments(t *testing.T) {
 	args := []string{"-test.run=TestExecutionHelperProcess", "--", "success"}
+	environment := []string{"VERIFY_ENV=present"}
 	plan, err := Prepare(Request{
 		Program:          os.Args[0],
 		Args:             args,
 		WorkingDirectory: t.TempDir(),
+		Environment:      environment,
 	})
 	if err != nil {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 
 	args[0] = "modified"
+	environment[0] = "VERIFY_ENV=modified"
 	if got, want := plan.timeout, DefaultTimeout; got != want {
 		t.Fatalf("timeout = %v, want %v", got, want)
 	}
@@ -30,6 +33,9 @@ func TestPrepareDefaultsAndCopiesArguments(t *testing.T) {
 	}
 	if plan.args[0] == "modified" {
 		t.Fatal("Prepare() retained the caller's argument slice")
+	}
+	if plan.environment[0] == "VERIFY_ENV=modified" {
+		t.Fatal("Prepare() retained the caller's environment slice")
 	}
 }
 
@@ -109,6 +115,25 @@ func TestRunCapturesExitAndTruncation(t *testing.T) {
 	}
 }
 
+func TestRunUsesExplicitEnvironment(t *testing.T) {
+	plan, err := Prepare(Request{
+		Program:          os.Args[0],
+		Args:             []string{"-test.run=TestExecutionHelperProcess", "--", "environment"},
+		WorkingDirectory: t.TempDir(),
+		Environment:      []string{"VERIFY_ENV=present"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := plan.Run(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExitCode != 0 || result.Stdout != "present" {
+		t.Fatalf("environment result=%+v", result)
+	}
+}
+
 func TestRunHonorsParentCancellation(t *testing.T) {
 	plan, err := Prepare(Request{
 		Program:          os.Args[0],
@@ -157,6 +182,9 @@ func TestExecutionHelperProcess(t *testing.T) {
 		os.Exit(7)
 	case "sleep":
 		time.Sleep(10 * time.Second)
+		os.Exit(0)
+	case "environment":
+		_, _ = os.Stdout.WriteString(os.Getenv("VERIFY_ENV"))
 		os.Exit(0)
 	}
 }
