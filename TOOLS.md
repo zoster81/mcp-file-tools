@@ -1,6 +1,6 @@
 # Tools Reference
 
-The authoritative 26-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
+The authoritative 27-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
 
 ## Guided Prompts
 
@@ -658,6 +658,54 @@ Git receives closed stdin, bounded stdout/stderr, cancellation and process-tree 
       "error": "..."
     }
   ]
+}
+```
+
+### backup_store
+
+Read bounded metadata from the optional persistent backup store. This tool is strictly read-only: it never returns object bytes or internal store paths, never repairs or deletes data, and does not enable automatic backup capture. It is always registered so stdio and Streamable HTTP expose the same schema. When `MCP_BACKUP_STORE_DIR` is unset, `action=status` returns `enabled: false`; the other actions fail with `INVALID_INPUT`.
+
+Actions form a strict union:
+
+- `status`: accepts only `action`. It runs a quick structural verification and returns redacted format versions, health, generation, aggregate counts, configured limits, and bounded path-free issues.
+- `list`: accepts `cursor`, `limit`, `targetPath`, and `pinned`. Results are newest-first and include only targets authorized by the current process roots. The opaque keyset cursor is authenticated and bound to the exact filters, current allowed/protected-root policy snapshot, and store generation; target visibility is revalidated on every page. Tampered or filter-swapped cursors fail with `INVALID_INPUT`, while a changed store generation fails with `CONFLICT`. `limit` defaults to 50 and cannot exceed 100.
+- `inspect`: requires `backupId` and accepts no other action fields. It validates the strict manifest, confirms that its target is currently authorized, and fully hashes the referenced object before returning metadata such as digest, byte count, pre-state fingerprint, mode, modification time, label, pinned state, and manifest checksum. Object bytes are never returned.
+- `audit`: accepts `auditMode=quick|full`, `maxObjects`, and `maxBytes`. Quick mode validates structure, references, object sizes, recovery residue, orphans, and index consistency. Full mode additionally hashes every referenced object under the requested limits, which cannot exceed the configured store limits. Audit reports issues but never repairs, quarantines, or deletes data.
+
+Every result is additionally bounded by `MCP_MAX_OUTPUT_BYTES`. Backup target paths are exposed only when they still pass the current allowed-root and protected-root policy. The store itself remains inaccessible through ordinary filesystem tools.
+
+**Status example:**
+```json
+{
+  "action": "status"
+}
+```
+
+**List example:**
+```json
+{
+  "action": "list",
+  "limit": 25,
+  "targetPath": "/project/config.json",
+  "pinned": false
+}
+```
+
+**Inspect example:**
+```json
+{
+  "action": "inspect",
+  "backupId": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
+
+**Full audit example:**
+```json
+{
+  "action": "audit",
+  "auditMode": "full",
+  "maxObjects": 1000,
+  "maxBytes": 1073741824
 }
 ```
 

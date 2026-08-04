@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phases 1 and 2 provide the disabled-by-default store foundation plus internal capture, recovery, indexing, quota, and audit primitives without a public backup tool.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phases 1–3 now provide the disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, and the bounded read-only `backup_store` management surface.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -500,7 +500,7 @@ Maintainers accepted all ten decisions on 2026-08-04: a dedicated non-overlappin
 
 ## Status
 
-Active. Implementation follows the approved [persistent backup lifecycle](PERSISTENT_BACKUP_LIFECYCLE.md) in independently reviewable phases. The public source catalog remains at 26 tools until a later reviewed phase deliberately adds the planned management surface.
+Active. Implementation follows the approved [persistent backup lifecycle](PERSISTENT_BACKUP_LIFECYCLE.md) in independently reviewable phases. Phase 3 adds the reviewed read-only management surface and brings the public source catalog to 27 tools while the published 2.0.0 baseline remains 23.
 
 ## Goal
 
@@ -510,7 +510,7 @@ Implement durable exact-byte capture, bounded metadata management, approval-boun
 
 - [x] Phase 1 — Add disabled-by-default configuration, approved defaults and hard maxima, a dedicated canonical non-overlapping store root, owner-only permissions, a platform-native lifetime writer lock, immutable `backup-store-v1` descriptor, empty versioned layout, fail-closed structural validation, and protected-root denial for ordinary tools.
 - [x] Phase 2 — Add immutable SHA-256 object capture, immutable checksummed manifests, quota reservations, derived index rebuild, bounded startup recovery, and quick/full internal audit primitives.
-- [ ] Phase 3 — Add the read-only `backup_store` status/list/inspect/audit surface with bounded cursors, redacted metadata, catalog/schema tests, and stdio/HTTP equivalence.
+- [x] Phase 3 — Add the read-only `backup_store` status/list/inspect/audit surface with bounded cursors, redacted metadata, catalog/schema tests, and stdio/HTTP equivalence.
 - [ ] Phase 4 — Bind `backupPolicy: "required"` into `edit_file` preview/apply and durably capture the approved pre-state before mutation.
 - [ ] Phase 5 — Add package-wide reservation and all-target backup capture before the first `patch_package` commit while preserving explicit `PARTIAL_COMMIT` semantics and no automatic rollback.
 - [ ] Phase 6 — Add original-target restore preview/apply with exact object verification, stale-target rejection, and mandatory safety backup of an existing target.
@@ -529,7 +529,13 @@ Phase 2 adds an internal-only exact-byte capture transaction. It conservatively 
 
 Startup now performs bounded directory scans, rejects malformed manifests, missing referenced objects, links, reparse points, hard-linked internal files, inconsistent metadata, and structural permission failures, and rebuilds a missing, corrupt, stale, or tampered derived index. Capture revalidates the retained store-root identity and internal layout before staging and before durable installation. Quick internal audit validates structure, references, sizes, recovery residue, orphans, and index consistency; full audit additionally hashes every referenced object under explicit object and byte limits. Audit is read-only and never deletes or repairs uncertain data.
 
-Phase 2 remains unreachable from MCP clients. It does not add `backup_store`, change the 26-tool source catalog, automatically capture any mutation, bind `backupPolicy` into previews, restore files, garbage-collect data, mutate pin state, or change adjacent `.bak` behavior.
+Phase 2 remains unreachable directly from MCP clients. It did not add `backup_store` or change the then-current 26-tool source catalog, and it still does not automatically capture any mutation, bind `backupPolicy` into previews, restore files, garbage-collect data, mutate pin state, or change adjacent `.bak` behavior.
+
+## Phase 3 behavior
+
+Phase 3 adds one always-registered read-only `backup_store` tool and brings the unreleased source catalog to 27 tools over both transports. `status` reports whether the operator configured a store and, when enabled, returns redacted format, health, generation, aggregate counts, configured limits, and bounded path-free issues. `list` returns newest-first manifest metadata with exact target/pinned filters, a maximum page size of 100, current-root visibility filtering, and an authenticated keyset cursor bound to filters, the allowed/protected-root policy snapshot, and store generation; target visibility is revalidated on every page. `inspect` requires one backup ID, revalidates current target authorization before hashing, and fully hashes the referenced object before returning metadata. `audit` exposes bounded quick or full read-only integrity scans and never repairs or deletes data.
+
+The strict action union rejects unknown fields and cross-action parameters. Every output is bounded by `MCP_MAX_OUTPUT_BYTES`. Store IDs, object bytes, internal store paths, temporary paths, and capability secrets are never returned. With no configured store, only `status` succeeds and reports `enabled: false`; list, inspect, and audit fail explicitly. Phase 3 does not create backups, integrate mutation policy, restore files, garbage-collect data, change pin state, or introduce rollback.
 
 ## Completion gate
 

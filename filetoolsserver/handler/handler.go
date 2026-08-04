@@ -7,12 +7,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/config"
 	"github.com/zoster81/mcp-file-tools/internal/execution"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 	"github.com/zoster81/mcp-file-tools/internal/operation"
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
+
+// BackupStoreReader is the read-only management contract exposed by the handler.
+type BackupStoreReader interface {
+	Root() string
+	Status(context.Context) (backupstore.StoreStatus, error)
+	List(context.Context, backupstore.ListOptions) (backupstore.ListResult, error)
+	Inspect(context.Context, string, backupstore.InspectOptions) (backupstore.InspectResult, error)
+	Audit(context.Context, backupstore.AuditOptions) (backupstore.AuditReport, error)
+}
 
 // Default permissions for new files and directories
 const (
@@ -30,6 +40,7 @@ type Handler struct {
 	allowedDirs                    []string
 	protectedRequestedDirs         []string // immutable internal roots denied to public tools
 	protectedDirs                  []string // resolved internal roots denied to public tools
+	backupStore                    BackupStoreReader
 	editPreviews                   *editPreviewStore
 	patchPackagePreviews           *patchPackagePreviewStore
 	patchPackageStageReplacement   func(context.Context, string, []byte, os.FileMode) (*filesystem.StagedReplacement, error)
@@ -67,7 +78,21 @@ func WithExecutionPolicy(policy ExecutionPolicy) Option {
 // tools must never expose, even if a dynamic MCP root later overlaps them.
 func WithProtectedDirectories(dirs []string) Option {
 	return func(h *Handler) {
-		h.protectedRequestedDirs, h.protectedDirs = normalizeAllowedDirectorySets(dirs)
+		requested, resolved := normalizeAllowedDirectorySets(dirs)
+		h.protectedRequestedDirs = mergeUniqueDirectories(h.protectedRequestedDirs, requested)
+		h.protectedDirs = mergeUniqueDirectories(h.protectedDirs, resolved)
+	}
+}
+
+// WithBackupStore configures the optional process-wide read-only management store.
+func WithBackupStore(store BackupStoreReader) Option {
+	return func(h *Handler) {
+		h.backupStore = store
+		if store != nil && store.Root() != "" {
+			requested, resolved := normalizeAllowedDirectorySets([]string{store.Root()})
+			h.protectedRequestedDirs = mergeUniqueDirectories(h.protectedRequestedDirs, requested)
+			h.protectedDirs = mergeUniqueDirectories(h.protectedDirs, resolved)
+		}
 	}
 }
 

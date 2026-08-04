@@ -191,7 +191,7 @@ Implemented tests cover valid and malformed JSON, unsupported encodings, UTF-16 
 
 The follow-on lifecycle is maintained in [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md). Maintainers approved its ten decisions as R17 on 2026-08-04, and R18 now implements that contract in separate reviewable phases rather than extending R16 incidentally.
 
-R18 phases 1 and 2 add the disabled-by-default internal store foundation plus exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative quota reservations, bounded recovery, a rebuildable derived index, and internal read-only audits. These primitives are not registered as an MCP tool and are not invoked by any R16 mutation path.
+R18 phases 1–3 add the disabled-by-default internal store foundation, exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative quota reservations, bounded recovery, a rebuildable derived index, and the read-only `backup_store` status/list/inspect/audit surface. The tool exposes only currently authorized redacted metadata and integrity results; no R16 mutation path invokes persistent capture yet.
 
 Until the later R18 mutation-integration phases are implemented:
 

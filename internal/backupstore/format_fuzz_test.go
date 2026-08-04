@@ -74,6 +74,39 @@ func FuzzDecodeIndex(f *testing.F) {
 	})
 }
 
+func FuzzDecodeListCursor(f *testing.F) {
+	store := &Store{descriptor: fuzzDescriptor()}
+	valid, err := store.encodeListCursor(listCursorPayload{
+		Version:        listCursorVersion,
+		Generation:     strings.Repeat("b", 64),
+		FilterHash:     strings.Repeat("c", 64),
+		AfterCreatedAt: "2026-08-04T17:00:00Z",
+		AfterBackupID:  strings.Repeat("d", 64),
+	})
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(valid)
+	f.Add("")
+	f.Add("not-base64")
+
+	f.Fuzz(func(t *testing.T, cursor string) {
+		if len(cursor) > maxListCursorBytes+1 {
+			t.Skip()
+		}
+		payload, err := store.decodeListCursor(cursor)
+		if err == nil {
+			if payload.Version != listCursorVersion || !validHexIdentifier(payload.Generation) ||
+				!validHexIdentifier(payload.FilterHash) || !validHexIdentifier(payload.AfterBackupID) {
+				t.Fatalf("decoder accepted invalid cursor payload: %#v", payload)
+			}
+			if _, parseErr := time.Parse(time.RFC3339Nano, payload.AfterCreatedAt); parseErr != nil {
+				t.Fatalf("decoder accepted invalid cursor timestamp: %#v", payload)
+			}
+		}
+	})
+}
+
 func fuzzAbsolutePath() string {
 	if runtime.GOOS == "windows" {
 		return `C:\backup\target.txt`

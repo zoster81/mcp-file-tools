@@ -12,8 +12,79 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/config"
 )
+
+func TestBuildServerWiresAndProtectsConfiguredBackupStore(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	base := t.TempDir()
+	publicRoot := filepath.Join(base, "public")
+	storeRoot := filepath.Join(base, "backup-store")
+	if err := os.Mkdir(publicRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := backupstore.Open(backupstore.Options{Directory: storeRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	target := filepath.Join(publicRoot, "target.txt")
+	if err := os.WriteFile(target, []byte("backup source bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	capture, err := store.Capture(ctx, backupstore.CaptureRequest{
+		TargetPath:      target,
+		SourceOperation: backupstore.SourceOperationEdit,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := BuildServer(ServerOptions{
+		Version:            "backup-architecture-test",
+		AllowedDirectories: []string{publicRoot},
+		BackupStore:        store,
+		Config:             config.Load(),
+		EnableClientRoots:  false,
+		LifecycleContext:   ctx,
+	})
+	session := connectTestClient(t, ctx, server, "backup-architecture")
+
+	for _, call := range []struct {
+		name      string
+		arguments map[string]any
+	}{
+		{name: "status", arguments: map[string]any{"action": "status"}},
+		{name: "list", arguments: map[string]any{"action": "list", "limit": 10}},
+		{name: "inspect", arguments: map[string]any{"action": "inspect", "backupId": capture.Manifest.BackupID}},
+	} {
+		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "backup_store", Arguments: call.arguments})
+		if err != nil || result.IsError {
+			t.Fatalf("backup_store %s result=%#v err=%v", call.name, result, err)
+		}
+		encoded, err := json.Marshal(result.StructuredContent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(encoded, []byte(storeRoot)) || bytes.Contains(encoded, []byte("backup source bytes")) {
+			t.Fatalf("backup_store %s exposed internal data: %s", call.name, encoded)
+		}
+	}
+
+	denied, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "read_text_file",
+		Arguments: map[string]any{"path": filepath.Join(storeRoot, "store.json")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !denied.IsError {
+		t.Fatalf("ordinary tool accessed backup store: %#v", denied)
+	}
+}
 
 func TestBuildServerUsesExplicitVersionAndSharedProcessRoots(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

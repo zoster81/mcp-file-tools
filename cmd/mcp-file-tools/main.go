@@ -78,6 +78,7 @@ func runCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		Version:              version,
 		AllowedDirectories:   normalized,
 		ProtectedDirectories: protectedDirectories,
+		BackupStore:          store,
 		Config:               applicationConfig,
 		ExecutionPolicy:      selection.executionPolicy,
 		EnableClientRoots:    selection.enableClientRoots,

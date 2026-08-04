@@ -11,7 +11,7 @@ AI clients see `Настройки` — not `????` or `Íàñòðîéêè`.
 
 Secure, encoding-aware MCP filesystem service with two first-class transports: local **stdio** and native stateful **MCP Streamable HTTP**. It detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
 
-- **26 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
+- **27 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
 - **Agent-oriented repository workflows** — optional read line numbers, paged/multi-mode grep, `.gitignore` traversal, bounded sorting, batch conversion previews, approval-bound one-shot edits, strict patches, and ambiguity-safe fuzzy matching.
 - **24 registered encodings** — Cyrillic, Windows-125x, ISO-8859, KOI8, UTF-16 LE/BE, GBK/GB18030, and other legacy text formats.
 - **Fail-closed HTTP service** — bearer authentication on every MCP request, loopback defaults, exact Host/Origin checks, bounded sessions and request resources, no CORS, and explicit TLS/proxy requirements for non-loopback exposure.
@@ -29,13 +29,13 @@ This repository began as a deployment-oriented fork for ChatGPT Web, but version
 | stdio | Local MCP clients and secure tunnel bridges | Client configuration and operating-system process boundary | Startup directories are authoritative; dynamic roots are a compatibility fallback only when startup roots are empty |
 | stateful Streamable HTTP | Persistent localhost services, containers, trusted proxies, and explicitly secured remote services | Bearer token on every MCP request; loopback by default; TLS or a trusted proxy boundary for non-loopback listeners | Startup directories are immutable and shared by every session; HTTP client roots are disabled |
 
-Both transports use the same `BuildServer` path and expose the same 26 tools, 3 prompts, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
+Both transports use the same `BuildServer` path and expose the same 27 tools, 3 prompts, encoding behavior, limits, typed errors, and execution policy. The HTTP trust model is defined in [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md); the fork's independent scope and relationship to upstream are defined in [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md).
 
 The OpenAI Secure MCP Tunnel remains a supported stdio deployment option, not the identity or only use case of the project. The fork does not require Claude Code, Codex, ChatGPT, or another specific MCP host. Version 2.0 removes the fork-owned Claude Code downloader plugin to avoid maintaining a second network installer and cache trust boundary; any compatible client can invoke the released binary directly or connect to its HTTP endpoint.
 
 ### Process-wide directory and session model
 
-Allowed directories are a **process-wide authorization boundary**. Every MCP connection or future HTTP session attached to one server process sees the same configured directory set and the same 26 tools, limits, execution flags, and error behavior. A session represents an independent protocol connection with its own requests, cancellation, and lifecycle; it is not a per-agent filesystem role or sandbox.
+Allowed directories are a **process-wide authorization boundary**. Every MCP connection or future HTTP session attached to one server process sees the same configured directory set and the same 27 tools, limits, execution flags, and error behavior. A session represents an independent protocol connection with its own requests, cancellation, and lifecycle; it is not a per-agent filesystem role or sandbox.
 
 This deliberately supports deployments where several agents work on different projects under one allowed drive or workspace, read shared documentation or libraries, and follow prompt-level rules about where each agent may write. The server does not enforce those per-agent read/write conventions. When technical isolation is required, run separate server processes with narrower allowed directories and, for concurrent Git work, separate checkouts or worktrees.
 
@@ -59,13 +59,13 @@ R15 is implemented and verified but remains unreleased and undeployed. It adds b
 
 R16 phases 1–5 are implemented in source. `fingerprint_paths` provides deterministic streamed SHA-256 state evidence, `edit_file` adds bounded one-shot `preview`/`apply`, `patch_package` exposes strict `patch-package-v1` `inspect`, `dryRun`, `apply`, and `verify`, and `verify_state` runs ordered typed JSON, text-format, fixed `git diff --check`, and fingerprint checks. The verification tool is read-only, requires no execution feature flag, invokes Git directly without a shell, and distinguishes failed expectations from operational errors. Package operations create no persistent backup and do not claim multi-file atomicity or automatic rollback.
 
-R17 approved the persistent-backup lifecycle, and R18 phases 1 and 2 are implemented in source. An operator may configure `MCP_BACKUP_STORE_DIR` to initialize a separate non-overlapping internal store with owner-only permissions, one lifetime writer lock, an immutable descriptor, bounded recovery, and a rebuildable index. Internal code can now capture exact bytes into verified SHA-256 objects and strict checksummed manifests under conservative quotas, with quick/full read-only audits. No MCP tool or normal mutation invokes that capture path yet, so configuration alone creates no backups and does not change edit/package behavior, restore files, or delete data.
+R17 approved the persistent-backup lifecycle, and R18 phases 1–3 are implemented in source. An operator may configure `MCP_BACKUP_STORE_DIR` to initialize a separate non-overlapping internal store with owner-only permissions, one lifetime writer lock, an immutable descriptor, bounded recovery, and a rebuildable index. Internal code can capture exact bytes into verified SHA-256 objects and strict checksummed manifests under conservative quotas. The read-only `backup_store` tool now exposes redacted status, authorization-filtered newest-first listing, fully verified metadata inspection, and bounded quick/full audits over both transports. Configuration alone still creates no backups because ordinary mutations do not invoke capture until later phases; restore, garbage collection, mutable pinning, and automatic rollback remain unavailable.
 
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
 ## What It Does
 
-Provides 26 tools for file operations, encoding conversion, state verification, update checks, and optional local execution, plus 3 guided prompts:
+Provides 27 tools for file operations, encoding conversion, state verification, update checks, and optional local execution, plus 3 guided prompts:
 - [`read_text_file`](TOOLS.md#read_text_file) - Stream decoded text with bounded line/output memory and optional absolute line numbers
 - [`read_multiple_files`](TOOLS.md#read_multiple_files) - Read files in deterministic order under one aggregate decoded-output budget
 - [`write_file`](TOOLS.md#write_file) - Write through the shared encoder with explicit `auto`/`always`/`never`/`preserve` BOM policy
@@ -78,6 +78,7 @@ Provides 26 tools for file operations, encoding conversion, state verification, 
 - [`search_files`](TOOLS.md#search_files) - `.gitignore`-aware glob search with bounded globally correct sorting
 - [`fingerprint_paths`](TOOLS.md#fingerprint_paths) - Stream deterministic SHA-256 state fingerprints with optional bounded entry details
 - [`verify_state`](TOOLS.md#verify_state) - Run bounded typed JSON, text-format, fixed Git diff, and fingerprint checks without arbitrary shell execution
+- [`backup_store`](TOOLS.md#backup_store) - Read bounded redacted status, listing, verified metadata, and audit results from the optional persistent backup store
 - [`grep_text_files`](TOOLS.md#grep_text_files) - Paged regex search with pattern/filter arrays and content/path/count modes
 - [`detect_encoding`](TOOLS.md#detect_encoding) - Auto-detect file encoding with confidence score
 - [`convert_encoding`](TOOLS.md#convert_encoding) - Single/batch conversion, dry-run previews, unsupported-rune locations, and durable writes

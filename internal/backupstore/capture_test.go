@@ -469,6 +469,8 @@ func phase2TestLimits() Limits {
 		MaxManifests:         128,
 		MaxVersionsPerTarget: 16,
 		MaxPinned:            16,
+		RetentionDays:        defaultRetentionDays,
+		PlanTTLSeconds:       defaultPlanTTLSeconds,
 	}
 }
 

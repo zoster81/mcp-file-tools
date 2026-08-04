@@ -110,6 +110,16 @@
       }
     },
     {
+      "name": "backup_store",
+      "title": "Backup Store",
+      "description": "Read bounded metadata from the optional persistent backup store without returning object bytes or internal store paths. status reports redacted format, health, quota, counts, and recovery residue; list returns newest-first currently authorized manifest metadata with exact target/pinned filters and an authenticated generation-bound cursor; inspect verifies one manifest and fully hashes its referenced object before returning metadata; audit runs quick structural checks or a bounded full referenced-object hash audit. The tool is always registered, but only status succeeds when MCP_BACKUP_STORE_DIR is unset. Parameters: action=status|list|inspect|audit, cursor, limit, targetPath, pinned, backupId, auditMode=quick|full, maxObjects, maxBytes.",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "detect_line_endings",
       "title": "Detect Line Endings",
       "description": "Incrementally detect line ending style (crlf/lf/mixed/none) after decoding any registered encoding. MCP_MAX_LINE_BYTES bounds lines and MCP_MAX_OUTPUT_BYTES bounds minority line numbers. Empty files are UTF-8; ambiguous non-empty input requires an explicit encoding. Parameters: path, encoding.",

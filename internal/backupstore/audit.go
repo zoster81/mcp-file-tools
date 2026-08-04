@@ -47,12 +47,24 @@ func (store *Store) Audit(ctx context.Context, options AuditOptions) (AuditRepor
 		return AuditReport{}, operation.New(operation.KindInvalidInput, "backup audit mode is invalid")
 	}
 	maxObjects := options.MaxObjects
-	if maxObjects <= 0 {
+	if maxObjects < 0 {
+		return AuditReport{}, operation.New(operation.KindInvalidInput, "backup audit object limit must not be negative")
+	}
+	if maxObjects == 0 {
 		maxObjects = store.limits.MaxManifests
 	}
+	if maxObjects > store.limits.MaxManifests {
+		return AuditReport{}, operation.New(operation.KindLimit, "backup audit object limit exceeds the configured maximum")
+	}
 	maxBytes := options.MaxBytes
-	if maxBytes <= 0 {
+	if maxBytes < 0 {
+		return AuditReport{}, operation.New(operation.KindInvalidInput, "backup audit byte limit must not be negative")
+	}
+	if maxBytes == 0 {
 		maxBytes = store.limits.MaxTotalBytes
+	}
+	if maxBytes > store.limits.MaxTotalBytes {
+		return AuditReport{}, operation.New(operation.KindLimit, "backup audit byte limit exceeds the configured maximum")
 	}
 
 	store.transactionMu.Lock()

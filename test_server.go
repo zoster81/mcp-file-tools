@@ -116,6 +116,9 @@ func main() {
 	}})
 	check("verify_state", !rVerifyState.IsError && oVerifyState.Passed && oVerifyState.PassedCount == 3)
 
+	rBackupStatus, oBackupStatus, _ := h.HandleBackupStore(ctx, nil, handler.BackupStoreInput{Action: handler.BackupStoreActionStatus})
+	check("backup_store (disabled status)", !rBackupStatus.IsError && !oBackupStatus.Enabled && oBackupStatus.State == handler.BackupStoreStateDisabled)
+
 	rPreview, oPreview, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{
 		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello package!", NewText: "Hello preview!"}},
 	})

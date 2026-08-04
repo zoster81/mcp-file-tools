@@ -372,12 +372,13 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 	var expectedTools string
 	var expectedPrompts string
 	var expectedRoots string
+	var expectedBackupStatus string
 	for name, session := range sessions {
 		tools, err := session.ListTools(ctx, nil)
 		if err != nil {
 			t.Fatalf("%s list tools: %v", name, err)
 		}
-		if len(tools.Tools) != 26 {
+		if len(tools.Tools) != 27 {
 			t.Fatalf("%s tool count = %d", name, len(tools.Tools))
 		}
 		serializedTools := marshalJSON(t, tools.Tools)
@@ -413,6 +414,20 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 			expectedRoots = serializedRoots
 		} else if serializedRoots != expectedRoots {
 			t.Fatalf("%s process roots diverged: %s != %s", name, serializedRoots, expectedRoots)
+		}
+
+		backupStatus, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "backup_store",
+			Arguments: map[string]any{"action": "status"},
+		})
+		if err != nil || backupStatus.IsError {
+			t.Fatalf("%s backup status = %#v err=%v", name, backupStatus, err)
+		}
+		serializedBackupStatus := marshalJSON(t, backupStatus.StructuredContent)
+		if expectedBackupStatus == "" {
+			expectedBackupStatus = serializedBackupStatus
+		} else if serializedBackupStatus != expectedBackupStatus {
+			t.Fatalf("%s backup status diverged: %s != %s", name, serializedBackupStatus, expectedBackupStatus)
 		}
 	}
 

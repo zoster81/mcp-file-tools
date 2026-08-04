@@ -6,7 +6,7 @@
 
 This document is the authoritative security boundary, storage format, lifecycle, restore contract, garbage-collection model, limits, failure semantics, and verification gate for the persistent backup subsystem. Implementation must remain phased so each durability and recovery boundary can be reviewed and verified independently.
 
-R18 phases 1 and 2 are implemented in source. Phase 1 provides disabled-by-default configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, and denial of the internal root to ordinary filesystem tools. Phase 2 adds internal exact-byte object capture, strict checksummed manifests, conservative quota reservations, a rebuildable derived index, bounded startup recovery, and quick/full read-only audit primitives. No backup-management tool, edit/package integration, restore, or garbage collection is exposed yet.
+R18 phases 1–3 are implemented in source. Phase 1 provides disabled-by-default configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, and denial of the internal root to ordinary filesystem tools. Phase 2 adds internal exact-byte object capture, strict checksummed manifests, conservative quota reservations, a rebuildable derived index, bounded startup recovery, and quick/full read-only audit primitives. Phase 3 exposes only the bounded read-only `backup_store` status/list/inspect/audit surface. Edit/package integration, restore, garbage collection, mutable pinning, and automatic rollback remain unavailable.
 
 The existing transactional `.bak` behavior of `convert_encoding` remains unchanged. R16 `edit_file` preview/apply and `patch_package` apply continue to create no persistent backup until their later R18 integration phases change schemas and behavior deliberately.
 
@@ -233,27 +233,25 @@ A future package manifest may declare package-wide required backup policy.
 
 ## Public management surface
 
-The approved direction uses one additional read/write tool, tentatively `backup_store`, to minimize catalog growth. Exact public schemas remain deferred to the relevant R18 implementation phase and require catalog, compatibility, and transport-equivalence review.
+R18 phase 3 implements one always-registered read-only `backup_store` tool, bringing the unreleased source catalog to 27 tools. The initial strict action union contains:
 
-Candidate actions:
+- `status`: no additional fields; when disabled it returns `enabled: false`, and when configured it returns redacted version, health, generation, quota, counts, residue, and bounded path-free issues;
+- `list`: optional `cursor`, `limit`, `targetPath`, and `pinned`; pages are newest-first, limited to 100 records, filtered through current root authorization, and use an authenticated keyset cursor bound to filters, the allowed/protected-root policy snapshot, and store generation; target visibility is revalidated on every page;
+- `inspect`: required `backupId`; it validates the manifest, verifies current target authorization, and fully hashes the referenced object before returning metadata without bytes;
+- `audit`: optional `auditMode=quick|full`, `maxObjects`, and `maxBytes`; requested bounds cannot exceed configured store limits, and the operation never repairs or deletes data.
 
-- `status`: bounded store version, health, quota, counts, and degraded state;
-- `list`: bounded cursor-based manifest metadata listing;
-- `inspect`: one manifest plus verified object metadata, without bytes;
-- `audit`: quick structural audit or bounded full object hash audit;
-- `restorePreview`: prepare exact restore evidence and one-shot capability;
-- `restoreApply`: consume the capability and perform the approved restore;
-- `gcDryRun`: produce a bounded deletion plan and one-shot capability;
-- `gcApply`: consume and revalidate the exact plan.
+The tool never accepts a store path, object path, executable, shell command, restore destination, mutation policy, or deletion instruction. Unknown fields and cross-action parameters are rejected. Every response remains within `MCP_MAX_OUTPUT_BYTES`.
 
-The tool never accepts a store path, object path, executable, or shell command.
+Restore and garbage-collection actions remain deferred. Later phases may extend the same tool with `restorePreview`, `restoreApply`, `gcDryRun`, and `gcApply` only after their separate one-shot schemas and safety tests are complete.
 
 ## Listing and review
 
-- Results are ordered by creation time and backup ID.
-- Pagination uses an opaque bounded cursor rather than unbounded offsets.
-- Filters may include exact target path and pinned state after normal path validation.
-- Returned metadata never includes internal store paths.
+- Results are ordered newest-first by creation time and backup ID.
+- Pagination uses an authenticated opaque cursor rather than unbounded client-controlled offsets.
+- The cursor is bound to the exact target/pinned filters, current allowed/protected-root policy snapshot, and store generation; target visibility is revalidated on every page, tampering or filter changes fail with `INVALID_INPUT`, and generation changes fail with `CONFLICT`.
+- Filters include exact target path and pinned state after current normal path validation.
+- Results whose original target is no longer authorized are omitted; inspect fails with `ACCESS_DENIED` for such targets.
+- Returned metadata never includes internal store paths or store identifiers.
 - File bytes are never returned by list or inspect.
 - Diff generation belongs to restore preview and remains subject to encoding, line, file, and output limits.
 
@@ -341,7 +339,7 @@ After acquiring the exclusive lock, initialization now performs a bounded struct
 
 Capture and audit revalidate the retained store-root identity. Capture additionally revalidates the internal layout before staging and again before durable object or manifest installation. Audit reports structural entries without deleting or repairing them.
 
-Full object hashing is performed by internal full audit and every capture dedup verification. Public inspect and restore verification remain later phases.
+Full object hashing is performed by internal full audit, public `backup_store.inspect`, and every capture dedup verification. Restore verification remains a later phase.
 
 Structural corruption must not be repaired automatically. The approved fail-closed behavior is:
 
@@ -358,7 +356,7 @@ The internal audit primitive has two implemented modes:
 - `quick`: validate structure, manifest checksums, object presence, size, index consistency, references, staging, trash, and orphan counts;
 - `full`: additionally stream and hash every referenced object under explicit object, byte, time, and output limits.
 
-Audit is read-only. It never repairs, deletes, or quarantines data. Phase 3 will decide the exact bounded MCP schema that exposes these results without store paths or bytes.
+Audit is read-only. It never repairs, deletes, or quarantines data. Phase 3 exposes the same bounded results through `backup_store.audit` without store paths or bytes.
 
 ## Failure and error semantics
 
@@ -392,7 +390,7 @@ The implementation must preserve these invariants at every injected failure poin
 
 - Capture: `O(file bytes)` time and bounded streaming memory.
 - Restore preview/apply: `O(current bytes + object bytes)` time and bounded streaming memory, excluding explicitly bounded diff construction.
-- List: `O(page size)` with a valid index; bounded index rebuild is `O(manifests)`.
+- List: `O(manifests scanned)` worst-case under the configured manifest bound, with `O(page size)` retained output and keyset pagination; bounded index rebuild is `O(manifests)`.
 - Quick audit: `O(manifests + objects)` metadata work.
 - Full audit: `O(total referenced object bytes)`.
 - GC planning: `O(manifests + objects)` with bounded retained candidates.
@@ -508,4 +506,4 @@ Maintainers explicitly accepted all ten decisions on 2026-08-04:
 9. existing adjacent `.bak` conversion behavior remains separate;
 10. no automatic patch-package rollback is introduced.
 
-Approval authorizes phased implementation, not a single monolithic change. Each R18 phase must preserve the complete boundary above, add focused failure-injection tests, pass the relevant regression and cross-platform gates, and avoid exposing a partially implemented public promise. R18 phases 1 and 2 intentionally add no public backup tool or automatic backup behavior; phase 2 can create objects and manifests only through an internal package API that is not registered with either MCP transport.
+Approval authorizes phased implementation, not a single monolithic change. Each R18 phase must preserve the complete boundary above, add focused failure-injection tests, pass the relevant regression and cross-platform gates, and avoid exposing a partially implemented public promise. R18 phases 1 and 2 added no public backup tool or automatic backup behavior. Phase 3 adds only the read-only management surface; object and manifest creation remains reachable solely through an internal package API that ordinary MCP mutations do not invoke.
