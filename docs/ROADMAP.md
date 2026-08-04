@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phase 1 adds only the disabled-by-default store foundation.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phases 1 and 2 provide the disabled-by-default store foundation plus internal capture, recovery, indexing, quota, and audit primitives without a public backup tool.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -425,15 +425,13 @@ The approved design baseline is [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_W
 - [x] Keep schemas, limits, error metadata, prompts, and behavior equivalent over stdio and stateful Streamable HTTP.
 - [x] Complete focused TDD, adversarial path/cache/replay/partial-commit tests, full regression, race, static-analysis, vulnerability, manual MCP, catalog, documentation, and repository checks.
 
-## Deferred but approved work
+## Separately governed follow-on work
 
-Persistent backup storage and user-managed change review are approved in principle but blocked on a separate lifecycle design. R16 must not introduce an incidental unbounded `.bak` scheme or imply that patch packages can be restored after success.
+Persistent backup storage and user-managed change review remain outside R16. R17 approved their lifecycle design, and R18 implements it in separate phases rather than introducing an incidental unbounded `.bak` scheme or implying that patch packages can already be restored.
 
-The later design review must resolve store location, content-addressed deduplication, global and per-target quotas, retention, pinning, registry/manifests, dry-run garbage collection, restore preview/apply, secret handling, crash recovery, corruption behavior, and quota-exhaustion policy.
+Until the later R18 mutation-integration phases are complete:
 
-Until that gate is approved:
-
-- preview/apply creates no new persistent backup;
+- R16 preview/apply creates no new persistent backup;
 - patch packages expose no retained rollback point;
 - change review consists of the approved diff plus pre/post fingerprints;
 - existing operation-specific backup behavior remains unchanged.
@@ -458,7 +456,7 @@ Until that gate is approved:
 4. Patch-package apply, partial-commit reporting, and verify.
 5. Initial structured verification checks.
 6. Full R16 verification and documentation alignment.
-7. Separate persistent-backup lifecycle brainstorming before any backup-store implementation.
+7. Complete and approve a separate persistent-backup lifecycle design before implementation. **Completed as R17; implementation is tracked in R18.**
 
 ## Completion gate
 
@@ -511,7 +509,7 @@ Implement durable exact-byte capture, bounded metadata management, approval-boun
 ## Implementation phases
 
 - [x] Phase 1 — Add disabled-by-default configuration, approved defaults and hard maxima, a dedicated canonical non-overlapping store root, owner-only permissions, a platform-native lifetime writer lock, immutable `backup-store-v1` descriptor, empty versioned layout, fail-closed structural validation, and protected-root denial for ordinary tools.
-- [ ] Phase 2 — Add immutable SHA-256 object capture, immutable checksummed manifests, quota reservations, derived index rebuild, bounded startup recovery, and quick/full internal audit primitives.
+- [x] Phase 2 — Add immutable SHA-256 object capture, immutable checksummed manifests, quota reservations, derived index rebuild, bounded startup recovery, and quick/full internal audit primitives.
 - [ ] Phase 3 — Add the read-only `backup_store` status/list/inspect/audit surface with bounded cursors, redacted metadata, catalog/schema tests, and stdio/HTTP equivalence.
 - [ ] Phase 4 — Bind `backupPolicy: "required"` into `edit_file` preview/apply and durably capture the approved pre-state before mutation.
 - [ ] Phase 5 — Add package-wide reservation and all-target backup capture before the first `patch_package` commit while preserving explicit `PARTIAL_COMMIT` semantics and no automatic rollback.
@@ -524,6 +522,14 @@ Implement durable exact-byte capture, bounded metadata management, approval-boun
 `MCP_BACKUP_STORE_DIR` remains unset by default. When configured in phase 1, startup validates or creates an empty internal store, restricts it to the process identity, acquires one exclusive lifetime lock, validates the immutable descriptor and expected empty layout, and excludes the store from every ordinary filesystem root. Relative, filesystem-root, overlapping, aliased, symlinked, junction-backed, reparse-backed, special-file, unexpectedly populated, malformed, unsupported, permissively owned, or concurrently locked stores fail startup without exposing their paths.
 
 Phase 1 does not capture target bytes, write backup manifests, reserve quota, expose a management tool, change edit or package schemas, restore targets, garbage-collect data, migrate `.bak` files, add encryption keys, or claim rollback.
+
+## Phase 2 behavior
+
+Phase 2 adds an internal-only exact-byte capture transaction. It conservatively reserves total bytes, one manifest, per-target unpinned versions, and optional immutable pin capacity; retains stable target identity; streams and revalidates the target; installs or fully verifies a content-addressed SHA-256 object; commits a strict checksummed `backup-manifest-v1` record only after the object is durable; and then rebuilds the disposable `backup-index-v1` projection. The persisted index stays compact by recording only generation and aggregate counts, while ordered manifest, object, and target details are rebuilt in memory from authoritative files. Identical content is deduplicated only after full verification. Durable orphan objects remain accounted for when a later manifest step fails, while a manifest committed before an index error remains authoritative and is returned with the error.
+
+Startup now performs bounded directory scans, rejects malformed manifests, missing referenced objects, links, reparse points, hard-linked internal files, inconsistent metadata, and structural permission failures, and rebuilds a missing, corrupt, stale, or tampered derived index. Capture revalidates the retained store-root identity and internal layout before staging and before durable installation. Quick internal audit validates structure, references, sizes, recovery residue, orphans, and index consistency; full audit additionally hashes every referenced object under explicit object and byte limits. Audit is read-only and never deletes or repairs uncertain data.
+
+Phase 2 remains unreachable from MCP clients. It does not add `backup_store`, change the 26-tool source catalog, automatically capture any mutation, bind `backupPolicy` into previews, restore files, garbage-collect data, mutate pin state, or change adjacent `.bak` behavior.
 
 ## Completion gate
 

@@ -50,9 +50,9 @@ func acquireStoreLock(path string) (*storeLock, error) {
 		_ = windows.CloseHandle(handle)
 		return nil, err
 	}
-	if info.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 {
+	if info.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 || info.NumberOfLinks != 1 {
 		_ = windows.CloseHandle(handle)
-		return nil, errors.New("backup store lock is not a regular file")
+		return nil, errors.New("backup store lock is not a single-link regular file")
 	}
 	if created {
 		if err := restrictHandlePermissions(handle, false); err != nil {

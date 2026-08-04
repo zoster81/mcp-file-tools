@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/zoster81/mcp-file-tools/filetoolsserver"
+	"github.com/zoster81/mcp-file-tools/internal/config"
 )
 
 func TestRunCommandVersionWritesOnlyVersion(t *testing.T) {
@@ -65,6 +66,25 @@ func TestRunCommandRejectsHTTPWithoutTokenBeforeStartup(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "MCP_HTTP_TOKEN") {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestBackupStoreLimitsPreserveConfiguredValues(t *testing.T) {
+	configured := config.BackupLimits{
+		MaxTotalBytes:        11,
+		MaxObjectBytes:       12,
+		MaxManifests:         13,
+		MaxVersionsPerTarget: 14,
+		MaxPinned:            15,
+		RetentionDays:        16,
+		PlanTTLSeconds:       17,
+	}
+	mapped := backupStoreLimits(configured)
+	if mapped.MaxTotalBytes != configured.MaxTotalBytes || mapped.MaxObjectBytes != configured.MaxObjectBytes ||
+		mapped.MaxManifests != configured.MaxManifests || mapped.MaxVersionsPerTarget != configured.MaxVersionsPerTarget ||
+		mapped.MaxPinned != configured.MaxPinned || mapped.RetentionDays != configured.RetentionDays ||
+		mapped.PlanTTLSeconds != configured.PlanTTLSeconds {
+		t.Fatalf("mapped backup limits = %#v", mapped)
 	}
 }
 

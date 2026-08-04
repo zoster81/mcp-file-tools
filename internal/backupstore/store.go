@@ -1,6 +1,7 @@
 package backupstore
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -40,6 +41,7 @@ var expectedRootEntries = map[string]struct{}{
 type Options struct {
 	Directory                string
 	PublicAllowedDirectories []string
+	Limits                   Limits
 }
 
 // Descriptor is the immutable store identity written to store.json.
@@ -55,14 +57,32 @@ type Descriptor struct {
 // Store owns the exclusive process lock and immutable descriptor.
 type Store struct {
 	root       string
+	rootInfo   fs.FileInfo
 	descriptor Descriptor
+	limits     Limits
 	lock       *storeLock
-	closeOnce  sync.Once
-	closeErr   error
+
+	transactionMu sync.Mutex
+	stateMu       sync.RWMutex
+	index         Index
+	closed        bool
+
+	reservedBytes     int64
+	reservedManifests int
+	reservedPinned    int
+	reservedTargets   map[string]int
+
+	captureHooks captureTestHooks
+	closeOnce    sync.Once
+	closeErr     error
 }
 
 // Open validates, creates, exclusively locks, and initializes one store.
 func Open(options Options) (_ *Store, err error) {
+	limits, err := normalizeLimits(options.Limits)
+	if err != nil {
+		return nil, err
+	}
 	root, err := validateDedicatedStorePath(options.Directory, options.PublicAllowedDirectories)
 	if err != nil {
 		return nil, err
@@ -82,7 +102,12 @@ func Open(options Options) (_ *Store, err error) {
 		}
 		return nil, sanitizedFilesystemError("backup store lock could not be acquired", err)
 	}
-	store := &Store{root: root, lock: lock}
+	store := &Store{
+		root:            root,
+		limits:          limits,
+		lock:            lock,
+		reservedTargets: make(map[string]int),
+	}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, store.Close())
@@ -102,7 +127,36 @@ func Open(options Options) (_ *Store, err error) {
 	if err := validateRootEntries(root); err != nil {
 		return nil, err
 	}
+	rootInfo, err := captureStoreRootIdentity(root)
+	if err != nil {
+		return nil, err
+	}
+	store.rootInfo = rootInfo
 	store.descriptor = descriptor
+	if err := store.validateIdentityAndLayout(); err != nil {
+		return nil, err
+	}
+
+	scan, err := scanStore(context.Background(), root, descriptor, scanOptions{
+		mode:       AuditQuick,
+		maxObjects: limits.MaxManifests,
+		maxBytes:   limits.MaxTotalBytes,
+		checkIndex: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if structuralErr := firstStructuralIssue(scan.report); structuralErr != nil {
+		return nil, structuralErr
+	}
+	index := buildIndex(descriptor, scan.manifests, scan.objects)
+	persisted, loadErr := loadIndex(root, descriptor)
+	if loadErr != nil || !indexesEquivalent(persisted, index) {
+		if err := persistIndex(root, index); err != nil {
+			return nil, err
+		}
+	}
+	store.index = index
 	return store, nil
 }
 
@@ -123,18 +177,142 @@ func (store *Store) Descriptor() Descriptor {
 	return store.descriptor
 }
 
+// Index returns a detached copy of the current derived index.
+func (store *Store) Index() Index {
+	if store == nil {
+		return Index{}
+	}
+	store.stateMu.RLock()
+	defer store.stateMu.RUnlock()
+	return cloneIndex(store.index)
+}
+
 // Close releases the lifetime writer lock. It is safe to call repeatedly.
 func (store *Store) Close() error {
 	if store == nil {
 		return nil
 	}
 	store.closeOnce.Do(func() {
+		store.transactionMu.Lock()
+		defer store.transactionMu.Unlock()
+		store.stateMu.Lock()
+		store.closed = true
+		store.stateMu.Unlock()
 		if store.lock != nil {
 			store.closeErr = store.lock.close()
 			store.lock = nil
 		}
 	})
 	return store.closeErr
+}
+
+func (store *Store) isClosed() bool {
+	store.stateMu.RLock()
+	defer store.stateMu.RUnlock()
+	return store.closed
+}
+
+func captureStoreRootIdentity(root string) (fs.FileInfo, error) {
+	info, err := os.Lstat(root)
+	if err != nil {
+		return nil, sanitizedFilesystemError("backup store root cannot be inspected", err)
+	}
+	if isLinkOrReparse(info) || !info.IsDir() {
+		return nil, operation.New(operation.KindFilesystem, "backup store root is not a real directory")
+	}
+	if err := validatePathPermissions(root, true); err != nil {
+		return nil, sanitizedFilesystemError("backup store root permissions are not owner-only", err)
+	}
+	return info, nil
+}
+
+func (store *Store) validateRootIdentity() error {
+	if store == nil || store.rootInfo == nil {
+		return operation.New(operation.KindConflict, "backup store identity is unavailable")
+	}
+	info, err := os.Lstat(store.root)
+	if err != nil {
+		return sanitizedFilesystemError("backup store root cannot be inspected", err)
+	}
+	if isLinkOrReparse(info) || !info.IsDir() || !os.SameFile(store.rootInfo, info) {
+		return operation.New(operation.KindConflict, "backup store root identity changed")
+	}
+	if err := validatePathPermissions(store.root, true); err != nil {
+		return sanitizedFilesystemError("backup store root permissions are not owner-only", err)
+	}
+	return nil
+}
+
+func (store *Store) validateIdentityAndLayout() error {
+	if err := store.validateRootIdentity(); err != nil {
+		return err
+	}
+	if err := validateRootEntries(store.root); err != nil {
+		return err
+	}
+	algorithmRoot := filepath.Join(store.root, "objects", ObjectAlgorithm)
+	algorithmInfo, err := os.Lstat(algorithmRoot)
+	if err != nil {
+		return sanitizedFilesystemError("backup object algorithm directory cannot be inspected", err)
+	}
+	if isLinkOrReparse(algorithmInfo) || !algorithmInfo.IsDir() {
+		return operation.New(operation.KindFilesystem, "backup object algorithm directory is invalid")
+	}
+	if err := validatePathPermissions(algorithmRoot, true); err != nil {
+		return sanitizedFilesystemError("backup object algorithm directory permissions are not owner-only", err)
+	}
+	indexFile := indexPath(store.root)
+	indexInfo, err := os.Lstat(indexFile)
+	if err == nil {
+		if isLinkOrReparse(indexInfo) || !indexInfo.Mode().IsRegular() {
+			return operation.New(operation.KindFilesystem, "backup index entry is not a regular file")
+		}
+		if err := validateSingleLink(indexFile, indexInfo); err != nil {
+			return operation.New(operation.KindFilesystem, "backup index hard-link state is invalid")
+		}
+		if err := validatePathPermissions(indexFile, false); err != nil {
+			return sanitizedFilesystemError("backup index permissions are not owner-only", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return sanitizedFilesystemError("backup index cannot be inspected", err)
+	}
+	return nil
+}
+
+func normalizeLimits(limits Limits) (Limits, error) {
+	defaults := defaultStoreLimits()
+	if limits.MaxTotalBytes == 0 {
+		limits.MaxTotalBytes = defaults.MaxTotalBytes
+	}
+	if limits.MaxObjectBytes == 0 {
+		limits.MaxObjectBytes = defaults.MaxObjectBytes
+	}
+	if limits.MaxManifests == 0 {
+		limits.MaxManifests = defaults.MaxManifests
+	}
+	if limits.MaxVersionsPerTarget == 0 {
+		limits.MaxVersionsPerTarget = defaults.MaxVersionsPerTarget
+	}
+	if limits.MaxPinned == 0 {
+		limits.MaxPinned = defaults.MaxPinned
+	}
+	if limits.RetentionDays == 0 {
+		limits.RetentionDays = defaults.RetentionDays
+	}
+	if limits.PlanTTLSeconds == 0 {
+		limits.PlanTTLSeconds = defaults.PlanTTLSeconds
+	}
+	if limits.MaxTotalBytes < 0 || limits.MaxObjectBytes < 0 || limits.MaxManifests < 0 ||
+		limits.MaxVersionsPerTarget < 0 || limits.MaxPinned < 0 || limits.RetentionDays < 0 || limits.PlanTTLSeconds < 0 {
+		return Limits{}, operation.New(operation.KindInvalidInput, "backup store limits must be positive")
+	}
+	if limits.MaxTotalBytes > hardMaxTotalBytes || limits.MaxObjectBytes > hardMaxObjectBytes ||
+		limits.MaxManifests > hardMaxManifests || limits.MaxVersionsPerTarget > hardMaxVersionsPerTarget ||
+		limits.MaxPinned > hardMaxPinned || limits.RetentionDays > hardMaxRetentionDays ||
+		limits.PlanTTLSeconds > hardMaxPlanTTLSeconds {
+		return Limits{}, operation.New(operation.KindLimit, "backup store limits exceed supported hard maxima")
+	}
+	return limits, nil
 }
 
 func validateDedicatedStorePath(directory string, publicRoots []string) (string, error) {
@@ -295,9 +473,12 @@ func ensureDirectory(path string) error {
 }
 
 func validateRootEntries(root string) error {
-	entries, err := os.ReadDir(root)
+	entries, overflow, err := readDirectoryBounded(root, len(expectedRootEntries))
 	if err != nil {
 		return sanitizedFilesystemError("backup store root cannot be inspected", err)
+	}
+	if overflow {
+		return operation.Wrap(operation.KindFilesystem, "validate_backup_store", "", errors.New("backup store root contains unexpected entries"))
 	}
 	for _, entry := range entries {
 		name := entry.Name()
@@ -315,6 +496,11 @@ func validateRootEntries(root string) error {
 		if name == "store.json" || name == "store.lock" {
 			if !info.Mode().IsRegular() {
 				return operation.Wrap(operation.KindFilesystem, "validate_backup_store", "", errors.New("backup store metadata entry is not a regular file"))
+			}
+			if name == "store.json" {
+				if err := validateSingleLink(entryPath, info); err != nil {
+					return operation.Wrap(operation.KindFilesystem, "validate_backup_store", "", errors.New("backup store descriptor hard-link state is invalid"))
+				}
 			}
 			if err := validatePathPermissions(entryPath, false); err != nil {
 				return sanitizedFilesystemError("backup store metadata permissions are not owner-only", err)
@@ -335,9 +521,12 @@ func loadOrCreateDescriptor(root string) (Descriptor, error) {
 	path := filepath.Join(root, "store.json")
 	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
-		entries, readErr := os.ReadDir(root)
+		entries, overflow, readErr := readDirectoryBounded(root, 1)
 		if readErr != nil {
 			return Descriptor{}, sanitizedFilesystemError("backup store root cannot be inspected", readErr)
+		}
+		if overflow {
+			return Descriptor{}, operation.Wrap(operation.KindFilesystem, "validate_backup_store", "", errors.New("backup store descriptor is missing from a non-empty store"))
 		}
 		for _, entry := range entries {
 			if entry.Name() != "store.lock" {

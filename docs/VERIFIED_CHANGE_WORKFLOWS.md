@@ -191,7 +191,7 @@ Implemented tests cover valid and malformed JSON, unsupported encodings, UTF-16 
 
 The follow-on lifecycle is maintained in [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md). Maintainers approved its ten decisions as R17 on 2026-08-04, and R18 now implements that contract in separate reviewable phases rather than extending R16 incidentally.
 
-R18 phase 1 adds only the disabled-by-default internal store foundation: strict path separation, protected-root denial, owner-only permissions, one platform-native lifetime writer lock, an immutable versioned descriptor, and an empty layout. It does not capture bytes, create manifests, expose a public backup tool, or change any R16 mutation schema.
+R18 phases 1 and 2 add the disabled-by-default internal store foundation plus exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative quota reservations, bounded recovery, a rebuildable derived index, and internal read-only audits. These primitives are not registered as an MCP tool and are not invoked by any R16 mutation path.
 
 Until the later R18 mutation-integration phases are implemented:
 
@@ -200,7 +200,7 @@ Until the later R18 mutation-integration phases are implemented:
 - change review is limited to the approved preview diff and returned pre/post fingerprints;
 - existing tool-specific backup behavior remains unchanged and must not be generalized accidentally.
 
-Every later phase must preserve the approved dedicated store, content-addressed objects, immutable manifests, derived index, quotas, explicit retention and pinning, restore safety backup, dry-run/apply GC, secret-handling, crash-recovery, disabled-by-default policy, separate `.bak` behavior, and no-automatic-rollback decisions.
+Every later phase must preserve the approved dedicated store, verified content-addressed objects, immutable checksummed manifests, derived index, conservative quota reservations, explicit retention and pinning, restore safety backup, dry-run/apply GC, secret-handling, crash-recovery, disabled-by-default policy, separate `.bak` behavior, and no-automatic-rollback decisions.
 
 ## Implementation sequence
 

@@ -5,7 +5,7 @@ This guide applies to `internal/backupstore/`. Follow the repository root [`AGEN
 ## Security and durability invariants
 
 - The store is a dedicated internal authority configured only at process startup and must never overlap a public allowed directory in either requested or resolved form.
-- Reject relative paths, symlinks, junctions, reparse points, special files, path aliases, and uncertain component resolution.
+- Reject relative paths, symlinks, junctions, reparse points, hard-linked internal regular files, special files, path aliases, root-identity replacement, and uncertain component resolution.
 - Hold one platform-native exclusive writer lock for the complete store lifetime.
 - Treat `store.json`, objects, and manifests as immutable. Derived indexes may be rebuilt but are never authoritative.
 - Create directories and files with owner-only permissions where supported and never expose internal paths or stored bytes through ordinary logs or MCP results.
@@ -14,7 +14,7 @@ This guide applies to `internal/backupstore/`. Follow the repository root [`AGEN
 
 ## Implementation guidance
 
-Keep path validation, locking, descriptor handling, object storage, manifests, indexing, restore, and garbage collection in separate small components. Use bounded streaming reads and explicit size limits. Revalidate file type and stable identity around every no-replace install or immutable read.
+Keep path validation, locking, descriptor handling, object storage, manifests, indexing, restore, and garbage collection in separate small components. Use bounded streaming reads and bounded directory enumeration with explicit size and count limits. Revalidate the retained store-root identity, internal layout, file type, owner-only permissions, and single-link state around every no-replace install or immutable read.
 
 Platform-specific locking, reparse detection, and directory synchronization belong in build-tagged files. Failure injection must cover write, sync, close, rename, cleanup, lock, corruption, and crash-recovery boundaries.
 

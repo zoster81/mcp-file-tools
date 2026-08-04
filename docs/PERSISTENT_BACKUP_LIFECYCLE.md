@@ -6,13 +6,13 @@
 
 This document is the authoritative security boundary, storage format, lifecycle, restore contract, garbage-collection model, limits, failure semantics, and verification gate for the persistent backup subsystem. Implementation must remain phased so each durability and recovery boundary can be reviewed and verified independently.
 
-R18 phase 1 is implemented in source: disabled-by-default environment configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, the empty store layout, and denial of the internal root to ordinary filesystem tools. This phase does not capture file bytes, create backup manifests, expose a backup-management tool, integrate edit or package policy, restore files, or run garbage collection.
+R18 phases 1 and 2 are implemented in source. Phase 1 provides disabled-by-default configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, and denial of the internal root to ordinary filesystem tools. Phase 2 adds internal exact-byte object capture, strict checksummed manifests, conservative quota reservations, a rebuildable derived index, bounded startup recovery, and quick/full read-only audit primitives. No backup-management tool, edit/package integration, restore, or garbage collection is exposed yet.
 
 The existing transactional `.bak` behavior of `convert_encoding` remains unchanged. R16 `edit_file` preview/apply and `patch_package` apply continue to create no persistent backup until their later R18 integration phases change schemas and behavior deliberately.
 
 ## Goals
 
-A future backup subsystem should:
+The persistent backup subsystem is designed to:
 
 - durably capture exact pre-mutation bytes before an approved mutation can commit;
 - deduplicate identical bytes without weakening integrity verification;
@@ -65,7 +65,7 @@ This deliberate internal filesystem authority was approved as a security-boundar
 - Store metadata, manifests, objects, locks, staging files, and trash entries use owner-only permissions.
 - Entries must be regular files or real directories. Links, reparse points, sockets, devices, and other special files fail closed.
 - Immutable object installation uses no-replace creation.
-- Link count and stable identity should be checked where the platform exposes reliable primitives.
+- Store-root identity is retained for the process lifetime, operation boundaries revalidate the root and internal layout, and regular store files must have exactly one hard link where the platform exposes reliable primitives.
 - A local actor with the same operating-system identity as the server remains able to tamper with the store. Content hashes detect accidental corruption but are not a defense against a fully compromised process identity.
 
 ### Process ownership
@@ -127,7 +127,7 @@ Digest filenames provide integrity and deduplication, not authorization.
 
 ### Backup manifests
 
-A manifest is the immutable source of truth for one captured target state. The planned `backup-manifest-v1` record contains:
+A manifest is the immutable source of truth for one captured target state. The implemented internal `backup-manifest-v1` record contains:
 
 - 256-bit random `backupId`;
 - store format and manifest version;
@@ -137,8 +137,8 @@ A manifest is the immutable source of truth for one captured target state. The p
 - object algorithm, digest, and byte size;
 - original `content-v1` fingerprint;
 - original regular-file mode and modification time where meaningful;
-- optional encoding, BOM, and line-ending observations as non-authoritative review metadata;
 - optional bounded user label;
+- optional encoding, BOM, and line-ending observations remain deferred until a public review surface needs them;
 - immutable pinned state for the first version, or a separately journaled pin record if mutable pinning is approved;
 - a canonical manifest checksum.
 
@@ -149,9 +149,10 @@ Restore must revalidate object bytes and current path authorization. It must nev
 The index accelerates bounded listing and quota calculations but is never authoritative.
 
 - Manifests and objects remain the durable source of truth.
-- The index is generated from a deterministic manifest scan.
+- The in-memory index is generated from a deterministic manifest and object scan.
+- The persisted `index-v1.json` remains compact: it stores only the generation digest and aggregate counts, never every path or manifest row.
 - Index replacement uses synced staging and atomic replacement.
-- A missing or corrupt index is rebuilt under explicit limits.
+- A missing, corrupt, stale, or tampered index is rebuilt under explicit limits.
 - An interrupted index update cannot invalidate a committed manifest.
 
 This avoids a transaction that depends on atomically updating both a manifest and one global mutable database file.
@@ -171,13 +172,13 @@ The approved defaults are:
 | `MCP_BACKUP_RETENTION_DAYS` | `30` | Age threshold used by GC planning, not automatic deletion. |
 | `MCP_BACKUP_PLAN_TTL_SECONDS` | `900` | Lifetime of restore and GC preview capabilities. |
 
-All values must be positive and overflow-safe. R18 phase 1 enforces hard maxima of 1 TiB total bytes, 1 GiB per object, 1,000,000 manifests, 10,000 versions per target, 100,000 pinned manifests, 3,650 retention days, and 86,400 seconds for plan lifetime. Values above those maxima fall back to the documented defaults. `MCP_MAX_OUTPUT_BYTES` continues to bound MCP output, and `MCP_MAX_BATCH_FILES` bounds targets in one backup-integrated package operation.
+All values must be positive and overflow-safe. Configuration loading enforces hard maxima of 1 TiB total bytes, 1 GiB per object, 1,000,000 manifests, 10,000 versions per target, 100,000 pinned manifests, 3,650 retention days, and 86,400 seconds for plan lifetime; environment values above those maxima fall back to the documented defaults, while invalid direct internal store options fail closed. `MCP_MAX_OUTPUT_BYTES` continues to bound future MCP output, and `MCP_MAX_BATCH_FILES` will bound targets in one backup-integrated package operation.
 
-Configuring `MCP_BACKUP_STORE_DIR` in phase 1 only initializes and locks an empty internal store. It does not create backups. No retention rule deletes data automatically; later required-backup admission will reject quota exhaustion with `LIMIT` before target mutation.
+Phase 2 consumes total-byte, object-size, manifest-count, per-target-version, and immutable-pin limits through conservative process-local reservations. Configuring `MCP_BACKUP_STORE_DIR` still does not automatically create backups because no public mutation path calls the internal capture primitive. Retention and plan-lifetime values remain inactive until GC and restore phases. No quota failure triggers implicit garbage collection.
 
 ## Capture transaction
 
-A required backup is committed before the associated target mutation begins.
+The internal phase-2 capture primitive implements the durable portion of this transaction. It is not yet connected to a public mutation, and its caller must supply an already normalized and authorized target path. When later integration marks a backup as required, the backup must be committed before the associated target mutation begins.
 
 1. Validate the requested target through current allowed-root policy.
 2. Capture a bounded digest-bearing snapshot and stable identity.
@@ -199,7 +200,7 @@ If object or manifest persistence fails, the target mutation does not begin. A c
 - Total committed unique object bytes plus live reservations must remain within quota.
 - Deduplication may reduce committed bytes, but admission reserves the conservative full object size until an existing object is verified.
 - Cancellation or failure releases the reservation.
-- Package apply reserves every required target backup before capturing or committing any target.
+- Individual capture reservations are implemented; package-wide all-target reservation remains phase 5 work.
 - Quota exhaustion is a preflight failure, not a trigger for implicit garbage collection.
 
 ## Mutation integration
@@ -329,16 +330,18 @@ The preferred initial choice is immutable pin state at backup creation. Mutable 
 
 ## Startup recovery and degraded state
 
-After acquiring the exclusive lock, initialization performs a bounded structural scan:
+After acquiring the exclusive lock, initialization now performs a bounded structural scan:
 
 - validate `store.json` and directory types;
-- reject links, reparse points, unexpected special files, and path escapes;
-- validate manifest filenames, sizes, schemas, checksums, and unique IDs;
+- reject links, reparse points, hard-linked regular files, unexpected special files, and path escapes;
+- validate manifest filenames, sizes, schemas, checksums, unique IDs, owner-only permissions, and single-link state;
 - validate referenced object paths and sizes without necessarily hashing every object;
 - rebuild the derived index when missing or stale;
 - identify staging files, trash entries, orphan objects, missing objects, and duplicate manifests.
 
-Full object hashing is performed by explicit audit, capture dedup verification, inspect when requested, and every restore.
+Capture and audit revalidate the retained store-root identity. Capture additionally revalidates the internal layout before staging and again before durable object or manifest installation. Audit reports structural entries without deleting or repairing them.
+
+Full object hashing is performed by internal full audit and every capture dedup verification. Public inspect and restore verification remain later phases.
 
 Structural corruption must not be repaired automatically. The approved fail-closed behavior is:
 
@@ -350,12 +353,12 @@ This favors safety over availability. Maintainers may revise this to an online d
 
 ## Integrity audit
 
-`audit` has two modes:
+The internal audit primitive has two implemented modes:
 
 - `quick`: validate structure, manifest checksums, object presence, size, index consistency, references, staging, trash, and orphan counts;
 - `full`: additionally stream and hash every referenced object under explicit object, byte, time, and output limits.
 
-Audit is read-only. It never repairs, deletes, or quarantines data.
+Audit is read-only. It never repairs, deletes, or quarantines data. Phase 3 will decide the exact bounded MCP schema that exposes these results without store paths or bytes.
 
 ## Failure and error semantics
 
@@ -505,4 +508,4 @@ Maintainers explicitly accepted all ten decisions on 2026-08-04:
 9. existing adjacent `.bak` conversion behavior remains separate;
 10. no automatic patch-package rollback is introduced.
 
-Approval authorizes phased implementation, not a single monolithic change. Each R18 phase must preserve the complete boundary above, add focused failure-injection tests, pass the relevant regression and cross-platform gates, and avoid exposing a partially implemented public promise. R18 phase 1 intentionally adds no public backup tool and creates no backup bytes or manifests.
+Approval authorizes phased implementation, not a single monolithic change. Each R18 phase must preserve the complete boundary above, add focused failure-injection tests, pass the relevant regression and cross-platform gates, and avoid exposing a partially implemented public promise. R18 phases 1 and 2 intentionally add no public backup tool or automatic backup behavior; phase 2 can create objects and manifests only through an internal package API that is not registered with either MCP transport.

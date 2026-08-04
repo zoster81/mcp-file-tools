@@ -50,6 +50,9 @@ func acquireStoreLock(path string) (*storeLock, error) {
 	if err := validateUnixOwnerOnlyInfo(info, false); err != nil {
 		return cleanup(err)
 	}
+	if err := validateSingleLink(path, info); err != nil {
+		return cleanup(err)
+	}
 	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		return cleanup(err)
 	}

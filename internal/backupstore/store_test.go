@@ -63,6 +63,32 @@ func TestOpenInitializesAndReopensVersionedStore(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsInvalidInternalLimitsBeforeFilesystemMutation(t *testing.T) {
+	base := canonicalTempDir(t)
+	for _, tc := range []struct {
+		name   string
+		limits Limits
+		kind   operation.Kind
+	}{
+		{name: "negative", limits: Limits{MaxTotalBytes: -1}, kind: operation.KindInvalidInput},
+		{name: "above hard maximum", limits: Limits{MaxTotalBytes: hardMaxTotalBytes + 1}, kind: operation.KindLimit},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := filepath.Join(base, strings.ReplaceAll(tc.name, " ", "-"))
+			store, err := Open(Options{Directory: root, Limits: tc.limits})
+			if store != nil {
+				_ = store.Close()
+			}
+			if operation.KindOf(err) != tc.kind {
+				t.Fatalf("Open() error = %v, want %s", err, tc.kind)
+			}
+			if _, statErr := os.Lstat(root); !os.IsNotExist(statErr) {
+				t.Fatalf("invalid limits created a store directory: %v", statErr)
+			}
+		})
+	}
+}
+
 func TestOpenRejectsRelativeAndOverlappingDirectories(t *testing.T) {
 	publicRoot := canonicalTempDir(t)
 	volumeRoot := filepath.Clean(filepath.VolumeName(publicRoot) + string(filepath.Separator))

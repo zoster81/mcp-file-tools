@@ -59,7 +59,7 @@ R15 is implemented and verified but remains unreleased and undeployed. It adds b
 
 R16 phases 1–5 are implemented in source. `fingerprint_paths` provides deterministic streamed SHA-256 state evidence, `edit_file` adds bounded one-shot `preview`/`apply`, `patch_package` exposes strict `patch-package-v1` `inspect`, `dryRun`, `apply`, and `verify`, and `verify_state` runs ordered typed JSON, text-format, fixed `git diff --check`, and fingerprint checks. The verification tool is read-only, requires no execution feature flag, invokes Git directly without a shell, and distinguishes failed expectations from operational errors. Package operations create no persistent backup and do not claim multi-file atomicity or automatic rollback.
 
-R17 approved the persistent-backup lifecycle, and R18 phase 1 is implemented in source. An operator may configure `MCP_BACKUP_STORE_DIR` to initialize a separate non-overlapping internal store with owner-only permissions, one lifetime writer lock, an immutable versioned descriptor, and protected-root denial for ordinary tools. This foundation remains disabled by default and does not yet capture bytes, write manifests, expose a backup tool, change edit/package behavior, restore files, or delete data.
+R17 approved the persistent-backup lifecycle, and R18 phases 1 and 2 are implemented in source. An operator may configure `MCP_BACKUP_STORE_DIR` to initialize a separate non-overlapping internal store with owner-only permissions, one lifetime writer lock, an immutable descriptor, bounded recovery, and a rebuildable index. Internal code can now capture exact bytes into verified SHA-256 objects and strict checksummed manifests under conservative quotas, with quick/full read-only audits. No MCP tool or normal mutation invokes that capture path yet, so configuration alone creates no backups and does not change edit/package behavior, restore files, or delete data.
 
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
@@ -126,7 +126,7 @@ This repository has evolved from its original upstream codebase. Compared with t
 - a bounded process-local edit preview cache with 256-bit one-shot capabilities, exact prepared bytes, target/result fingerprints, deterministic expiry/eviction, stable file-identity checks, replay prevention, and no persistent backup side effect;
 - a strict `patch-package-v1` inspect/dry-run/apply/verify workflow for bounded ordered existing-file edits, with unknown-field rejection, alias and hard-link detection, one-shot capabilities, shared encoding-aware preparation, all-target staging, deterministic commits, explicit partial-state evidence, and no persistent backup or automatic rollback;
 - an ordered read-only `verify_state` workflow for JSON syntax, encoding/BOM/line-ending/trailing-whitespace expectations, fixed direct `git diff --check`, and shared fingerprints, with strict schemas, bounded diagnostics, filtered process environment, and no shell or execution opt-in;
-- a disabled-by-default persistent-backup store foundation with a dedicated non-overlapping internal root, owner-only Windows DACL or Unix mode/owner validation, a platform-native lifetime writer lock, immutable `backup-store-v1` descriptor, versioned empty layout, and no public backup side effect yet;
+- a disabled-by-default persistent-backup core with a dedicated non-overlapping internal root, owner-only Windows DACL or Unix mode/owner validation, a platform-native lifetime writer lock, immutable `backup-store-v1` descriptor, verified SHA-256 object deduplication, strict checksummed manifests, conservative quota reservations, bounded recovery, a rebuildable index, and internal quick/full audits, with no public backup side effect yet;
 - transport-independent typed operation errors for path validation, access control, encoding, decoding, output encoding, permissions, conflicts, cancellation, limits, and filesystem failures, with centralized MCP and batch mapping that preserves public messages and schemas;
 - a shared bounded ordered worker coordinator used by `read_multiple_files` and `grep_text_files`, with deterministic commits, cancellation-aware dispatch, aggregate output/state budgets, and early stop for global match limits;
 - a bounded-memory text pipeline with incremental decoding for all 24 encodings, 16 MiB decoded-line limits, SHA-256 read sessions, reader-based mutation staging, and hard configured limits for full-document editing;
@@ -364,7 +364,7 @@ Once the connector is active, ask ChatGPT Web or the connected MCP client:
 - **roots-capable stdio clients:** client-provided roots are accepted only when the process starts without configured directories;
 - **multiple sessions:** every connection to one process shares the same allowed directories; prompt instructions may narrow an agent's intended write scope but are not server-enforced ACLs;
 - **execution tools:** `run_script` validates its script and working-directory paths, while `shell` validates only its working directory and is otherwise unrestricted;
-- **optional backup-store foundation:** `MCP_BACKUP_STORE_DIR`, when configured in unreleased R18 phase 1, must be a separate canonical non-overlapping path and is denied to ordinary file tools.
+- **optional backup-store core:** `MCP_BACKUP_STORE_DIR`, when configured in unreleased R18 phases 1–2, must be a separate canonical non-overlapping path and is denied to ordinary file tools; internal capture and audit primitives are not yet exposed through MCP.
 
 ## Configuration
 
@@ -406,14 +406,14 @@ The server can be configured via environment variables:
 | `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS` | Lifetime of one package preview before lazy expiration and identity cleanup. | `900` |
 | `MCP_MAX_OUTPUT_BYTES` | Aggregate read output, retained grep state, fingerprint details, edit/package responses, verification diagnostics, and inconsistent-line output budget. | `67108864` |
 | `MCP_MAX_SESSIONS` | Maximum live native Streamable HTTP sessions. | `128` |
-| `MCP_BACKUP_STORE_DIR` | Unreleased R18 phase-1 dedicated internal store. Must be absolute, canonical, non-overlapping with public roots, owner-only, and exclusively lockable. Configuring it currently initializes an empty protected store but does not create backups. | unset |
-| `MCP_BACKUP_MAX_TOTAL_BYTES` | Future maximum retained unique object bytes; phase 1 validates configuration only. Hard maximum: 1 TiB. | `1073741824` |
-| `MCP_BACKUP_MAX_OBJECT_BYTES` | Future maximum bytes in one object; phase 1 validates configuration only. Hard maximum: 1 GiB. | `67108864` |
-| `MCP_BACKUP_MAX_MANIFESTS` | Future maximum live manifests; phase 1 validates configuration only. Hard maximum: 1,000,000. | `10000` |
-| `MCP_BACKUP_MAX_VERSIONS_PER_TARGET` | Future maximum unpinned versions retained per target; phase 1 validates configuration only. Hard maximum: 10,000. | `32` |
-| `MCP_BACKUP_MAX_PINNED` | Future maximum pinned manifests; phase 1 validates configuration only. Hard maximum: 100,000. | `256` |
-| `MCP_BACKUP_RETENTION_DAYS` | Future age threshold for explicit GC planning; never an automatic deletion timer. Hard maximum: 3,650 days. | `30` |
-| `MCP_BACKUP_PLAN_TTL_SECONDS` | Future restore/GC one-shot plan lifetime. Hard maximum: 86,400 seconds. | `900` |
+| `MCP_BACKUP_STORE_DIR` | Unreleased R18 dedicated internal store. Must be absolute, canonical, non-overlapping with public roots, owner-only, and exclusively lockable. Startup performs bounded recovery and index validation; no MCP or normal mutation creates backups yet. | unset |
+| `MCP_BACKUP_MAX_TOTAL_BYTES` | Maximum unique object bytes admitted by the internal capture primitive, including durable orphans and live conservative reservations. Hard maximum: 1 TiB. | `1073741824` |
+| `MCP_BACKUP_MAX_OBJECT_BYTES` | Maximum bytes in one internally captured object. Hard maximum: 1 GiB. | `67108864` |
+| `MCP_BACKUP_MAX_MANIFESTS` | Maximum live internal manifests and bounded recovery/audit scale. Hard maximum: 1,000,000. | `10000` |
+| `MCP_BACKUP_MAX_VERSIONS_PER_TARGET` | Maximum internally captured unpinned manifest versions for one target; pinned captures use the separate global pinned quota. Hard maximum: 10,000. | `32` |
+| `MCP_BACKUP_MAX_PINNED` | Maximum manifests created with immutable pinned state by internal capture. Hard maximum: 100,000. | `256` |
+| `MCP_BACKUP_RETENTION_DAYS` | Reserved age threshold for future explicit GC planning; never an automatic deletion timer. Hard maximum: 3,650 days. | `30` |
+| `MCP_BACKUP_PLAN_TTL_SECONDS` | Reserved future restore/GC one-shot plan lifetime. Hard maximum: 86,400 seconds. | `900` |
 | `MCP_MEMORY_THRESHOLD` | Deprecated fallback for `MCP_MAX_FILE_BYTES` and `MCP_MAX_OUTPUT_BYTES`; specific variables take precedence. | unset |
 | `MCP_ENABLE_RUN_SCRIPT` | Enables only the `run_script` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |
 | `MCP_ENABLE_SHELL` | Enables only the unrestricted `shell` tool. Accepted true values: `1`, `true`, `yes`, `on`, `enabled`. | disabled |

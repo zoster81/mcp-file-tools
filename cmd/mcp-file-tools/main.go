@@ -65,6 +65,7 @@ func runCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		store, err = backupstore.Open(backupstore.Options{
 			Directory:                applicationConfig.Backup.StoreDir,
 			PublicAllowedDirectories: options.allowedDirectories,
+			Limits:                   backupStoreLimits(applicationConfig.Backup.Limits),
 		})
 		if err != nil {
 			fmt.Fprintf(stderr, "Error: %v\n", err)
@@ -100,6 +101,18 @@ func runCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		return 1
 	}
 	return 0
+}
+
+func backupStoreLimits(limits config.BackupLimits) backupstore.Limits {
+	return backupstore.Limits{
+		MaxTotalBytes:        limits.MaxTotalBytes,
+		MaxObjectBytes:       limits.MaxObjectBytes,
+		MaxManifests:         limits.MaxManifests,
+		MaxVersionsPerTarget: limits.MaxVersionsPerTarget,
+		MaxPinned:            limits.MaxPinned,
+		RetentionDays:        limits.RetentionDays,
+		PlanTTLSeconds:       limits.PlanTTLSeconds,
+	}
 }
 
 func configureLogging(stderr io.Writer, getenv func(string) string) {
