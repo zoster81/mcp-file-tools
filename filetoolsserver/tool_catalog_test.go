@@ -1,7 +1,9 @@
 package filetoolsserver
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -62,6 +64,40 @@ func TestRuntimeToolsMatchAuthoritativeCatalog(t *testing.T) {
 		}
 		if !reflect.DeepEqual(tool.Annotations, wantAnnotations) {
 			t.Errorf("tool %q annotations = %#v, want %#v", definition.Name, tool.Annotations, wantAnnotations)
+		}
+	}
+
+	editTool := byName["edit_file"]
+	inputSchema, err := json.Marshal(editTool.InputSchema)
+	if err != nil {
+		t.Fatalf("marshal edit_file input schema: %v", err)
+	}
+	outputSchema, err := json.Marshal(editTool.OutputSchema)
+	if err != nil {
+		t.Fatalf("marshal edit_file output schema: %v", err)
+	}
+	if !bytes.Contains(inputSchema, []byte(`"backupPolicy"`)) {
+		t.Fatalf("edit_file input schema does not expose backupPolicy: %s", inputSchema)
+	}
+	if !bytes.Contains(outputSchema, []byte(`"backupPolicy"`)) || !bytes.Contains(outputSchema, []byte(`"backupId"`)) {
+		t.Fatalf("edit_file output schema does not expose backup metadata: %s", outputSchema)
+	}
+
+	packageTool := byName["patch_package"]
+	packageInputSchema, err := json.Marshal(packageTool.InputSchema)
+	if err != nil {
+		t.Fatalf("marshal patch_package input schema: %v", err)
+	}
+	packageOutputSchema, err := json.Marshal(packageTool.OutputSchema)
+	if err != nil {
+		t.Fatalf("marshal patch_package output schema: %v", err)
+	}
+	if !bytes.Contains(packageInputSchema, []byte(`"backupPolicy"`)) {
+		t.Fatalf("patch_package input schema does not expose backupPolicy: %s", packageInputSchema)
+	}
+	for _, field := range [][]byte{[]byte(`"backupPolicy"`), []byte(`"backupCount"`), []byte(`"backupId"`)} {
+		if !bytes.Contains(packageOutputSchema, field) {
+			t.Fatalf("patch_package output schema does not expose %s: %s", field, packageOutputSchema)
 		}
 	}
 }

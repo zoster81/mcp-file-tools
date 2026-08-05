@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 	"github.com/zoster81/mcp-file-tools/internal/operation"
 	"golang.org/x/text/unicode/norm"
@@ -75,6 +76,10 @@ func (h *Handler) handlePatchPackageInspect(manifest PatchPackageManifest, targe
 }
 
 func (h *Handler) handlePatchPackageDryRun(ctx context.Context, manifest PatchPackageManifest, targets []validatedPatchPackageTarget) (*mcp.CallToolResult, PatchPackageOutput, error) {
+	if manifest.BackupPolicy == editBackupPolicyRequired && h.backupBatchCapture == nil {
+		err := operation.New(operation.KindInvalidInput, "backup store does not provide package capture authority")
+		return errorResultFromError(err), PatchPackageOutput{}, nil
+	}
 	identities, err := openPatchPackageIdentities(targets)
 	if err != nil {
 		return errorResultFromError(err), PatchPackageOutput{}, nil
@@ -168,12 +173,21 @@ func (h *Handler) handlePatchPackageDryRun(ctx context.Context, manifest PatchPa
 			return errorResultFromError(err), PatchPackageOutput{}, nil
 		}
 	}
+	if manifest.BackupPolicy == editBackupPolicyRequired {
+		requests := patchPackageCaptureRequests(manifest.Label, preparedTargets)
+		if len(requests) > 0 {
+			if err := h.backupBatchCapture.PreflightCaptureBatch(ctx, requests); err != nil {
+				return errorResultFromError(err), PatchPackageOutput{}, nil
+			}
+		}
+	}
 
 	preparedPackage := preparedPatchPackage{
 		formatVersion:              manifest.FormatVersion,
 		label:                      manifest.Label,
 		fingerprintAlgorithm:       manifest.FingerprintAlgorithm,
 		fingerprintMode:            manifest.FingerprintMode,
+		backupPolicy:               manifest.BackupPolicy,
 		aggregateMode:              patchPackageAggregateModeV1,
 		aggregateBeforeFingerprint: patchPackageAggregate(targets, before),
 		aggregateAfterFingerprint:  patchPackageAggregate(targets, resultFingerprints),
@@ -221,6 +235,9 @@ func (h *Handler) validatePatchPackageManifest(ctx context.Context, manifest Pat
 	}
 	if manifest.FingerprintMode != "content-v1" {
 		return nil, operation.New(operation.KindInvalidInput, "fingerprintMode must be content-v1")
+	}
+	if manifest.BackupPolicy != "" && manifest.BackupPolicy != editBackupPolicyRequired {
+		return nil, operation.New(operation.KindInvalidInput, "backupPolicy must be exactly required when provided")
 	}
 	if len(manifest.Label) > maxPatchPackageLabelBytes || strings.ContainsRune(manifest.Label, '\x00') {
 		return nil, operation.New(operation.KindInvalidInput, fmt.Sprintf("label must not contain NUL and must be at most %d bytes", maxPatchPackageLabelBytes))
@@ -412,6 +429,21 @@ func (h *Handler) capturePatchPackageFingerprintsOnce(ctx context.Context, targe
 	return fingerprints, nil
 }
 
+func patchPackageCaptureRequests(label string, targets []preparedPatchPackageTarget) []backupstore.CaptureRequest {
+	requests := make([]backupstore.CaptureRequest, 0, len(targets))
+	for index := range targets {
+		if !targets[index].prepared.changed {
+			continue
+		}
+		requests = append(requests, backupstore.CaptureRequest{
+			TargetPath:      targets[index].resolvedPath,
+			SourceOperation: backupstore.SourceOperationPatchPackage,
+			Label:           label,
+		})
+	}
+	return requests
+}
+
 func patchPackageBaseOutput(action string, manifest PatchPackageManifest, targets []validatedPatchPackageTarget) PatchPackageOutput {
 	output := PatchPackageOutput{
 		Action:               action,
@@ -419,6 +451,7 @@ func patchPackageBaseOutput(action string, manifest PatchPackageManifest, target
 		Label:                manifest.Label,
 		FingerprintAlgorithm: manifest.FingerprintAlgorithm,
 		FingerprintMode:      manifest.FingerprintMode,
+		BackupPolicy:         manifest.BackupPolicy,
 		TargetCount:          len(targets),
 		Results:              make([]PatchPackageTargetResult, len(targets)),
 	}
@@ -437,6 +470,9 @@ func patchPackageDryRunText(output PatchPackageOutput) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "Patch package dry run prepared %d targets (%d changed, %d unchanged).\nPreview ID: %s\nExpires: %s\nAggregate before: %s\nAggregate after: %s",
 		output.TargetCount, output.ChangedCount, output.UnchangedCount, output.PreviewID, output.ExpiresAt, output.AggregateBeforeFingerprint, output.AggregateAfterFingerprint)
+	if output.BackupPolicy != "" {
+		fmt.Fprintf(&builder, "\nBackup policy: %s", output.BackupPolicy)
+	}
 	for _, result := range output.Results {
 		fmt.Fprintf(&builder, "\n\n[%d] %s", result.Index, result.Path)
 		if result.Diff != "" {

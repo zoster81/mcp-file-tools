@@ -134,8 +134,8 @@ The input and every nested manifest object reject unknown JSON fields. The curre
 ### Actions
 
 - `inspect` **implemented**: validate structure, semantic input size, target count, paths, existing regular-file types, duplicate or aliased targets, edit shapes, fuzzy thresholds, strict patch structure, and declared algorithms without reading target contents.
-- `dryRun` **implemented**: retain one stable open-file identity per bounded target, obtain a coherent package-wide pre-state, verify every declared fingerprint, prepare each exact result through the shared edit pipeline, enforce aggregate prepared/output limits, perform final identity and package-wide state verification, return ordered diffs plus `patch-package-aggregate-v1` evidence, and store the exact package behind a bounded expiring 256-bit capability. No source file is changed.
-- `apply` **implemented**: atomically consume the exact dry-run capability, reject a resubmitted manifest, revalidate paths, identities, bounded current snapshots, prepared bytes, and read-only authorization, durably stage every changed output before the first commit, commit in deterministic manifest order, then require a coherent two-pass final fingerprint verification before success. Every apply attempt is terminal.
+- `dryRun` **implemented**: retain one stable open-file identity per bounded target, obtain a coherent package-wide pre-state, verify every declared fingerprint, prepare each exact result through the shared edit pipeline, enforce aggregate prepared/output limits, perform final identity and package-wide state verification, and return ordered diffs plus `patch-package-aggregate-v1` evidence. Exact optional `backupPolicy: "required"` additionally requires batch capture authority and performs a side-effect-free conservative aggregate quota preflight. The exact package and policy are stored behind a bounded expiring 256-bit capability. No source file or backup-store state is changed.
+- `apply` **implemented**: atomically consume the exact dry-run capability, reject a resubmitted manifest, revalidate paths, identities, bounded current snapshots, prepared bytes, and read-only authorization, then durably stage every changed output. Required policy atomically reserves the complete changed-target backup set, captures and verifies every pre-state in order, and revalidates all targets before the first commit. Commits remain deterministic and per-file, followed by coherent two-pass final fingerprint verification. Every apply attempt is terminal; incomplete capture commits no target mutation, while later commit failures preserve all durable IDs and explicit partial-state evidence.
 - `verify` **implemented**: require `expectedResultFingerprint` for every target, compare current `content-v1` fingerprints, and return per-file plus expected/actual aggregate results. Mismatch returns structured `CONFLICT`.
 
 The package cache is process-local and independent from edit previews. Its defaults are `MCP_MAX_PATCH_PACKAGE_PREVIEWS=16`, `MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES=134217728`, and `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS=900`. Expired entries are removed before deterministic FIFO eviction. Capability removal, response-limit failure, claim, and process exit release all retained identities.
@@ -191,14 +191,16 @@ Implemented tests cover valid and malformed JSON, unsupported encodings, UTF-16 
 
 The follow-on lifecycle is maintained in [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md). Maintainers approved its ten decisions as R17 on 2026-08-04, and R18 now implements that contract in separate reviewable phases rather than extending R16 incidentally.
 
-R18 phases 1–3 add the disabled-by-default internal store foundation, exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative quota reservations, bounded recovery, a rebuildable derived index, and the read-only `backup_store` status/list/inspect/audit surface. The tool exposes only currently authorized redacted metadata and integrity results; no R16 mutation path invokes persistent capture yet.
+R18 phases 1–5 add the disabled-by-default internal store foundation, exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative single and package-wide quota reservations, bounded recovery, a rebuildable derived index, the read-only `backup_store` status/list/inspect/audit surface, and approval-bound `edit_file` plus `patch_package` capture. The management tool exposes only currently authorized redacted metadata and integrity results.
 
-Until the later R18 mutation-integration phases are implemented:
+Current mutation behavior is deliberately narrow:
 
-- R16 preview/apply creates no persistent backup;
-- patch packages provide no retained rollback point;
-- change review is limited to the approved preview diff and returned pre/post fingerprints;
-- existing tool-specific backup behavior remains unchanged and must not be generalized accidentally.
+- `edit_file` preview/apply creates a persistent backup only when preview retained `backupPolicy: "required"`;
+- `patch_package` creates backups only when its manifest retained the same exact policy; dry run is side-effect-free, and apply captures every changed target before the first commit;
+- omitted policy, direct edit, and logical no-op create no persistent backup;
+- required backups are durable before the associated mutation boundary, and later failures preserve their identifiers;
+- package backups provide no automatic rollback or multi-file atomicity and retain explicit `PARTIAL_COMMIT` classification;
+- existing tool-specific `.bak` behavior remains unchanged and must not be generalized accidentally.
 
 Every later phase must preserve the approved dedicated store, verified content-addressed objects, immutable checksummed manifests, derived index, conservative quota reservations, explicit retention and pinning, restore safety backup, dry-run/apply GC, secret-handling, crash-recovery, disabled-by-default policy, separate `.bak` behavior, and no-automatic-rollback decisions.
 

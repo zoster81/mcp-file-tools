@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phases 1–3 now provide the disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, and the bounded read-only `backup_store` management surface.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phases 1–5 now provide the disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, the bounded read-only `backup_store` management surface, approval-bound required `edit_file` capture, and conservative all-target required `patch_package` capture before the first commit.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -429,12 +429,13 @@ The approved design baseline is [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_W
 
 Persistent backup storage and user-managed change review remain outside R16. R17 approved their lifecycle design, and R18 implements it in separate phases rather than introducing an incidental unbounded `.bak` scheme or implying that patch packages can already be restored.
 
-Until the later R18 mutation-integration phases are complete:
+At the current R18 phase-5 boundary:
 
-- R16 preview/apply creates no new persistent backup;
-- patch packages expose no retained rollback point;
-- change review consists of the approved diff plus pre/post fingerprints;
-- existing operation-specific backup behavior remains unchanged.
+- omitted-policy edit/package workflows and direct edit create no persistent backup;
+- edit preview may retain `backupPolicy: "required"`, causing apply to capture the approved pre-state before mutation;
+- a patch-package manifest may retain the same exact policy, causing dry run to preflight and apply to capture every changed pre-state before the first commit;
+- package backups provide recovery evidence but no retained automatic rollback or multi-file atomicity;
+- existing operation-specific `.bak` behavior remains unchanged.
 
 ## Design constraints
 
@@ -500,7 +501,7 @@ Maintainers accepted all ten decisions on 2026-08-04: a dedicated non-overlappin
 
 ## Status
 
-Active. Implementation follows the approved [persistent backup lifecycle](PERSISTENT_BACKUP_LIFECYCLE.md) in independently reviewable phases. Phase 3 adds the reviewed read-only management surface and brings the public source catalog to 27 tools while the published 2.0.0 baseline remains 23.
+Active. Implementation follows the approved [persistent backup lifecycle](PERSISTENT_BACKUP_LIFECYCLE.md) in independently reviewable phases. Phases 3–5 add the reviewed read-only management surface plus approval-bound `edit_file` and `patch_package` integration while the public source catalog remains 27 tools and the published 2.0.0 baseline remains 23.
 
 ## Goal
 
@@ -511,8 +512,8 @@ Implement durable exact-byte capture, bounded metadata management, approval-boun
 - [x] Phase 1 — Add disabled-by-default configuration, approved defaults and hard maxima, a dedicated canonical non-overlapping store root, owner-only permissions, a platform-native lifetime writer lock, immutable `backup-store-v1` descriptor, empty versioned layout, fail-closed structural validation, and protected-root denial for ordinary tools.
 - [x] Phase 2 — Add immutable SHA-256 object capture, immutable checksummed manifests, quota reservations, derived index rebuild, bounded startup recovery, and quick/full internal audit primitives.
 - [x] Phase 3 — Add the read-only `backup_store` status/list/inspect/audit surface with bounded cursors, redacted metadata, catalog/schema tests, and stdio/HTTP equivalence.
-- [ ] Phase 4 — Bind `backupPolicy: "required"` into `edit_file` preview/apply and durably capture the approved pre-state before mutation.
-- [ ] Phase 5 — Add package-wide reservation and all-target backup capture before the first `patch_package` commit while preserving explicit `PARTIAL_COMMIT` semantics and no automatic rollback.
+- [x] Phase 4 — Bind `backupPolicy: "required"` into `edit_file` preview/apply and durably capture the approved pre-state before mutation.
+- [x] Phase 5 — Add package-wide reservation and all-target backup capture before the first `patch_package` commit while preserving explicit `PARTIAL_COMMIT` semantics and no automatic rollback.
 - [ ] Phase 6 — Add original-target restore preview/apply with exact object verification, stale-target rejection, and mandatory safety backup of an existing target.
 - [ ] Phase 7 — Add generation-bound GC dry-run/apply, immutable pin-at-creation semantics, manifest-first removal, reference-counted object deletion, trash recovery, and no background deletion.
 - [ ] Complete failure injection, fuzzing, race, static-analysis, vulnerability, documentation, transport-equivalence, six-target build, native runtime smoke, and release gates for the full subsystem.
@@ -535,7 +536,21 @@ Phase 2 remains unreachable directly from MCP clients. It did not add `backup_st
 
 Phase 3 adds one always-registered read-only `backup_store` tool and brings the unreleased source catalog to 27 tools over both transports. `status` reports whether the operator configured a store and, when enabled, returns redacted format, health, generation, aggregate counts, configured limits, and bounded path-free issues. `list` returns newest-first manifest metadata with exact target/pinned filters, a maximum page size of 100, current-root visibility filtering, and an authenticated keyset cursor bound to filters, the allowed/protected-root policy snapshot, and store generation; target visibility is revalidated on every page. `inspect` requires one backup ID, revalidates current target authorization before hashing, and fully hashes the referenced object before returning metadata. `audit` exposes bounded quick or full read-only integrity scans and never repairs or deletes data.
 
-The strict action union rejects unknown fields and cross-action parameters. Every output is bounded by `MCP_MAX_OUTPUT_BYTES`. Store IDs, object bytes, internal store paths, temporary paths, and capability secrets are never returned. With no configured store, only `status` succeeds and reports `enabled: false`; list, inspect, and audit fail explicitly. Phase 3 does not create backups, integrate mutation policy, restore files, garbage-collect data, change pin state, or introduce rollback.
+The strict action union rejects unknown fields and cross-action parameters. Every output is bounded by `MCP_MAX_OUTPUT_BYTES`. Store IDs, object bytes, internal store paths, temporary paths, and capability secrets are never returned. With no configured store, only `status` succeeds and reports `enabled: false`; list, inspect, and audit fail explicitly. At the phase-3 boundary no mutation path created backups or introduced restore, garbage collection, pin mutation, or rollback.
+
+## Phase 4 behavior
+
+Phase 4 additively extends `edit_file` preview with the exact value `backupPolicy: "required"`; omitted policy remains the default and direct editing rejects the field. The policy is retained in the one-shot capability, while apply continues to accept only `previewId`. Preview creates no persistent state. Apply consumes the token, repeats path, stable-identity, target-fingerprint, prepared-result, cancellation, and output-limit checks, then calls the process-owned store to capture the exact authorized pre-state before any permission change or target replacement.
+
+A changed edit returns `backupId` only after the strict manifest is durable and verified against the approved path, source operation, and target fingerprint. Capture or quota failure prevents mutation. A durable manifest remains authoritative if the derived index refresh fails, and apply may continue; a later commit failure remains an MCP error but preserves `backupId` in structured output with `applied: false`. Logical no-ops, omitted policy, and direct editing create no persistent backup. Tests cover UTF-16 BOM/CRLF, CP1251 exact bytes, read-only metadata, output limits, cancellation, quota rejection, post-capture target change, post-backup write failure, index degradation, replay, and concurrent apply over both transports.
+
+## Phase 5 behavior
+
+Phase 5 extends the strict `patch-package-v1` manifest with exact optional `backupPolicy: "required"`. Inspect validates syntax without store access. Dry run requires package batch authority only for required policy, retains the policy in the one-shot capability, computes the changed target set, and performs a side-effect-free conservative aggregate admission check over full source bytes, manifests, pin capacity, and per-target versions. Omitted policy and all-no-op packages preserve prior behavior.
+
+Apply consumes the capability, preflights output including every possible backup ID, revalidates and stages all changed outputs, atomically reserves the complete package backup budget, then captures changed pre-states in manifest order. Every durable result is checked against its ID shape, normalized target, `patch_package` source operation, and approved fingerprint. All targets are revalidated after capture; no target commit can begin unless every changed target has a verified durable manifest. Incomplete capture returns the durable prefix and cleans staging without server mutation. Complete manifests remain authoritative across derived-index errors. Later per-file failures preserve all backup IDs and the existing committed/unchanged/unknown `PARTIAL_COMMIT` contract; no rollback is attempted.
+
+Tests cover conservative dedup admission, duplicate targets, reservation release, concurrent overcommit, ordered manifests, quota/output failure, no-op exclusion, incomplete durable prefixes, post-capture target changes, derived-index degradation, first-commit barrier, per-target ID inspection, MCP structured errors, replay, partial commit, and HTTP/direct cross-session equivalence.
 
 ## Completion gate
 

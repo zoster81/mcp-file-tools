@@ -13,6 +13,7 @@ import (
 
 	"github.com/zoster81/mcp-file-tools/filetoolsserver"
 	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/encoding"
 )
 
@@ -29,10 +30,22 @@ func check(name string, ok bool) {
 }
 
 func main() {
-	tempDir, _ := os.MkdirTemp("", "mcp-test-*")
-	defer os.RemoveAll(tempDir)
+	baseDir, _ := os.MkdirTemp("", "mcp-test-*")
+	defer os.RemoveAll(baseDir)
+	tempDir := filepath.Join(baseDir, "public")
+	if err := os.Mkdir(tempDir, 0o700); err != nil {
+		panic(err)
+	}
+	store, err := backupstore.Open(backupstore.Options{
+		Directory:                filepath.Join(baseDir, "backup-store"),
+		PublicAllowedDirectories: []string{tempDir},
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer store.Close()
 
-	h := handler.NewHandler([]string{tempDir})
+	h := handler.NewHandler([]string{tempDir}, handler.WithBackupStore(store))
 	ctx := context.Background()
 
 	fmt.Printf("Server version: %s\n\n", filetoolsserver.Version)
@@ -84,7 +97,7 @@ func main() {
 	rPackage, oPackage, _ := h.HandlePatchPackage(ctx, nil, handler.PatchPackageInput{
 		Action: "dryRun",
 		Manifest: handler.PatchPackageManifest{
-			FormatVersion: handler.PatchPackageFormatV1, FingerprintAlgorithm: "sha256", FingerprintMode: "content-v1",
+			FormatVersion: handler.PatchPackageFormatV1, FingerprintAlgorithm: "sha256", FingerprintMode: "content-v1", BackupPolicy: "required",
 			Targets: []handler.PatchPackageTarget{{
 				Path: testFile, ExpectedFingerprint: oPackageFingerprint.Fingerprint,
 				Edits: []handler.EditOperation{{OldText: "Hello!", NewText: "Hello package!"}},
@@ -92,10 +105,10 @@ func main() {
 		},
 	})
 	packageData, _ := os.ReadFile(testFile)
-	check("patch_package (dryRun)", !rPackageFingerprint.IsError && !rPackage.IsError && len(oPackage.PreviewID) == 64 && oPackage.TargetCount == 1 && oPackage.ChangedCount == 1 && string(packageData) == "Hello!")
+	check("patch_package (required dryRun)", !rPackageFingerprint.IsError && !rPackage.IsError && len(oPackage.PreviewID) == 64 && oPackage.BackupPolicy == "required" && oPackage.BackupCount == 0 && oPackage.TargetCount == 1 && oPackage.ChangedCount == 1 && store.Index().ManifestCount == 0 && string(packageData) == "Hello!")
 	rPackageApply, oPackageApply, _ := h.HandlePatchPackage(ctx, nil, handler.PatchPackageInput{Action: "apply", PreviewID: oPackage.PreviewID})
 	packageAppliedData, _ := os.ReadFile(testFile)
-	check("patch_package (apply)", !rPackageApply.IsError && oPackageApply.Applied && string(packageAppliedData) == "Hello package!")
+	check("patch_package (required apply)", !rPackageApply.IsError && oPackageApply.Applied && oPackageApply.BackupCount == 1 && len(oPackageApply.Results[0].BackupID) == 64 && store.Index().ManifestCount == 1 && string(packageAppliedData) == "Hello package!")
 	packageManifest := handler.PatchPackageManifest{
 		FormatVersion: handler.PatchPackageFormatV1, FingerprintAlgorithm: "sha256", FingerprintMode: "content-v1",
 		Targets: []handler.PatchPackageTarget{{
@@ -117,16 +130,16 @@ func main() {
 	check("verify_state", !rVerifyState.IsError && oVerifyState.Passed && oVerifyState.PassedCount == 3)
 
 	rBackupStatus, oBackupStatus, _ := h.HandleBackupStore(ctx, nil, handler.BackupStoreInput{Action: handler.BackupStoreActionStatus})
-	check("backup_store (disabled status)", !rBackupStatus.IsError && !oBackupStatus.Enabled && oBackupStatus.State == handler.BackupStoreStateDisabled)
+	check("backup_store (enabled status)", !rBackupStatus.IsError && oBackupStatus.Enabled && oBackupStatus.State == handler.BackupStoreStateReady)
 
 	rPreview, oPreview, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{
-		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello package!", NewText: "Hello preview!"}},
+		Action: "preview", Path: testFile, Edits: []handler.EditOperation{{OldText: "Hello package!", NewText: "Hello preview!"}}, BackupPolicy: "required",
 	})
 	previewData, _ := os.ReadFile(testFile)
-	check("edit_file (preview)", !rPreview.IsError && len(oPreview.PreviewID) == 64 && string(previewData) == "Hello package!")
+	check("edit_file (required preview)", !rPreview.IsError && len(oPreview.PreviewID) == 64 && oPreview.BackupPolicy == "required" && string(previewData) == "Hello package!")
 	rApply, oApply, _ := h.HandleEditFile(ctx, nil, handler.EditFileInput{Action: "apply", PreviewID: oPreview.PreviewID})
 	appliedData, _ := os.ReadFile(testFile)
-	check("edit_file (apply)", !rApply.IsError && oApply.Applied && string(appliedData) == "Hello preview!")
+	check("edit_file (required apply)", !rApply.IsError && oApply.Applied && len(oApply.BackupID) == 64 && store.Index().ManifestCount == 2 && string(appliedData) == "Hello preview!")
 
 	// Offset/Limit pagination
 	multiFile := filepath.Join(tempDir, "multi.txt")

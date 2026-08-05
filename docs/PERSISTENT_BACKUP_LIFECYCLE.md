@@ -6,9 +6,9 @@
 
 This document is the authoritative security boundary, storage format, lifecycle, restore contract, garbage-collection model, limits, failure semantics, and verification gate for the persistent backup subsystem. Implementation must remain phased so each durability and recovery boundary can be reviewed and verified independently.
 
-R18 phases 1–3 are implemented in source. Phase 1 provides disabled-by-default configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, and denial of the internal root to ordinary filesystem tools. Phase 2 adds internal exact-byte object capture, strict checksummed manifests, conservative quota reservations, a rebuildable derived index, bounded startup recovery, and quick/full read-only audit primitives. Phase 3 exposes only the bounded read-only `backup_store` status/list/inspect/audit surface. Edit/package integration, restore, garbage collection, mutable pinning, and automatic rollback remain unavailable.
+R18 phases 1–5 are implemented in source. Phase 1 provides disabled-by-default configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, and denial of the internal root to ordinary filesystem tools. Phase 2 adds internal exact-byte object capture, strict checksummed manifests, conservative quota reservations, a rebuildable derived index, bounded startup recovery, and quick/full read-only audit primitives. Phase 3 exposes only the bounded read-only `backup_store` status/list/inspect/audit surface. Phase 4 binds preview-only `backupPolicy: "required"` into `edit_file`. Phase 5 adds exact manifest-level package policy, side-effect-free aggregate preflight, atomic conservative all-target reservation, and durable capture of every changed package pre-state before the first commit. Restore, garbage collection, mutable pinning, and automatic rollback remain unavailable.
 
-The existing transactional `.bak` behavior of `convert_encoding` remains unchanged. R16 `edit_file` preview/apply and `patch_package` apply continue to create no persistent backup until their later R18 integration phases change schemas and behavior deliberately.
+The existing transactional `.bak` behavior of `convert_encoding` remains unchanged. `edit_file` and `patch_package` create persistent backups only when their approved preview/manifest explicitly binds `backupPolicy: "required"`; omitted policy, direct editing, and logical no-ops continue to create none.
 
 ## Goals
 
@@ -178,7 +178,7 @@ Phase 2 consumes total-byte, object-size, manifest-count, per-target-version, an
 
 ## Capture transaction
 
-The internal phase-2 capture primitive implements the durable portion of this transaction. It is not yet connected to a public mutation, and its caller must supply an already normalized and authorized target path. When later integration marks a backup as required, the backup must be committed before the associated target mutation begins.
+The internal phase-2 capture primitive implements the durable portion of this transaction. Phase 4 connects it only to approval-bound `edit_file` apply; the caller supplies an already normalized and authorized target path, and the backup is committed before the associated target mutation begins.
 
 1. Validate the requested target through current allowed-root policy.
 2. Capture a bounded digest-bearing snapshot and stable identity.
@@ -200,7 +200,7 @@ If object or manifest persistence fails, the target mutation does not begin. A c
 - Total committed unique object bytes plus live reservations must remain within quota.
 - Deduplication may reduce committed bytes, but admission reserves the conservative full object size until an existing object is verified.
 - Cancellation or failure releases the reservation.
-- Individual capture reservations are implemented; package-wide all-target reservation remains phase 5 work.
+- Individual and package-wide reservations are implemented. Package admission reserves every changed source at its full byte size plus all manifest, pinned, and per-target version capacity atomically before the first capture; verified deduplication may reduce only the committed object bytes.
 - Quota exhaustion is a preflight failure, not a trigger for implicit garbage collection.
 
 ## Mutation integration
@@ -209,23 +209,31 @@ Persistent backup behavior must be explicit and approval-bound.
 
 ### Edit preview/apply
 
-A future additive preview field should declare a backup policy such as `backupPolicy: "required"`. The policy becomes part of the retained preview capability. Apply cannot weaken or remove it.
+R18 phase 4 implements the additive preview field `backupPolicy: "required"`. The value is accepted only in that exact form and retained inside the one-shot preview capability; apply accepts only `previewId` and therefore cannot weaken, remove, or replace it.
 
-- Omitted policy preserves current no-persistent-backup behavior.
-- Required policy captures the exact approved pre-state before target commit.
-- Apply returns the resulting backup identifier only after durable manifest commit.
-- Direct editing remains unchanged in the initial integration unless a separate compatibility decision approves direct backup policy.
+- Omitted policy preserves the no-persistent-backup behavior.
+- Required policy is valid only for preview and requires a configured store.
+- Preview validates availability and returns the retained policy without creating a backup.
+- Apply consumes the capability, revalidates path, identity, and fingerprints, preflights worst-case response size, then captures the exact approved pre-state before permission changes or target replacement.
+- Apply returns `backupId` only after durable manifest commit. A later mutation failure remains an error but preserves that identifier in structured output.
+- Capture failure, quota exhaustion, cancellation before capture, or manifest mismatch prevents mutation.
+- Logical no-ops create no backup because no target mutation follows.
+- Direct editing remains unchanged and rejects `backupPolicy`.
 
 ### Patch packages
 
-A future package manifest may declare package-wide required backup policy.
+R18 phase 5 implements exact manifest-level `backupPolicy: "required"` for patch packages.
 
-- Dry run validates store availability, target eligibility, quota bounds, and worst-case reservation size without creating persistent backups.
-- Apply atomically claims the package capability.
-- Every target pre-state backup is durably captured before the first target commit.
-- If any capture fails, no target mutation begins.
-- Package commit remains per-file and may still return `PARTIAL_COMMIT`; backups improve recovery evidence but do not make multi-file replacement atomic.
-- Automatic rollback remains out of scope.
+- Inspect validates the exact policy value without requiring a configured store.
+- Dry run requires package capture authority, prepares the exact changed set, and performs a side-effect-free conservative aggregate quota preflight without creating objects or manifests.
+- The retained one-shot capability binds the policy; apply still accepts only `previewId`.
+- Apply stages every changed output, atomically reserves the complete package backup budget, and captures changed pre-states in manifest order.
+- Every returned manifest is verified against its expected backup ID shape, normalized target path, `patch_package` source operation, and approved pre-state fingerprint.
+- All package targets are revalidated after capture. The first target commit cannot begin until every changed target has a verified durable manifest.
+- If capture is incomplete, no server target mutation begins. Any already durable prefix remains valid and its per-target `backupId` is returned.
+- A derived-index-only error does not invalidate complete authoritative manifests; apply may continue after all results are verified.
+- Package commit remains per-file and may still return `PARTIAL_COMMIT`; all durable IDs remain in structured output, but backups do not make multi-file replacement atomic.
+- Logical no-op targets receive no backup. Automatic rollback remains out of scope.
 
 ### Existing `.bak` conversion behavior
 
@@ -506,4 +514,4 @@ Maintainers explicitly accepted all ten decisions on 2026-08-04:
 9. existing adjacent `.bak` conversion behavior remains separate;
 10. no automatic patch-package rollback is introduced.
 
-Approval authorizes phased implementation, not a single monolithic change. Each R18 phase must preserve the complete boundary above, add focused failure-injection tests, pass the relevant regression and cross-platform gates, and avoid exposing a partially implemented public promise. R18 phases 1 and 2 added no public backup tool or automatic backup behavior. Phase 3 adds only the read-only management surface; object and manifest creation remains reachable solely through an internal package API that ordinary MCP mutations do not invoke.
+Approval authorizes phased implementation, not a single monolithic change. Each R18 phase must preserve the complete boundary above, add focused failure-injection tests, pass the relevant regression and cross-platform gates, and avoid exposing a partially implemented public promise. R18 phases 1 and 2 added no public backup tool or automatic backup behavior. Phase 3 added only the read-only management surface. Phase 4 connected capture solely to approval-bound `edit_file`. Phase 5 connects package capture solely to a strict `patch-package-v1` manifest carrying `backupPolicy: "required"`; omitted-policy mutation paths retain their prior behavior.

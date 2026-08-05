@@ -17,7 +17,11 @@ import (
 // Capture durably installs or verifies an immutable object, then commits one
 // immutable manifest. The derived index is refreshed only after the manifest is
 // authoritative. A non-zero result may accompany an index-persistence error.
-func (store *Store) Capture(ctx context.Context, request CaptureRequest) (result CaptureResult, err error) {
+func (store *Store) Capture(ctx context.Context, request CaptureRequest) (CaptureResult, error) {
+	return store.capture(ctx, request, -1, false)
+}
+
+func (store *Store) capture(ctx context.Context, request CaptureRequest, expectedSize int64, preReserved bool) (result CaptureResult, err error) {
 	if store == nil {
 		return CaptureResult{}, operation.New(operation.KindInvalidInput, "backup store is unavailable")
 	}
@@ -42,6 +46,9 @@ func (store *Store) Capture(ctx context.Context, request CaptureRequest) (result
 	if lstatInfo.Size() > store.limits.MaxObjectBytes {
 		return CaptureResult{}, operation.New(operation.KindLimit, "backup target exceeds the maximum object size")
 	}
+	if expectedSize >= 0 && lstatInfo.Size() != expectedSize {
+		return CaptureResult{}, operation.New(operation.KindConflict, "backup target size changed after batch preflight")
+	}
 
 	identity, err := filesystem.OpenFileIdentity(request.TargetPath)
 	if err != nil {
@@ -61,11 +68,13 @@ func (store *Store) Capture(ctx context.Context, request CaptureRequest) (result
 		return CaptureResult{}, operation.New(operation.KindConflict, "backup target identity changed before capture")
 	}
 
-	reservation, err := store.reserve(lstatInfo.Size(), request)
-	if err != nil {
-		return CaptureResult{}, err
+	if !preReserved {
+		reservation, reserveErr := store.reserve(lstatInfo.Size(), request)
+		if reserveErr != nil {
+			return CaptureResult{}, reserveErr
+		}
+		defer store.release(reservation)
 	}
-	defer store.release(reservation)
 	if err := store.validateIdentityAndLayout(); err != nil {
 		return CaptureResult{}, err
 	}

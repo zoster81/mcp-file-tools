@@ -30,6 +30,7 @@ type preparedPatchPackage struct {
 	label                      string
 	fingerprintAlgorithm       string
 	fingerprintMode            string
+	backupPolicy               string
 	aggregateMode              string
 	aggregateBeforeFingerprint string
 	aggregateAfterFingerprint  string
@@ -210,7 +211,7 @@ func (prepared *preparedPatchPackage) close() {
 func (prepared preparedPatchPackage) retainedBytes() (int64, error) {
 	parts := []int{
 		len(prepared.formatVersion), len(prepared.label), len(prepared.fingerprintAlgorithm),
-		len(prepared.fingerprintMode), len(prepared.aggregateMode),
+		len(prepared.fingerprintMode), len(prepared.backupPolicy), len(prepared.aggregateMode),
 		len(prepared.aggregateBeforeFingerprint), len(prepared.aggregateAfterFingerprint),
 	}
 	var total int64

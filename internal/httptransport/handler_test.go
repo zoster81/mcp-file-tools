@@ -17,6 +17,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zoster81/mcp-file-tools/filetoolsserver"
 	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/config"
 )
 
@@ -331,15 +332,33 @@ func TestHandlerRejectsAggregateBodySaturation(t *testing.T) {
 }
 
 func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	base := t.TempDir()
+	publicRoot := filepath.Join(base, "public")
+	if err := os.Mkdir(publicRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.EvalSymlinks(publicRoot)
 	if err != nil {
 		t.Fatalf("resolve temporary root: %v", err)
 	}
+	store, err := backupstore.Open(backupstore.Options{
+		Directory:                filepath.Join(base, "backup-store"),
+		PublicAllowedDirectories: []string{root},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("close backup store: %v", err)
+		}
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	server := filetoolsserver.BuildServer(filetoolsserver.ServerOptions{
 		Version:            "http-test",
 		AllowedDirectories: []string{root},
+		BackupStore:        store,
 		Config:             config.Load(),
 		EnableClientRoots:  false,
 		LifecycleContext:   ctx,
@@ -529,6 +548,7 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		"formatVersion":        "patch-package-v1",
 		"fingerprintAlgorithm": "sha256",
 		"fingerprintMode":      "content-v1",
+		"backupPolicy":         "required",
 		"targets": []map[string]any{{
 			"path":                path,
 			"expectedFingerprint": fingerprintOutput.Fingerprint,
@@ -561,15 +581,18 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		t.Fatalf("HTTP patch package dryRun result = %#v err=%v", packageResult, err)
 	}
 	var packagePreview struct {
-		PreviewID string `json:"previewId"`
-		Results   []struct {
+		PreviewID    string `json:"previewId"`
+		BackupPolicy string `json:"backupPolicy"`
+		BackupCount  int    `json:"backupCount"`
+		Results      []struct {
 			ResultFingerprint string `json:"resultFingerprint"`
 		} `json:"results"`
 	}
 	if err := json.Unmarshal([]byte(marshalJSON(t, packageResult.StructuredContent)), &packagePreview); err != nil {
 		t.Fatal(err)
 	}
-	if len(packagePreview.PreviewID) != 64 || len(packagePreview.Results) != 1 || len(packagePreview.Results[0].ResultFingerprint) != 64 {
+	if len(packagePreview.PreviewID) != 64 || packagePreview.BackupPolicy != "required" || packagePreview.BackupCount != 0 ||
+		len(packagePreview.Results) != 1 || len(packagePreview.Results[0].ResultFingerprint) != 64 {
 		t.Fatalf("unexpected package preview: %#v", packagePreview)
 	}
 	readAfterPackage, err := os.ReadFile(path)
@@ -591,14 +614,27 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		t.Fatalf("direct patch package apply result = %#v err=%v", packageApply, err)
 	}
 	var packageApplyOutput struct {
-		Applied   bool   `json:"applied"`
-		PreviewID string `json:"previewId"`
+		Applied      bool   `json:"applied"`
+		PreviewID    string `json:"previewId"`
+		BackupPolicy string `json:"backupPolicy"`
+		BackupCount  int    `json:"backupCount"`
+		Results      []struct {
+			BackupID string `json:"backupId"`
+		} `json:"results"`
 	}
 	if err := json.Unmarshal([]byte(marshalJSON(t, packageApply.StructuredContent)), &packageApplyOutput); err != nil {
 		t.Fatal(err)
 	}
-	if !packageApplyOutput.Applied || packageApplyOutput.PreviewID != "" {
+	if !packageApplyOutput.Applied || packageApplyOutput.PreviewID != "" || packageApplyOutput.BackupPolicy != "required" ||
+		packageApplyOutput.BackupCount != 1 || len(packageApplyOutput.Results) != 1 || len(packageApplyOutput.Results[0].BackupID) != 64 {
 		t.Fatalf("unexpected package apply output: %#v", packageApplyOutput)
+	}
+	packageBackupInspect, err := second.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "inspect", "backupId": packageApplyOutput.Results[0].BackupID},
+	})
+	if err != nil || packageBackupInspect.IsError {
+		t.Fatalf("HTTP package backup inspect result=%#v err=%v", packageBackupInspect, err)
 	}
 	packageReplay, err := second.CallTool(ctx, &mcp.CallToolParams{
 		Name: "patch_package",
@@ -683,22 +719,24 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 	previewResult, err := first.CallTool(ctx, &mcp.CallToolParams{
 		Name: "edit_file",
 		Arguments: map[string]any{
-			"action": "preview",
-			"path":   previewPath,
-			"edits":  []map[string]any{{"oldText": "alpha", "newText": "omega"}},
+			"action":       "preview",
+			"path":         previewPath,
+			"edits":        []map[string]any{{"oldText": "alpha", "newText": "omega"}},
+			"backupPolicy": "required",
 		},
 	})
 	if err != nil || previewResult.IsError {
 		t.Fatalf("HTTP edit preview result = %#v err=%v", previewResult, err)
 	}
 	var previewOutput struct {
-		PreviewID string `json:"previewId"`
-		Changed   bool   `json:"changed"`
+		PreviewID    string `json:"previewId"`
+		BackupPolicy string `json:"backupPolicy"`
+		Changed      bool   `json:"changed"`
 	}
 	if err := json.Unmarshal([]byte(marshalJSON(t, previewResult.StructuredContent)), &previewOutput); err != nil {
 		t.Fatal(err)
 	}
-	if len(previewOutput.PreviewID) != 64 || !previewOutput.Changed {
+	if len(previewOutput.PreviewID) != 64 || !previewOutput.Changed || previewOutput.BackupPolicy != "required" {
 		t.Fatalf("unexpected HTTP edit preview output: %#v", previewOutput)
 	}
 	if data, err := os.ReadFile(previewPath); err != nil || string(data) != "alpha" {
@@ -716,17 +754,26 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		t.Fatalf("direct edit apply result = %#v err=%v", applyResult, err)
 	}
 	var applyOutput struct {
-		PreviewID string `json:"previewId"`
-		Applied   bool   `json:"applied"`
+		PreviewID    string `json:"previewId"`
+		BackupPolicy string `json:"backupPolicy"`
+		BackupID     string `json:"backupId"`
+		Applied      bool   `json:"applied"`
 	}
 	if err := json.Unmarshal([]byte(marshalJSON(t, applyResult.StructuredContent)), &applyOutput); err != nil {
 		t.Fatal(err)
 	}
-	if !applyOutput.Applied || applyOutput.PreviewID != "" {
+	if !applyOutput.Applied || applyOutput.PreviewID != "" || applyOutput.BackupPolicy != "required" || len(applyOutput.BackupID) != 64 {
 		t.Fatalf("unexpected direct edit apply output: %#v", applyOutput)
 	}
 	if data, err := os.ReadFile(previewPath); err != nil || string(data) != "omega" {
 		t.Fatalf("direct apply content: %q err=%v", data, err)
+	}
+	inspectBackup, err := second.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "inspect", "backupId": applyOutput.BackupID},
+	})
+	if err != nil || inspectBackup.IsError {
+		t.Fatalf("HTTP backup inspect result=%#v err=%v", inspectBackup, err)
 	}
 	replayResult, err := second.CallTool(ctx, &mcp.CallToolParams{
 		Name: "edit_file",

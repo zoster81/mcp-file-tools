@@ -6,12 +6,14 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 	"github.com/zoster81/mcp-file-tools/internal/operation"
 	"github.com/zoster81/mcp-file-tools/internal/textstream"
@@ -58,7 +60,7 @@ func validatePatchPackageActionInput(input PatchPackageInput) (string, error) {
 
 func patchPackageManifestEmpty(manifest PatchPackageManifest) bool {
 	return manifest.FormatVersion == "" && manifest.Label == "" && manifest.FingerprintAlgorithm == "" &&
-		manifest.FingerprintMode == "" && len(manifest.Targets) == 0
+		manifest.FingerprintMode == "" && manifest.BackupPolicy == "" && len(manifest.Targets) == 0
 }
 
 func stagePatchPackageReplacement(ctx context.Context, path string, data []byte, mode os.FileMode) (*filesystem.StagedReplacement, error) {
@@ -130,6 +132,68 @@ func (h *Handler) handlePatchPackageApply(ctx context.Context, previewID string)
 			failure := operation.WrapFilesystem("patch_package_after_stage", "", err)
 			failure = h.joinPatchPackageStagingCleanup(failure, staged)
 			return errorResultFromError(failure), PatchPackageOutput{}, nil
+		}
+	}
+
+	if prepared.backupPolicy == editBackupPolicyRequired {
+		if h.backupBatchCapture == nil {
+			failure := operation.New(operation.KindConflict, "required package backup authority is unavailable")
+			return h.patchPackageApplyFailure(prepared, output, -1, failure, staged)
+		}
+		requests := patchPackageCaptureRequests(prepared.label, prepared.targets)
+		if len(requests) > 0 {
+			captures, captureErr := h.backupBatchCapture.CaptureBatch(ctx, requests)
+			changedIndices := make([]int, 0, len(requests))
+			for index := range prepared.targets {
+				if prepared.targets[index].prepared.changed {
+					changedIndices = append(changedIndices, index)
+				}
+			}
+			invalidBatchResult := len(captures) > len(changedIndices)
+			if invalidBatchResult {
+				captureErr = errors.Join(operation.New(operation.KindConflict, "backup batch returned unexpected results"), captureErr)
+				captures = captures[:len(changedIndices)]
+			}
+			verifiedCaptures := 0
+			for captureIndex, captured := range captures {
+				targetIndex := changedIndices[captureIndex]
+				manifest := captured.Manifest
+				if validPatchPackagePreviewID(manifest.BackupID) {
+					output.Results[targetIndex].BackupID = manifest.BackupID
+					output.BackupCount++
+				}
+				if !validPatchPackagePreviewID(manifest.BackupID) || manifest.TargetPath != prepared.targets[targetIndex].resolvedPath ||
+					manifest.SourceOperation != backupstore.SourceOperationPatchPackage ||
+					manifest.ContentFingerprint != prepared.targets[targetIndex].prepared.targetFingerprint {
+					captureErr = errors.Join(captureErr, operation.New(operation.KindConflict, "durable package backup does not match the approved pre-state"))
+					break
+				}
+				verifiedCaptures++
+			}
+			if invalidBatchResult || verifiedCaptures != len(requests) {
+				failedIndex := -1
+				if verifiedCaptures < len(changedIndices) {
+					failedIndex = changedIndices[verifiedCaptures]
+				}
+				if captureErr == nil {
+					captureErr = operation.New(operation.KindFilesystem, "required package backup batch is incomplete")
+				}
+				return h.patchPackageApplyFailure(prepared, output, failedIndex, captureErr, staged)
+			}
+			if captureErr != nil {
+				// Every authoritative manifest is durable; only derived projection work failed.
+				slog.Warn("package backup manifests committed but derived index refresh reported an error", "backupCount", output.BackupCount)
+			}
+		}
+		for index := range prepared.targets {
+			if _, failure := h.revalidatePreparedPatchPackageTarget(ctx, &prepared.targets[index], "after package backup"); failure != nil {
+				if ctx.Err() != nil {
+					cancelled := operation.Wrap(operation.KindCancelled, "verify_package_after_backup", prepared.targets[index].resolvedPath, ctx.Err())
+					return h.patchPackageApplyFailure(prepared, output, index, cancelled, staged)
+				}
+				conflict := operation.New(operation.KindConflict, extractPatchPackageFailureMessage(failure))
+				return h.patchPackageApplyFailure(prepared, output, index, conflict, staged)
+			}
 		}
 	}
 
@@ -447,6 +511,7 @@ func patchPackageOutputFromPreview(preview *patchPackagePreview, action string) 
 		Label:                      prepared.label,
 		FingerprintAlgorithm:       prepared.fingerprintAlgorithm,
 		FingerprintMode:            prepared.fingerprintMode,
+		BackupPolicy:               prepared.backupPolicy,
 		AggregateMode:              prepared.aggregateMode,
 		AggregateBeforeFingerprint: prepared.aggregateBeforeFingerprint,
 		AggregateAfterFingerprint:  prepared.aggregateAfterFingerprint,
@@ -491,7 +556,11 @@ func patchPackageAggregatePrepared(targets []preparedPatchPackageTarget, fingerp
 
 func (h *Handler) checkPatchPackageApplyWorstCaseOutput(output PatchPackageOutput) error {
 	worst := output
+	worst.Results = append([]PatchPackageTargetResult(nil), output.Results...)
 	worst.PartialCommit = true
+	if worst.BackupPolicy == editBackupPolicyRequired {
+		worst.BackupCount = worst.ChangedCount
+	}
 	worst.ActualAggregateFingerprint = strings.Repeat("f", sha256.Size*2)
 	worst.CommittedCount = output.TargetCount
 	worst.UnchangedCount = output.TargetCount
@@ -508,6 +577,9 @@ func (h *Handler) checkPatchPackageApplyWorstCaseOutput(output PatchPackageOutpu
 		worst.Results[index].State = patchPackageStateUnchanged
 		worst.Results[index].Applied = true
 		worst.Results[index].ReadOnlyCleared = true
+		if worst.BackupPolicy == editBackupPolicyRequired && worst.Results[index].Changed {
+			worst.Results[index].BackupID = strings.Repeat("f", patchPackagePreviewTokenBytes*2)
+		}
 	}
 	if len(worst.Results) > 0 {
 		failed := len(worst.Results) - 1
@@ -518,8 +590,12 @@ func (h *Handler) checkPatchPackageApplyWorstCaseOutput(output PatchPackageOutpu
 }
 
 func patchPackageApplyText(output PatchPackageOutput) string {
-	return fmt.Sprintf("Patch package applied in manifest order: %d committed, %d unchanged.\nAggregate result: %s",
+	text := fmt.Sprintf("Patch package applied in manifest order: %d committed, %d unchanged.\nAggregate result: %s",
 		output.CommittedCount, output.UnchangedCount, output.ActualAggregateFingerprint)
+	if output.BackupPolicy != "" {
+		text += fmt.Sprintf("\nDurable pre-state backups: %d", output.BackupCount)
+	}
+	return text
 }
 
 func patchPackageVerifyText(output PatchPackageOutput) string {
@@ -539,9 +615,13 @@ func patchPackageFailureText(output PatchPackageOutput) string {
 	if output.FailedIndex != nil {
 		location = fmt.Sprintf("Failure at target %d (%s)", *output.FailedIndex, output.FailedPath)
 	}
-	return fmt.Sprintf("%s\n%s: %s [%s]\nFinal classification: %d committed, %d unchanged, %d unknown.",
+	text := fmt.Sprintf("%s\n%s: %s [%s]\nFinal classification: %d committed, %d unchanged, %d unknown.",
 		status, location, output.FailureMessage, output.FailureCode,
 		output.CommittedCount, output.UnchangedCount, output.UnknownCount)
+	if output.BackupPolicy != "" {
+		text += fmt.Sprintf("\nDurable pre-state backups: %d", output.BackupCount)
+	}
+	return text
 }
 
 func extractPatchPackageFailureMessage(result *mcp.CallToolResult) string {

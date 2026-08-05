@@ -74,6 +74,53 @@ func TestBuildServerWiresAndProtectsConfiguredBackupStore(t *testing.T) {
 		}
 	}
 
+	editPreview, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "edit_file",
+		Arguments: map[string]any{
+			"action":       "preview",
+			"path":         target,
+			"edits":        []map[string]any{{"oldText": "backup", "newText": "edited"}},
+			"backupPolicy": "required",
+		},
+	})
+	if err != nil || editPreview.IsError {
+		t.Fatalf("edit preview result=%#v err=%v", editPreview, err)
+	}
+	var previewOutput struct {
+		PreviewID    string `json:"previewId"`
+		BackupPolicy string `json:"backupPolicy"`
+	}
+	decodeStructuredOutput(t, editPreview.StructuredContent, &previewOutput)
+	if len(previewOutput.PreviewID) != 64 || previewOutput.BackupPolicy != "required" {
+		t.Fatalf("edit preview output=%+v", previewOutput)
+	}
+	editApply, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "edit_file",
+		Arguments: map[string]any{"action": "apply", "previewId": previewOutput.PreviewID},
+	})
+	if err != nil || editApply.IsError {
+		t.Fatalf("edit apply result=%#v err=%v", editApply, err)
+	}
+	var applyOutput struct {
+		Applied      bool   `json:"applied"`
+		BackupPolicy string `json:"backupPolicy"`
+		BackupID     string `json:"backupId"`
+	}
+	decodeStructuredOutput(t, editApply.StructuredContent, &applyOutput)
+	if !applyOutput.Applied || applyOutput.BackupPolicy != "required" || len(applyOutput.BackupID) != 64 || applyOutput.BackupID == capture.Manifest.BackupID {
+		t.Fatalf("edit apply output=%+v", applyOutput)
+	}
+	backupInspect, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "inspect", "backupId": applyOutput.BackupID},
+	})
+	if err != nil || backupInspect.IsError {
+		t.Fatalf("backup inspect result=%#v err=%v", backupInspect, err)
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "edited source bytes" {
+		t.Fatalf("edited target=%q err=%v", data, err)
+	}
+
 	denied, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "read_text_file",
 		Arguments: map[string]any{"path": filepath.Join(storeRoot, "store.json")},
@@ -163,6 +210,17 @@ func TestBuildServerUsesProvidedConfiguration(t *testing.T) {
 	want := []byte{0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2}
 	if !bytes.Equal(data, want) {
 		t.Fatalf("configured output bytes = %x, want cp1251 %x", data, want)
+	}
+}
+
+func decodeStructuredOutput(t *testing.T, value any, output any) {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, output); err != nil {
+		t.Fatalf("decode structured output %s: %v", data, err)
 	}
 }
 

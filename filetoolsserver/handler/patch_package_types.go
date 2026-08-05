@@ -39,6 +39,7 @@ type PatchPackageManifest struct {
 	Label                string               `json:"label,omitempty"`
 	FingerprintAlgorithm string               `json:"fingerprintAlgorithm"`
 	FingerprintMode      string               `json:"fingerprintMode"`
+	BackupPolicy         string               `json:"backupPolicy,omitempty"`
 	Targets              []PatchPackageTarget `json:"targets"`
 }
 
@@ -71,6 +72,7 @@ type PatchPackageTargetResult struct {
 	Applied                   bool   `json:"applied"`
 	Verified                  bool   `json:"verified"`
 	ReadOnlyCleared           bool   `json:"readOnlyCleared,omitempty"`
+	BackupID                  string `json:"backupId,omitempty"`
 	ErrorCode                 string `json:"errorCode,omitempty"`
 	Error                     string `json:"error,omitempty"`
 }
@@ -95,6 +97,8 @@ type PatchPackageOutput struct {
 	UnchangedCount             int                        `json:"unchangedCount"`
 	MismatchCount              int                        `json:"mismatchCount"`
 	UnknownCount               int                        `json:"unknownCount"`
+	BackupPolicy               string                     `json:"backupPolicy,omitempty"`
+	BackupCount                int                        `json:"backupCount"`
 	Applied                    bool                       `json:"applied"`
 	Verified                   bool                       `json:"verified"`
 	PartialCommit              bool                       `json:"partialCommit"`

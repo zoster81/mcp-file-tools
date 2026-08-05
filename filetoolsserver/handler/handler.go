@@ -15,13 +15,25 @@ import (
 	"github.com/zoster81/mcp-file-tools/internal/security"
 )
 
-// BackupStoreReader is the read-only management contract exposed by the handler.
+// BackupStoreReader is the read-only management contract exposed publicly.
 type BackupStoreReader interface {
 	Root() string
 	Status(context.Context) (backupstore.StoreStatus, error)
 	List(context.Context, backupstore.ListOptions) (backupstore.ListResult, error)
 	Inspect(context.Context, string, backupstore.InspectOptions) (backupstore.InspectResult, error)
 	Audit(context.Context, backupstore.AuditOptions) (backupstore.AuditReport, error)
+}
+
+// BackupStoreCapturer is the internal mutation authority detected separately
+// from the public read-only management contract.
+type BackupStoreCapturer interface {
+	Capture(context.Context, backupstore.CaptureRequest) (backupstore.CaptureResult, error)
+}
+
+// BackupStoreBatchCapturer is the package-wide admission and capture authority.
+type BackupStoreBatchCapturer interface {
+	PreflightCaptureBatch(context.Context, []backupstore.CaptureRequest) error
+	CaptureBatch(context.Context, []backupstore.CaptureRequest) ([]backupstore.CaptureResult, error)
 }
 
 // Default permissions for new files and directories
@@ -41,6 +53,8 @@ type Handler struct {
 	protectedRequestedDirs         []string // immutable internal roots denied to public tools
 	protectedDirs                  []string // resolved internal roots denied to public tools
 	backupStore                    BackupStoreReader
+	backupCapture                  BackupStoreCapturer
+	backupBatchCapture             BackupStoreBatchCapturer
 	editPreviews                   *editPreviewStore
 	patchPackagePreviews           *patchPackagePreviewStore
 	patchPackageStageReplacement   func(context.Context, string, []byte, os.FileMode) (*filesystem.StagedReplacement, error)
@@ -84,10 +98,19 @@ func WithProtectedDirectories(dirs []string) Option {
 	}
 }
 
-// WithBackupStore configures the optional process-wide read-only management store.
+// WithBackupStore configures optional read-only management and detects whether
+// the same store also provides the internal capture authority.
 func WithBackupStore(store BackupStoreReader) Option {
 	return func(h *Handler) {
 		h.backupStore = store
+		h.backupCapture = nil
+		h.backupBatchCapture = nil
+		if capturer, ok := store.(BackupStoreCapturer); ok {
+			h.backupCapture = capturer
+		}
+		if capturer, ok := store.(BackupStoreBatchCapturer); ok {
+			h.backupBatchCapture = capturer
+		}
 		if store != nil && store.Root() != "" {
 			requested, resolved := normalizeAllowedDirectorySets([]string{store.Root()})
 			h.protectedRequestedDirs = mergeUniqueDirectories(h.protectedRequestedDirs, requested)

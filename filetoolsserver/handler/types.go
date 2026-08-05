@@ -177,6 +177,7 @@ type EditFileInput struct {
 	DryRun        bool            `json:"dryRun,omitempty"`
 	Encoding      string          `json:"encoding,omitempty"`
 	ForceWritable *bool           `json:"forceWritable,omitempty"` // default: false - fail on read-only files
+	BackupPolicy  string          `json:"backupPolicy,omitempty"`  // preview only: required
 }
 
 type EditFileOutput struct {
@@ -193,6 +194,8 @@ type EditFileOutput struct {
 	HasBOM            bool   `json:"hasBOM,omitempty"`
 	BOMType           string `json:"bomType,omitempty"`
 	LineEndingStyle   string `json:"lineEndingStyle,omitempty"`
+	BackupPolicy      string `json:"backupPolicy,omitempty"`
+	BackupID          string `json:"backupId,omitempty"`
 	Changed           bool   `json:"changed"`
 	Applied           bool   `json:"applied"`
 }

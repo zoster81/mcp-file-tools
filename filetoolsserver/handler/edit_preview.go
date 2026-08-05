@@ -27,6 +27,7 @@ type preparedEdit struct {
 	encoding          string
 	bomType           string
 	lineEndingStyle   string
+	backupPolicy      string
 	hasBOM            bool
 	changed           bool
 	forceWritable     bool
@@ -215,7 +216,7 @@ func (prepared preparedEdit) retainedBytes() (int64, error) {
 	parts := []int{
 		len(prepared.data), len(prepared.diff), len(prepared.requestedPath), len(prepared.resolvedPath),
 		len(prepared.targetFingerprint), len(prepared.resultFingerprint), len(prepared.encoding),
-		len(prepared.bomType), len(prepared.lineEndingStyle),
+		len(prepared.bomType), len(prepared.lineEndingStyle), len(prepared.backupPolicy),
 	}
 	var total int64
 	for _, part := range parts {

@@ -9,17 +9,30 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/zoster81/mcp-file-tools/internal/backupstore"
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 	"github.com/zoster81/mcp-file-tools/internal/operation"
 )
 
 const (
-	editActionDirect  = "direct"
-	editActionPreview = "preview"
-	editActionApply   = "apply"
+	editActionDirect         = "direct"
+	editActionPreview        = "preview"
+	editActionApply          = "apply"
+	editBackupPolicyRequired = "required"
 )
 
+func normalizeEditBackupPolicy(value string) (string, error) {
+	if value == "" || value == editBackupPolicyRequired {
+		return value, nil
+	}
+	return "", operation.New(operation.KindInvalidInput, "backupPolicy must be exactly required when provided")
+}
+
 func validateEditActionInput(input EditFileInput) (string, error) {
+	backupPolicy, err := normalizeEditBackupPolicy(input.BackupPolicy)
+	if err != nil {
+		return "", err
+	}
 	action := strings.ToLower(strings.TrimSpace(input.Action))
 	if action == "" {
 		action = editActionDirect
@@ -28,6 +41,9 @@ func validateEditActionInput(input EditFileInput) (string, error) {
 	case editActionDirect:
 		if input.PreviewID != "" {
 			return "", operation.New(operation.KindInvalidInput, "previewId is valid only with action=apply")
+		}
+		if backupPolicy != "" {
+			return "", operation.New(operation.KindInvalidInput, "backupPolicy is valid only with action=preview")
 		}
 	case editActionPreview:
 		if input.PreviewID != "" {
@@ -41,7 +57,7 @@ func validateEditActionInput(input EditFileInput) (string, error) {
 			return "", operation.New(operation.KindInvalidInput, "previewId must be 64 hexadecimal characters")
 		}
 		if input.Path != "" || len(input.Edits) != 0 || strings.TrimSpace(input.Patch) != "" ||
-			input.DryRun || input.Encoding != "" || input.ForceWritable != nil {
+			input.DryRun || input.Encoding != "" || input.ForceWritable != nil || input.BackupPolicy != "" {
 			return "", operation.New(operation.KindInvalidInput, "action=apply accepts only previewId")
 		}
 	default:
@@ -51,6 +67,10 @@ func validateEditActionInput(input EditFileInput) (string, error) {
 }
 
 func (h *Handler) prepareEdit(ctx context.Context, input EditFileInput) (preparedEdit, *mcp.CallToolResult) {
+	backupPolicy, err := normalizeEditBackupPolicy(input.BackupPolicy)
+	if err != nil {
+		return preparedEdit{}, errorResultFromError(err)
+	}
 	if len(input.Edits) == 0 && strings.TrimSpace(input.Patch) == "" {
 		return preparedEdit{}, errorResult("edits or patch is required")
 	}
@@ -141,6 +161,7 @@ func (h *Handler) prepareEdit(ctx context.Context, input EditFileInput) (prepare
 		hasBOM:            document.BOM.HasBOM,
 		bomType:           document.BOM.Type,
 		lineEndingStyle:   document.LineEndings.Style,
+		backupPolicy:      backupPolicy,
 		changed:           changed,
 		forceWritable:     forceWritable,
 		sourceMode:        document.Mode,
@@ -181,6 +202,11 @@ func (h *Handler) handleDirectEdit(ctx context.Context, input EditFileInput) (*m
 }
 
 func (h *Handler) handleEditPreview(ctx context.Context, input EditFileInput) (*mcp.CallToolResult, EditFileOutput, error) {
+	backupPolicy, _ := normalizeEditBackupPolicy(input.BackupPolicy)
+	if backupPolicy == editBackupPolicyRequired && h.backupCapture == nil {
+		err := operation.New(operation.KindInvalidInput, "backup store is not configured")
+		return errorResultFromError(err), EditFileOutput{}, nil
+	}
 	prepared, failure := h.prepareEdit(ctx, input)
 	if failure != nil {
 		return failure, EditFileOutput{}, nil
@@ -247,9 +273,13 @@ func (h *Handler) handleEditApply(ctx context.Context, previewID string) (*mcp.C
 	output := editOutputFromPreview(preview)
 	output.Action = editActionApply
 	output.PreviewID = ""
-	output.Applied = true
+	output.Applied = false
 	worstCase := output
+	worstCase.Applied = true
 	worstCase.ReadOnlyCleared = true
+	if prepared.changed && prepared.backupPolicy == editBackupPolicyRequired {
+		worstCase.BackupID = strings.Repeat("f", editPreviewTokenBytes*2)
+	}
 	if err := h.checkEditResponseLimit(worstCase, editApplyText(worstCase)+"\nRead-only flag was cleared."); err != nil {
 		return errorResultFromError(err), EditFileOutput{}, nil
 	}
@@ -257,8 +287,41 @@ func (h *Handler) handleEditApply(ctx context.Context, previewID string) (*mcp.C
 	if err != nil || !matches {
 		return errorResultWithCode(ErrCodeConflict, "target file identity changed before edit commit"), EditFileOutput{}, nil
 	}
+
+	if prepared.changed && prepared.backupPolicy == editBackupPolicyRequired {
+		if h.backupCapture == nil {
+			err := operation.New(operation.KindConflict, "required backup store is unavailable")
+			return errorResultFromError(err), output, nil
+		}
+		captured, captureErr := h.backupCapture.Capture(ctx, backupstore.CaptureRequest{
+			TargetPath:      validation.Path,
+			SourceOperation: backupstore.SourceOperationEdit,
+		})
+		if captured.Manifest.BackupID == "" {
+			if captureErr == nil {
+				captureErr = operation.New(operation.KindFilesystem, "required backup did not commit a manifest")
+			}
+			return errorResultFromError(captureErr), output, nil
+		}
+		output.BackupID = captured.Manifest.BackupID
+		if !validEditPreviewID(output.BackupID) || captured.Manifest.TargetPath != validation.Path ||
+			captured.Manifest.SourceOperation != backupstore.SourceOperationEdit ||
+			captured.Manifest.ContentFingerprint != prepared.targetFingerprint {
+			return errorResultWithCode(ErrCodeConflict, "durable backup does not match the approved edit pre-state"), output, nil
+		}
+		if captureErr != nil {
+			// The manifest is authoritative and durable; the derived index is disposable.
+			slog.Warn("backup manifest committed but derived index refresh reported an error")
+		}
+		matches, err = prepared.identityFile.Matches(validation.Path)
+		if err != nil || !matches {
+			return errorResultWithCode(ErrCodeConflict, "target file identity changed after durable backup"), output, nil
+		}
+	}
+
 	if err := prepared.identityFile.Close(); err != nil {
-		return errorResultFromError(operation.WrapFilesystem("close_edit_preview_identity", validation.Path, err)), EditFileOutput{}, nil
+		failure := errorResultFromError(operation.WrapFilesystem("close_edit_preview_identity", validation.Path, err))
+		return failure, output, nil
 	}
 	prepared.identityFile = nil
 
@@ -267,22 +330,23 @@ func (h *Handler) handleEditApply(ctx context.Context, previewID string) (*mcp.C
 		var commitFailure *mcp.CallToolResult
 		readOnlyCleared, commitFailure = h.commitPreparedEdit(ctx, prepared, current, current.Mode.Perm())
 		if commitFailure != nil {
-			return commitFailure, EditFileOutput{}, nil
+			return commitFailure, output, nil
 		}
 	}
 	post, err := filesystem.CaptureSnapshotWithDigest(validation.Path)
 	if err != nil {
-		return errorResultFromError(err), EditFileOutput{}, nil
+		return errorResultFromError(err), output, nil
 	}
 	actualFingerprint, err := filesystem.FingerprintRegularFileSnapshot(post)
 	if err != nil {
-		return errorResultFromError(err), EditFileOutput{}, nil
+		return errorResultFromError(err), output, nil
 	}
 	if actualFingerprint != prepared.resultFingerprint {
-		return errorResultWithCode(ErrCodeConflict, "applied file does not match the prepared result fingerprint"), EditFileOutput{}, nil
+		return errorResultWithCode(ErrCodeConflict, "applied file does not match the prepared result fingerprint"), output, nil
 	}
 	output.ReadOnlyCleared = readOnlyCleared
 	output.ResultFingerprint = actualFingerprint
+	output.Applied = true
 	text := editApplyText(output)
 	if readOnlyCleared {
 		text += "\nRead-only flag was cleared."
@@ -347,6 +411,7 @@ func editOutputFromPrepared(action string, prepared preparedEdit) EditFileOutput
 		HasBOM:            prepared.hasBOM,
 		BOMType:           prepared.bomType,
 		LineEndingStyle:   prepared.lineEndingStyle,
+		BackupPolicy:      prepared.backupPolicy,
 		Changed:           prepared.changed,
 	}
 }
@@ -362,13 +427,21 @@ func editOutputFromPreview(preview *editPreview) EditFileOutput {
 const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 
 func editPreviewText(output EditFileOutput) string {
-	return fmt.Sprintf("Edit preview prepared.\nPreview ID: %s\nExpires: %s\nTarget fingerprint: %s\nResult fingerprint: %s\n\n%s",
-		output.PreviewID, output.ExpiresAt, output.TargetFingerprint, output.ResultFingerprint, output.Diff)
+	policy := ""
+	if output.BackupPolicy != "" {
+		policy = "\nBackup policy: " + output.BackupPolicy
+	}
+	return fmt.Sprintf("Edit preview prepared.\nPreview ID: %s\nExpires: %s\nTarget fingerprint: %s\nResult fingerprint: %s%s\n\n%s",
+		output.PreviewID, output.ExpiresAt, output.TargetFingerprint, output.ResultFingerprint, policy, output.Diff)
 }
 
 func editApplyText(output EditFileOutput) string {
-	return fmt.Sprintf("Edit preview applied.\nTarget fingerprint: %s\nResult fingerprint: %s\n\n%s",
-		output.TargetFingerprint, output.ResultFingerprint, output.Diff)
+	backup := ""
+	if output.BackupID != "" {
+		backup = "\nBackup ID: " + output.BackupID
+	}
+	return fmt.Sprintf("Edit preview applied.\nTarget fingerprint: %s\nResult fingerprint: %s%s\n\n%s",
+		output.TargetFingerprint, output.ResultFingerprint, backup, output.Diff)
 }
 
 func (h *Handler) checkEditResponseLimit(output EditFileOutput, text string) error {

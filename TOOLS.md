@@ -148,12 +148,12 @@ Edit one existing text file through one shared encoding/BOM-aware preparation pi
 `action` selects one of three modes:
 
 - omitted or `direct`: preserve the historical behavior; prepare and optionally commit in one request;
-- `preview`: prepare the exact encoded result without changing the file, retain it in a bounded process-local cache, and return a 256-bit `previewId`, expiry, diff, encoding metadata, and target/result fingerprints;
-- `apply`: accept only `previewId`, atomically consume it, revalidate path, file identity, target fingerprint, and prepared-result fingerprint, then commit the exact retained bytes through the durable mutation layer.
+- `preview`: prepare the exact encoded result without changing the file, optionally bind `backupPolicy: "required"`, retain the policy and exact mutation in a bounded process-local cache, and return a 256-bit `previewId`, expiry, diff, encoding metadata, and target/result fingerprints;
+- `apply`: accept only `previewId`, atomically consume it, revalidate path, file identity, target fingerprint, and prepared-result fingerprint, durably capture the approved pre-state first when the retained policy is `required`, then commit the exact retained bytes through the durable mutation layer.
 
 Every apply attempt is terminal, including conflict, cancellation, encoding-independent write failure, or successful no-op. Unknown, expired, evicted, replayed, or restart-invalidated identifiers return `CONFLICT`. Preview identifiers are never listed or written to ordinary logs. They are process-wide capabilities because every connection already shares the same roots and authorization policy; possession authorizes only the exact prepared mutation.
 
-The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `128`), `MCP_MAX_EDIT_PREVIEW_BYTES` (default `67108864` dynamic retained bytes), and `MCP_EDIT_PREVIEW_TTL_SECONDS` (default `900`). Expired entries are removed before deterministic FIFO eviction. Cache removal closes retained file-identity handles. Preview/apply creates no persistent backup and process restart invalidates all previews.
+The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `128`), `MCP_MAX_EDIT_PREVIEW_BYTES` (default `67108864` dynamic retained bytes), and `MCP_EDIT_PREVIEW_TTL_SECONDS` (default `900`). Expired entries are removed before deterministic FIFO eviction. Cache removal closes retained file-identity handles, and process restart invalidates all previews. Omitted `backupPolicy` preserves the no-persistent-backup behavior. `backupPolicy: "required"` is accepted only by preview and requires a configured store; no backup is created until apply, and a logical no-op creates none.
 
 **Parameters:**
 - `action` (optional): `direct` (default), `preview`, or `apply`
@@ -164,6 +164,7 @@ The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `
 - `dryRun` (direct only): Return the prepared diff without writing
 - `encoding` (direct/preview only): File encoding, auto-detected when omitted
 - `forceWritable` (direct/preview only): Clear a read-only flag during commit when explicitly authorized
+- `backupPolicy` (preview only): Omit for no persistent backup, or set exactly `required`; apply cannot override or weaken the retained policy
 
 **Preparation and commit guarantees:**
 - exact, whitespace-flexible, or opt-in bounded fuzzy matching with one unique best candidate;
@@ -174,6 +175,8 @@ The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `
 - one exact prepared byte sequence shared by preview and apply;
 - target and result SHA-256 `content-v1` fingerprints;
 - stable open-file identity retained through approval, including same-content path-replacement detection;
+- when required, exact-byte pre-state capture with a durable checksummed manifest before permission changes or target replacement;
+- failed capture prevents mutation; a backup committed before a later write failure remains valid and its `backupId` remains in structured output;
 - synced same-directory staging, atomic replacement, path revalidation, snapshot conflict detection, and post-commit fingerprint verification.
 
 **Direct example:**
@@ -194,7 +197,8 @@ The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `
 {
   "action": "preview",
   "path": "/path/to/file.go",
-  "patch": "--- /path/to/file.go\n+++ /path/to/file.go\n@@ -1 +1 @@\n-old\n+new\n"
+  "patch": "--- /path/to/file.go\n+++ /path/to/file.go\n@@ -1 +1 @@\n-old\n+new\n",
+  "backupPolicy": "required"
 }
 ```
 
@@ -211,6 +215,7 @@ The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `
   "resultFingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "encoding": "utf-8",
   "lineEndingStyle": "lf",
+  "backupPolicy": "required",
   "changed": true,
   "applied": false
 }
@@ -224,13 +229,13 @@ The preview cache is bounded independently by `MCP_MAX_EDIT_PREVIEWS` (default `
 }
 ```
 
-A successful apply omits `previewId` so the consumed capability is not re-emitted. `applied: true` means the prepared action completed successfully; `changed` distinguishes a committed byte change from a successful logical no-op. `readOnlyCleared` appears only when the approved commit cleared that flag.
+A successful apply omits `previewId` so the consumed capability is not re-emitted. `applied: true` means the prepared action completed successfully; `changed` distinguishes a committed byte change from a successful logical no-op. `backupPolicy` repeats the retained policy and `backupId` appears only after a durable manifest commit. If target mutation then fails, the MCP call is an error but structured output still carries that `backupId` with `applied: false`. `readOnlyCleared` appears only when the approved commit cleared that flag.
 
 ### patch_package
 
 Run a strict versioned package of coordinated edits to existing regular files. The four actions are `inspect`, `dryRun`, `apply`, and `verify`. The workflow preserves the package's declared order and encoding/BOM/line-ending behavior, but it does **not** claim atomic multi-file commit or automatic rollback.
 
-The input and every nested manifest object reject unknown JSON fields. `formatVersion` must be `patch-package-v1`, `fingerprintAlgorithm` must be `sha256`, and `fingerprintMode` must be `content-v1`. Targets must use unique normalized paths resolving to distinct filesystem objects; duplicate spellings, symlink aliases, junction aliases, and hard links are rejected. Creation, deletion, movement, renaming, and `/dev/null` patches are unsupported.
+The input and every nested manifest object reject unknown JSON fields. `formatVersion` must be `patch-package-v1`, `fingerprintAlgorithm` must be `sha256`, and `fingerprintMode` must be `content-v1`. The manifest may omit `backupPolicy` or set it exactly to `required`. Targets must use unique normalized paths resolving to distinct filesystem objects; duplicate spellings, symlink aliases, junction aliases, and hard links are rejected. Creation, deletion, movement, renaming, and `/dev/null` patches are unsupported.
 
 Each target declares:
 
@@ -243,8 +248,8 @@ Each target declares:
 **Actions:**
 
 - `inspect`: validates structure, limits, paths, file types, aliases, edit shapes, fuzzy thresholds, patch structure, and declared algorithms without reading target contents.
-- `dryRun`: obtains a coherent package-wide pre-state, retains one stable file identity per target, prepares the exact result bytes through the shared edit pipeline, verifies final unchanged source state, and returns diffs plus aggregate pre/post fingerprints. It also stores the exact prepared package in a bounded process-local cache and returns a 256-bit `previewId`.
-- `apply`: accepts only `previewId`. The capability is atomically consumed before validation, so replay, conflict, cancellation, staging failure, commit failure, and success are all terminal. Every target is revalidated with bounded digest snapshots and every changed result is durably staged before the first commit. Commits then occur in manifest order, followed by a coherent two-pass final fingerprint verification across all targets before success. No modified manifest is accepted and no automatic rollback is attempted.
+- `dryRun`: obtains a coherent package-wide pre-state, retains one stable file identity per target, prepares the exact result bytes through the shared edit pipeline, verifies final unchanged source state, and returns diffs plus aggregate pre/post fingerprints. When `backupPolicy` is `required`, it also validates package capture authority and conservatively preflights the aggregate source bytes, manifest count, pin count, and per-target version quotas without creating persistent state. It stores the exact prepared package and policy in a bounded process-local cache and returns a 256-bit `previewId`.
+- `apply`: accepts only `previewId`. The capability is atomically consumed before validation, so replay, conflict, cancellation, staging failure, capture failure, commit failure, and success are all terminal. Every target is revalidated and every changed result is durably staged. When required, the store atomically reserves the complete conservative package budget, captures changed pre-states in manifest order, and the handler verifies every backup ID, path, source operation, and fingerprint. All targets are revalidated again after capture; only then can the first manifest-order commit begin. A failed capture creates no target mutation, although any already durable backup prefix remains valid and is returned. Final coherent fingerprint verification and existing `PARTIAL_COMMIT` semantics remain unchanged; no modified manifest is accepted and no automatic rollback is attempted.
 - `verify`: requires `expectedResultFingerprint` for every target, reads current fingerprints, and returns ordered per-target matches plus expected and actual aggregate fingerprints. A mismatch returns `CONFLICT` with structured results.
 
 Package preview identifiers are process-wide capabilities because every connection already shares the same roots and authorization policy. They are never listed or written to normal logs. Restart invalidates them. Expired entries are removed before deterministic FIFO eviction, and every removal closes retained file identities.
@@ -257,7 +262,7 @@ All changed outputs are staged before the first commit, but filesystem replaceme
 - `unchanged`: current bytes match the approved pre-state;
 - `unknown`: neither state can be proven or the target could not be inspected conclusively.
 
-When at least one target is committed or unknown, the MCP error code is `PARTIAL_COMMIT`. The structured response includes `failedIndex`, `failedPath`, the underlying `failureCode`, bounded `failureMessage`, counts, per-target states, and actual fingerprints where available. The server does not call this transactional and does not create or use a persistent rollback store.
+When at least one target is committed or unknown, the MCP error code is `PARTIAL_COMMIT`. The structured response includes `failedIndex`, `failedPath`, the underlying `failureCode`, bounded `failureMessage`, counts, per-target states, actual fingerprints where available, and every durable per-target `backupId` produced by a required policy. Backups improve recovery evidence but do not make replacement transactional, trigger rollback, or change classification semantics.
 
 **Limits:**
 
@@ -268,7 +273,8 @@ When at least one target is committed or unknown, the MCP error code is `PARTIAL
 - `MCP_MAX_PATCH_PACKAGE_PREVIEWS` bounds live package capabilities per process (default `16`);
 - `MCP_MAX_PATCH_PACKAGE_PREVIEW_BYTES` bounds bytes retained by all live package capabilities (default `134217728`);
 - `MCP_PATCH_PACKAGE_PREVIEW_TTL_SECONDS` bounds capability lifetime (default `900`);
-- `MCP_MAX_OUTPUT_BYTES` bounds combined structured and text output, including worst-case partial-state diagnostics.
+- `MCP_MAX_OUTPUT_BYTES` bounds combined structured and text output, including worst-case partial-state diagnostics and backup identifiers;
+- configured backup-store total-byte, object-byte, manifest, per-target-version, and pinned limits bound required package admission. Dry run and apply charge every changed source at full size conservatively even when verified deduplication later lowers committed object bytes.
 
 **Dry-run example:**
 
@@ -280,6 +286,7 @@ When at least one target is committed or unknown, the MCP error code is `PARTIAL
     "label": "Rename two helpers",
     "fingerprintAlgorithm": "sha256",
     "fingerprintMode": "content-v1",
+    "backupPolicy": "required",
     "targets": [
       {
         "path": "/project/a.go",
@@ -315,6 +322,8 @@ The successful dry-run response includes:
   "expiresAt": "2026-08-04T00:15:00Z",
   "targetCount": 2,
   "changedCount": 2,
+  "backupPolicy": "required",
+  "backupCount": 0,
   "results": [
     {
       "index": 0,
@@ -340,7 +349,7 @@ The successful dry-run response includes:
 }
 ```
 
-A successful apply omits the consumed identifier and reports `applied: true`, `committedCount`, `unchangedCount`, `actualAggregateFingerprint`, and per-target `committed` or `unchanged` states.
+A successful apply omits the consumed identifier and reports `applied: true`, `committedCount`, `unchangedCount`, `actualAggregateFingerprint`, and per-target `committed` or `unchanged` states. With required policy it also reports `backupPolicy: "required"`, `backupCount`, and one `backupId` for every changed target; logical no-ops receive none.
 
 **Verify example:**
 
