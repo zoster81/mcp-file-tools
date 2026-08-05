@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"runtime"
 	"strings"
@@ -12,6 +13,28 @@ import (
 
 	"github.com/zoster81/mcp-file-tools/internal/filesystem"
 )
+
+func FuzzDecodeDescriptor(f *testing.F) {
+	valid, err := json.Marshal(fuzzDescriptor())
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(valid)
+	f.Add([]byte{})
+	f.Add([]byte(`{"formatVersion":"backup-store-v1"}`))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > maxDescriptorBytes+1 {
+			t.Skip()
+		}
+		descriptor, err := decodeDescriptor(io.LimitReader(bytes.NewReader(data), maxDescriptorBytes+1))
+		if err == nil {
+			if validateErr := validateDescriptor(descriptor); validateErr != nil {
+				t.Fatalf("decoder accepted invalid descriptor: %#v: %v", descriptor, validateErr)
+			}
+		}
+	})
+}
 
 func FuzzDecodeManifest(f *testing.F) {
 	descriptor := fuzzDescriptor()

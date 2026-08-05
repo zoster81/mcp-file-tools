@@ -627,7 +627,11 @@ func readDescriptor(path string, lstatInfo fs.FileInfo) (Descriptor, error) {
 	if !info.Mode().IsRegular() || !os.SameFile(lstatInfo, info) || info.Size() > maxDescriptorBytes {
 		return Descriptor{}, operation.Wrap(operation.KindFilesystem, "validate_backup_store", "", errors.New("backup store descriptor identity or size is invalid"))
 	}
-	decoder := json.NewDecoder(io.LimitReader(file, maxDescriptorBytes+1))
+	return decodeDescriptor(io.LimitReader(file, maxDescriptorBytes+1))
+}
+
+func decodeDescriptor(reader io.Reader) (Descriptor, error) {
+	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	var descriptor Descriptor
 	if err := decoder.Decode(&descriptor); err != nil {

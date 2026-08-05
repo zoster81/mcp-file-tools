@@ -12,7 +12,7 @@ The fork is a secure, encoding-aware MCP filesystem service for local, tunneled,
 - process-wide allowed-directory policy with symlink, junction, reparse-point, and missing-ancestor validation;
 - bounded-memory decoding, reading, grep, conversion, line-ending, and BOM operations across 24 registered encodings;
 - durable staged mutations with practical concurrent-change detection, no-replace creation, backup rollback, and platform-specific synchronization;
-- an optional dedicated persistent backup store with immutable content-addressed objects, checksummed manifests, bounded read-only management, and approval-bound pre-state capture for prepared edits and patch packages;
+- an optional dedicated persistent backup store with immutable content-addressed objects, checksummed manifests, bounded management/audit, approval-bound pre-state capture for prepared edits and patch packages, one-shot original-target restore, and explicit generation-bound garbage collection;
 - transport-independent error categories and tool metadata;
 - optional `run_script` and unrestricted `shell` tools, both disabled by default, with an additional execution gate for HTTP;
 - reproducible multi-platform releases, checksum-driven MCP Registry publication, and a non-root transport-neutral container.

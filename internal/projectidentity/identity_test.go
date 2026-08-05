@@ -267,6 +267,20 @@ func TestValidationToolVersionsArePinned(t *testing.T) {
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/publish-registry.yml"), "MCP_PUBLISHER_VERSION: 1.7.9")
 }
 
+func TestBackupStoreFuzzTargetsRunInCI(t *testing.T) {
+	root := repositoryRoot(t)
+	workflow := filepath.FromSlash(".github/workflows/test.yml")
+	for _, target := range []string{
+		"FuzzDecodeDescriptor",
+		"FuzzDecodeManifest",
+		"FuzzDecodeIndex",
+		"FuzzDecodeListCursor",
+		"FuzzValidateGCPlan",
+	} {
+		assertFileContains(t, root, workflow, target)
+	}
+}
+
 func assertFileContains(t *testing.T, root, relativePath, expected string) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(root, relativePath))

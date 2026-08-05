@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15 and R16 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 is active and implements that contract in independently reviewable phases; phases 1–7 now provide the disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, bounded review/audit, approval-bound edit/package capture, one-shot original-target restore, and explicit generation-bound GC with no background deletion.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15, R16, and R18 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 implements that contract through a disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, bounded review/audit, approval-bound edit/package capture, one-shot original-target restore, and explicit generation-bound GC with no background deletion.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -33,7 +33,7 @@ Product identity and the fork's independent relationship to upstream are defined
 | R15 | COMPLETE | Added attributed agent-ergonomics and project-aware workflows while preserving transport, memory, mutation, and security guarantees. |
 | R16 | COMPLETE | Added verified change workflows through deterministic fingerprints, one-shot edit preview/apply, declared patch packages, and structured verification. |
 | R17 | COMPLETE | Approved the bounded persistent-backup lifecycle, security boundary, quotas, restore safety, explicit GC, and non-rollback decisions. |
-| R18 | ACTIVE | Implement the approved persistent-backup subsystem in phased, failure-injected, cross-platform increments. |
+| R18 | COMPLETE | Implemented and verified the approved persistent-backup subsystem in phased, failure-injected, cross-platform increments. |
 
 ---
 
@@ -427,13 +427,15 @@ The approved design baseline is [VERIFIED_CHANGE_WORKFLOWS.md](VERIFIED_CHANGE_W
 
 ## Separately governed follow-on work
 
-Persistent backup storage and user-managed change review remain outside R16. R17 approved their lifecycle design, and R18 implements it in separate phases rather than introducing an incidental unbounded `.bak` scheme or implying that patch packages can already be restored.
+Persistent backup storage and user-managed change review remain outside R16. R17 approved their lifecycle design, and R18 implemented it in separate phases rather than introducing an incidental unbounded `.bak` scheme or weakening the completed R16 contracts.
 
-At the current R18 phase-5 boundary:
+At the completed R18 boundary:
 
 - omitted-policy edit/package workflows and direct edit create no persistent backup;
 - edit preview may retain `backupPolicy: "required"`, causing apply to capture the approved pre-state before mutation;
 - a patch-package manifest may retain the same exact policy, causing dry run to preflight and apply to capture every changed pre-state before the first commit;
+- original-target restore requires a durable safety backup when the target exists;
+- GC remains explicit, generation-bound, pin-aware, manifest-first, and reference-counted;
 - package backups provide recovery evidence but no retained automatic rollback or multi-file atomicity;
 - existing operation-specific `.bak` behavior remains unchanged.
 
@@ -457,7 +459,7 @@ At the current R18 phase-5 boundary:
 4. Patch-package apply, partial-commit reporting, and verify.
 5. Initial structured verification checks.
 6. Full R16 verification and documentation alignment.
-7. Complete and approve a separate persistent-backup lifecycle design before implementation. **Completed as R17; implementation is tracked in R18.**
+7. Complete and approve a separate persistent-backup lifecycle design before implementation. **Completed as R17; implementation completed as R18.**
 
 ## Completion gate
 
@@ -501,7 +503,7 @@ Maintainers accepted all ten decisions on 2026-08-04: a dedicated non-overlappin
 
 ## Status
 
-Active. Implementation follows the approved [persistent backup lifecycle](PERSISTENT_BACKUP_LIFECYCLE.md) in independently reviewable phases. Phases 3–7 add bounded review/audit, approval-bound `edit_file` and `patch_package` capture, original-target restore, and explicit generation-bound GC while the public source catalog remains 27 tools and the published 2.0.0 baseline remains 23.
+Completed on 2026-08-05. The approved [persistent backup lifecycle](PERSISTENT_BACKUP_LIFECYCLE.md) is implemented and verified in source. The public source catalog remains 27 tools, while the published and deployed 2.0.0 baseline remains unchanged at 23 tools.
 
 ## Goal
 
@@ -516,7 +518,7 @@ Implement durable exact-byte capture, bounded metadata management, approval-boun
 - [x] Phase 5 — Add package-wide reservation and all-target backup capture before the first `patch_package` commit while preserving explicit `PARTIAL_COMMIT` semantics and no automatic rollback.
 - [x] Phase 6 — Add original-target restore preview/apply with exact object verification, stale-target rejection, and mandatory safety backup of an existing target.
 - [x] Phase 7 — Add generation-bound GC dry-run/apply, immutable pin-at-creation semantics, manifest-first removal, reference-counted object deletion, trash recovery, and no background deletion.
-- [ ] Complete failure injection, fuzzing, race, static-analysis, vulnerability, documentation, transport-equivalence, six-target build, native runtime smoke, and release gates for the full subsystem.
+- [x] Complete failure injection, fuzzing, race, static-analysis, vulnerability, documentation, transport-equivalence, six-target build, native runtime smoke, and release gates for the full subsystem.
 
 ## Phase 1 behavior
 
@@ -571,3 +573,7 @@ Tests cover retention and version-limit policy, one-version floor, immutable pin
 ## Completion gate
 
 R18 is complete only when every phase is implemented and reviewed, live manifests can never reference missing durable objects by intentional ordering, required mutations cannot start before durable backup capture, restore always preserves an existing current state, GC cannot remove a referenced object, all state and outputs remain bounded, ordinary tools cannot access the store, and the complete cross-platform and release verification matrix passes.
+
+## Completion record
+
+Completed on 2026-08-05. A full lifecycle regression verifies approval-bound edit capture, original-target restore with a durable safety backup, generation-bound GC, full audit, and repeated store reopen while public target bytes remain unchanged by GC. The complete package suite and race detector passed in deterministic shards where the remote tunnel timeout prevented one monolithic invocation; `go mod tidy -diff`, module verification, vet, Staticcheck, govulncheck, workflow linting, manual MCP checks, Node release tests, and all five persistent-format fuzz targets passed. Six Windows/Linux/macOS amd64/arm64 binaries and backup-store test executables compiled, the generated six-package Registry manifest passed MCP Publisher 1.7.9 validation, and native Windows stdio smoke exposed all 27 tools. A temporary Linux/amd64 container passed UID 10001, read-only-root, dropped-capability, `no-new-privileges`, bounded-tmpfs, stdio MCP, direct-TLS HTTP readiness, `401`/`403`/`405`, no-CORS, and clean shutdown checks. Temporary binaries, manifests, images, containers, volumes, certificates, and the OCI engine were removed or restored to their initial state. No push, tag, release, deployment, launcher change, or runtime restart occurred.

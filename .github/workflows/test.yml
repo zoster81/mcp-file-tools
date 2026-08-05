@@ -59,6 +59,11 @@ jobs:
           go test ./internal/httptransport -run '^$' -fuzz '^FuzzNormalizeOrigin$' -fuzztime=5s
           go test ./internal/httptransport -run '^$' -fuzz '^FuzzTrustedProxyClientAddress$' -fuzztime=5s
           go test ./internal/httptransport -run '^$' -fuzz '^FuzzJSONRPCMessageRoundTrip$' -fuzztime=5s
+          go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeDescriptor$' -fuzztime=5s
+          go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeManifest$' -fuzztime=5s
+          go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeIndex$' -fuzztime=5s
+          go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeListCursor$' -fuzztime=5s
+          go test ./internal/backupstore -run '^$' -fuzz '^FuzzValidateGCPlan$' -fuzztime=5s
 
       - name: Lint GitHub Actions workflows
         if: matrix.os == 'ubuntu-latest'

@@ -189,9 +189,9 @@ Implemented tests cover valid and malformed JSON, unsupported encodings, UTF-16 
 
 ## 5. Approved persistent backup follow-on design
 
-The follow-on lifecycle is maintained in [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md). Maintainers approved its ten decisions as R17 on 2026-08-04, and R18 now implements that contract in separate reviewable phases rather than extending R16 incidentally.
+The follow-on lifecycle is maintained in [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md). Maintainers approved its ten decisions as R17 on 2026-08-04, and R18 implemented that contract in separate reviewable phases rather than extending R16 incidentally.
 
-R18 phases 1–7 add the disabled-by-default internal store foundation, exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative single and package-wide quota reservations, bounded recovery, a rebuildable derived index, bounded `backup_store` review/audit, approval-bound `edit_file` plus `patch_package` capture, one-shot original-target restore with mandatory safety backup for an existing target, and explicit generation-bound GC. No action exposes object bytes or internal store paths, and GC output omits target paths.
+R18 phases 1–7 implement the disabled-by-default internal store foundation, exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative single and package-wide quota reservations, bounded recovery, a rebuildable derived index, bounded `backup_store` review/audit, approval-bound `edit_file` plus `patch_package` capture, one-shot original-target restore with mandatory safety backup for an existing target, and explicit generation-bound GC. No action exposes object bytes or internal store paths, and GC output omits target paths.
 
 Current mutation behavior is deliberately narrow:
 
@@ -214,7 +214,7 @@ Every later phase must preserve the approved dedicated store, verified content-a
 4. Implement package apply and verify with the explicit partial-commit contract.
 5. Add the initial structured verification checks. **Implemented.**
 6. Run the complete R16 compatibility, race, security, catalog, transport-equivalence, documentation, and repository verification gates.
-7. Hold and approve a separate backup lifecycle design before adding persistent backup storage, restore, garbage collection, or package rollback. **Completed as R17; implementation is tracked in R18.**
+7. Hold and approve a separate backup lifecycle design before adding persistent backup storage, restore, garbage collection, or package rollback. **Completed as R17; implementation completed as R18.**
 
 ## R16 completion gate
 
