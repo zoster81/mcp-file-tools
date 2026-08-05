@@ -23,7 +23,7 @@ type backupVisibilitySnapshot struct {
 	scope              string
 }
 
-// HandleBackupStore exposes the configured store through read-only bounded actions.
+// HandleBackupStore exposes bounded management actions and approval-bound restore.
 func (h *Handler) HandleBackupStore(ctx context.Context, _ *mcp.CallToolRequest, input BackupStoreInput) (*mcp.CallToolResult, BackupStoreOutput, error) {
 	if err := validateBackupStoreInput(input); err != nil {
 		return errorResultFromError(err), BackupStoreOutput{}, nil
@@ -123,6 +123,12 @@ func (h *Handler) HandleBackupStore(ctx context.Context, _ *mcp.CallToolRequest,
 		}
 		return h.finishBackupStoreOutput(output, "Backup metadata and object integrity verified.")
 
+	case BackupStoreActionRestorePreview:
+		return h.handleBackupStoreRestorePreview(ctx, input.BackupID, visibility)
+
+	case BackupStoreActionRestoreApply:
+		return h.handleBackupStoreRestoreApply(ctx, input.PreviewID)
+
 	case BackupStoreActionAudit:
 		audit, err := h.backupStore.Audit(ctx, backupstore.AuditOptions{
 			Mode:       backupstore.AuditMode(input.AuditMode),
@@ -151,48 +157,68 @@ func (h *Handler) HandleBackupStore(ctx context.Context, _ *mcp.CallToolRequest,
 func validateBackupStoreInput(input BackupStoreInput) error {
 	hasListFields := input.Cursor != "" || input.Limit != 0 || input.TargetPath != "" || input.Pinned != nil
 	hasInspectFields := input.BackupID != ""
+	hasRestoreApplyFields := input.PreviewID != ""
 	hasAuditFields := input.AuditMode != "" || input.MaxObjects != 0 || input.MaxBytes != 0
 
 	switch input.Action {
 	case BackupStoreActionStatus:
-		if hasListFields || hasInspectFields || hasAuditFields {
+		if hasListFields || hasInspectFields || hasRestoreApplyFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "status accepts only action")
 		}
 	case BackupStoreActionList:
-		if hasInspectFields || hasAuditFields {
+		if hasInspectFields || hasRestoreApplyFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "list accepts only cursor, limit, targetPath, and pinned")
 		}
 	case BackupStoreActionInspect:
 		if input.BackupID == "" {
 			return operation.New(operation.KindInvalidInput, "inspect requires backupId")
 		}
-		if hasListFields || hasAuditFields {
+		if hasListFields || hasRestoreApplyFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "inspect accepts only backupId")
 		}
+	case BackupStoreActionRestorePreview:
+		if input.BackupID == "" {
+			return operation.New(operation.KindInvalidInput, "restorePreview requires backupId")
+		}
+		if hasListFields || hasRestoreApplyFields || hasAuditFields {
+			return operation.New(operation.KindInvalidInput, "restorePreview accepts only backupId")
+		}
+	case BackupStoreActionRestoreApply:
+		if !validRestorePreviewID(input.PreviewID) {
+			return operation.New(operation.KindInvalidInput, "previewId must be 64 hexadecimal characters")
+		}
+		if hasListFields || hasInspectFields || hasAuditFields {
+			return operation.New(operation.KindInvalidInput, "restoreApply accepts only previewId")
+		}
 	case BackupStoreActionAudit:
-		if hasListFields || hasInspectFields {
+		if hasListFields || hasInspectFields || hasRestoreApplyFields {
 			return operation.New(operation.KindInvalidInput, "audit accepts only auditMode, maxObjects, and maxBytes")
 		}
 		if input.AuditMode != "" && input.AuditMode != string(backupstore.AuditQuick) && input.AuditMode != string(backupstore.AuditFull) {
 			return operation.New(operation.KindInvalidInput, "auditMode must be quick or full")
 		}
 	default:
-		return operation.New(operation.KindInvalidInput, "action must be status, list, inspect, or audit")
+		return operation.New(operation.KindInvalidInput, "action must be status, list, inspect, audit, restorePreview, or restoreApply")
 	}
 	return nil
 }
 
 func (h *Handler) finishBackupStoreOutput(output BackupStoreOutput, text string) (*mcp.CallToolResult, BackupStoreOutput, error) {
-	encoded, err := json.Marshal(output)
-	if err != nil {
-		wrapped := operation.Wrap(operation.KindFilesystem, "encode_backup_store_output", "", err)
-		return errorResultFromError(wrapped), BackupStoreOutput{}, nil
-	}
-	if int64(len(encoded))+int64(len(text)) > h.maxOutputBytes() {
-		limitErr := operation.New(operation.KindLimit, fmt.Sprintf("backup store output exceeds limit %d bytes", h.maxOutputBytes()))
-		return errorResultFromError(limitErr), BackupStoreOutput{}, nil
+	if err := h.checkBackupStoreOutputLimit(output, text); err != nil {
+		return errorResultFromError(err), BackupStoreOutput{}, nil
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, output, nil
+}
+
+func (h *Handler) checkBackupStoreOutputLimit(output BackupStoreOutput, text string) error {
+	encoded, err := json.Marshal(output)
+	if err != nil {
+		return operation.Wrap(operation.KindFilesystem, "encode_backup_store_output", "", err)
+	}
+	if int64(len(encoded))+int64(len(text)) > h.maxOutputBytes() {
+		return operation.New(operation.KindLimit, fmt.Sprintf("backup store output exceeds limit %d bytes", h.maxOutputBytes()))
+	}
+	return nil
 }
 
 func (h *Handler) backupVisibilitySnapshot() backupVisibilitySnapshot {

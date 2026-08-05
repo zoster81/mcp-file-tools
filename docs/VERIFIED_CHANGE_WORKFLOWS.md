@@ -191,7 +191,7 @@ Implemented tests cover valid and malformed JSON, unsupported encodings, UTF-16 
 
 The follow-on lifecycle is maintained in [PERSISTENT_BACKUP_LIFECYCLE.md](PERSISTENT_BACKUP_LIFECYCLE.md). Maintainers approved its ten decisions as R17 on 2026-08-04, and R18 now implements that contract in separate reviewable phases rather than extending R16 incidentally.
 
-R18 phases 1–5 add the disabled-by-default internal store foundation, exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative single and package-wide quota reservations, bounded recovery, a rebuildable derived index, the read-only `backup_store` status/list/inspect/audit surface, and approval-bound `edit_file` plus `patch_package` capture. The management tool exposes only currently authorized redacted metadata and integrity results.
+R18 phases 1–6 add the disabled-by-default internal store foundation, exact-byte capture, verified content-addressed objects, strict checksummed manifests, conservative single and package-wide quota reservations, bounded recovery, a rebuildable derived index, bounded `backup_store` review/audit, approval-bound `edit_file` plus `patch_package` capture, and one-shot original-target restore with mandatory safety backup for an existing target. No action exposes object bytes or internal store paths.
 
 Current mutation behavior is deliberately narrow:
 
@@ -200,6 +200,7 @@ Current mutation behavior is deliberately narrow:
 - omitted policy, direct edit, and logical no-op create no persistent backup;
 - required backups are durable before the associated mutation boundary, and later failures preserve their identifiers;
 - package backups provide no automatic rollback or multi-file atomicity and retain explicit `PARTIAL_COMMIT` classification;
+- `backup_store.restorePreview`/`restoreApply` restore only the selected manifest's original authorized target, consume one-shot capabilities, require a durable safety backup for an existing target, and classify post-replacement failures without automatic rollback;
 - existing tool-specific `.bak` behavior remains unchanged and must not be generalized accidentally.
 
 Every later phase must preserve the approved dedicated store, verified content-addressed objects, immutable checksummed manifests, derived index, conservative quota reservations, explicit retention and pinning, restore safety backup, dry-run/apply GC, secret-handling, crash-recovery, disabled-by-default policy, separate `.bak` behavior, and no-automatic-rollback decisions.

@@ -282,16 +282,26 @@ type StagedReplacement struct {
 }
 
 // StageReplacement streams source into a synced same-directory temporary file.
-// It does not inspect or modify the current target.
+// It does not inspect or modify the current target. A zero permission mode uses
+// the historical safe default 0600.
 func StageReplacement(target string, source io.Reader, mode fs.FileMode, modTime *time.Time) (staged *StagedReplacement, err error) {
 	defer func() {
 		err = operation.WrapFilesystem("stage_replacement", target, err)
 	}()
-	return stageReplacement(target, source, mode, modTime, defaultMutationOps)
+	return stageReplacement(target, source, mode, modTime, true, defaultMutationOps)
 }
 
-func stageReplacement(target string, source io.Reader, mode fs.FileMode, modTime *time.Time, ops mutationOps) (*StagedReplacement, error) {
-	if mode.Perm() == 0 {
+// StageReplacementExactMode preserves mode exactly, including permission mode
+// 0000. It is intended for restoring already-authorized immutable metadata.
+func StageReplacementExactMode(target string, source io.Reader, mode fs.FileMode, modTime *time.Time) (staged *StagedReplacement, err error) {
+	defer func() {
+		err = operation.WrapFilesystem("stage_replacement_exact_mode", target, err)
+	}()
+	return stageReplacement(target, source, mode, modTime, false, defaultMutationOps)
+}
+
+func stageReplacement(target string, source io.Reader, mode fs.FileMode, modTime *time.Time, defaultZeroMode bool, ops mutationOps) (*StagedReplacement, error) {
+	if defaultZeroMode && mode.Perm() == 0 {
 		mode = 0600
 	}
 	tempPath, size, digest, err := stageReader(target, source, mode, modTime, ops)
@@ -333,6 +343,12 @@ func (staged *StagedReplacement) Commit(options ReplaceOptions) (changed bool, e
 	}
 	staged.tempPath = ""
 	return true, nil
+}
+
+// MatchesContentDigest reports whether the staged replacement contains exactly
+// the expected byte count and raw SHA-256 digest without exposing its path.
+func (staged *StagedReplacement) MatchesContentDigest(size int64, digest [sha256.Size]byte) bool {
+	return staged != nil && staged.tempPath != "" && staged.size == size && staged.digest == digest
 }
 
 // Cleanup removes an uncommitted staged replacement. It is safe to call more

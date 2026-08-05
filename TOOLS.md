@@ -672,7 +672,7 @@ Git receives closed stdin, bounded stdout/stderr, cancellation and process-tree 
 
 ### backup_store
 
-Read bounded metadata from the optional persistent backup store. This tool is strictly read-only: it never returns object bytes or internal store paths, never repairs or deletes data, and does not enable automatic backup capture. It is always registered so stdio and Streamable HTTP expose the same schema. When `MCP_BACKUP_STORE_DIR` is unset, `action=status` returns `enabled: false`; the other actions fail with `INVALID_INPUT`.
+Review and restore from the optional persistent backup store without returning object bytes or internal store paths. `status`, `list`, `inspect`, and `audit` remain read-only. `restorePreview` and `restoreApply` form an approval-bound mutation workflow restricted to the selected manifest's original currently authorized target. The tool is always registered so stdio and Streamable HTTP expose the same schema. When `MCP_BACKUP_STORE_DIR` is unset, `action=status` returns `enabled: false`; the other actions fail with `INVALID_INPUT`.
 
 Actions form a strict union:
 
@@ -680,8 +680,10 @@ Actions form a strict union:
 - `list`: accepts `cursor`, `limit`, `targetPath`, and `pinned`. Results are newest-first and include only targets authorized by the current process roots. The opaque keyset cursor is authenticated and bound to the exact filters, current allowed/protected-root policy snapshot, and store generation; target visibility is revalidated on every page. Tampered or filter-swapped cursors fail with `INVALID_INPUT`, while a changed store generation fails with `CONFLICT`. `limit` defaults to 50 and cannot exceed 100.
 - `inspect`: requires `backupId` and accepts no other action fields. It validates the strict manifest, confirms that its target is currently authorized, and fully hashes the referenced object before returning metadata such as digest, byte count, pre-state fingerprint, mode, modification time, label, pinned state, and manifest checksum. Object bytes are never returned.
 - `audit`: accepts `auditMode=quick|full`, `maxObjects`, and `maxBytes`. Quick mode validates structure, references, object sizes, recovery residue, orphans, and index consistency. Full mode additionally hashes every referenced object under the requested limits, which cannot exceed the configured store limits. Audit reports issues but never repairs, quarantines, or deletes data.
+- `restorePreview`: requires `backupId` and accepts no other action fields. It authorizes only the immutable manifest's original target, fully verifies the manifest and object, captures the exact current regular-file fingerprint or missing state, and preflights quota for the mandatory safety backup when the target exists. It returns current/result fingerprints, exact object size, an optional bounded diff when both states are safely decodable, and a 256-bit expiring `previewId`. It creates no object, manifest, or target mutation.
+- `restoreApply`: accepts only `previewId`. The capability is atomically consumed before validation, so success, failure, cancellation, stale state, and replay are terminal. Apply revalidates current authorization, source manifest/object identity and digest, target identity/fingerprint or missing state, and the prepared result. Exact source bytes are durably staged. An existing target is then captured as a mandatory durable `sourceOperation=restore` safety backup before any permission change or replacement; a missing target receives no safety backup and is installed with no-replace. Final bytes are fingerprinted before success. Operational errors preserve `safetyBackupId` plus `restored`, `unchanged`, `missing`, or `unknown` evidence without automatic rollback.
 
-Every result is additionally bounded by `MCP_MAX_OUTPUT_BYTES`. Backup target paths are exposed only when they still pass the current allowed-root and protected-root policy. The store itself remains inaccessible through ordinary filesystem tools.
+Every result and retained restore plan is bounded. `MCP_BACKUP_PLAN_TTL_SECONDS` controls plan lifetime; the process also enforces fixed caps of 64 live restore capabilities, 16 MiB retained restore metadata/diffs, and 1 MiB per-state diff input. `MCP_MAX_OUTPUT_BYTES` bounds responses. Backup target paths are exposed only when they still pass the current allowed-root and protected-root policy. The store itself remains inaccessible through ordinary filesystem tools. Restore never deletes or consumes the source backup, does not accept an alternate destination, and does not imply automatic rollback.
 
 **Status example:**
 ```json
@@ -717,6 +719,26 @@ Every result is additionally bounded by `MCP_MAX_OUTPUT_BYTES`. Backup target pa
   "maxBytes": 1073741824
 }
 ```
+
+**Restore preview example:**
+```json
+{
+  "action": "restorePreview",
+  "backupId": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
+
+A successful preview returns a nested `restore` object with `previewId`, `targetPath`, `targetExisted`, `currentFingerprint` when present, `resultFingerprint`, `objectBytes`, `objectVerified: true`, optional `diff`, and `state: "prepared"`.
+
+**Restore apply example:**
+```json
+{
+  "action": "restoreApply",
+  "previewId": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+}
+```
+
+A successful existing-target apply returns `state: "restored"`, `applied: true`, `actualFingerprint`, and `safetyBackupId`. A successful missing-target restore omits `safetyBackupId`. Any later error retains the safety identifier and classified actual state in structured output.
 
 ### grep_text_files
 

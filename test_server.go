@@ -141,6 +141,16 @@ func main() {
 	appliedData, _ := os.ReadFile(testFile)
 	check("edit_file (required apply)", !rApply.IsError && oApply.Applied && len(oApply.BackupID) == 64 && store.Index().ManifestCount == 2 && string(appliedData) == "Hello preview!")
 
+	rRestorePreview, oRestorePreview, _ := h.HandleBackupStore(ctx, nil, handler.BackupStoreInput{
+		Action: handler.BackupStoreActionRestorePreview, BackupID: oPackageApply.Results[0].BackupID,
+	})
+	check("backup_store (restore preview)", !rRestorePreview.IsError && oRestorePreview.Restore != nil && len(oRestorePreview.Restore.PreviewID) == 64 && !oRestorePreview.Restore.Applied && store.Index().ManifestCount == 2)
+	rRestoreApply, oRestoreApply, _ := h.HandleBackupStore(ctx, nil, handler.BackupStoreInput{
+		Action: handler.BackupStoreActionRestoreApply, PreviewID: oRestorePreview.Restore.PreviewID,
+	})
+	restoredData, _ := os.ReadFile(testFile)
+	check("backup_store (restore apply)", !rRestoreApply.IsError && oRestoreApply.Restore != nil && oRestoreApply.Restore.Applied && len(oRestoreApply.Restore.SafetyBackupID) == 64 && store.Index().ManifestCount == 3 && string(restoredData) == "Hello!")
+
 	// Offset/Limit pagination
 	multiFile := filepath.Join(tempDir, "multi.txt")
 	os.WriteFile(multiFile, []byte("a\nb\nc\nd"), 0644)

@@ -36,6 +36,14 @@ type BackupStoreBatchCapturer interface {
 	CaptureBatch(context.Context, []backupstore.CaptureRequest) ([]backupstore.CaptureResult, error)
 }
 
+// BackupStoreRestorer is the internal original-target restore authority detected
+// separately from the read-only management contract.
+type BackupStoreRestorer interface {
+	OpenRestoreSource(context.Context, string, backupstore.RestoreSourceOptions) (*backupstore.RestoreSource, error)
+	RestorePlanTTL() time.Duration
+	RestoreObjectLimit() int64
+}
+
 // Default permissions for new files and directories
 const (
 	DefaultFileMode os.FileMode = 0644
@@ -55,11 +63,16 @@ type Handler struct {
 	backupStore                    BackupStoreReader
 	backupCapture                  BackupStoreCapturer
 	backupBatchCapture             BackupStoreBatchCapturer
+	backupRestore                  BackupStoreRestorer
 	editPreviews                   *editPreviewStore
+	restorePreviews                *restorePreviewStore
 	patchPackagePreviews           *patchPackagePreviewStore
 	patchPackageStageReplacement   func(context.Context, string, []byte, os.FileMode) (*filesystem.StagedReplacement, error)
 	patchPackageCommitReplacement  func(int, *filesystem.StagedReplacement, filesystem.ReplaceOptions) (bool, error)
 	patchPackageCleanupReplacement func(*filesystem.StagedReplacement) error
+	restoreStageReplacement        func(context.Context, *backupstore.RestoreSource, string, os.FileMode, *time.Time) (*filesystem.StagedReplacement, error)
+	restoreCommitReplacement       func(*filesystem.StagedReplacement, filesystem.ReplaceOptions) (bool, error)
+	restoreCleanupReplacement      func(*filesystem.StagedReplacement) error
 	verifyGitExecutable            func() (string, error)
 	verifyGitRun                   func(context.Context, verificationGitRequest) (execution.Result, error)
 	replaceFile                    func(string, []byte, filesystem.ReplaceOptions) error
@@ -105,11 +118,15 @@ func WithBackupStore(store BackupStoreReader) Option {
 		h.backupStore = store
 		h.backupCapture = nil
 		h.backupBatchCapture = nil
+		h.backupRestore = nil
 		if capturer, ok := store.(BackupStoreCapturer); ok {
 			h.backupCapture = capturer
 		}
 		if capturer, ok := store.(BackupStoreBatchCapturer); ok {
 			h.backupBatchCapture = capturer
+		}
+		if restorer, ok := store.(BackupStoreRestorer); ok {
+			h.backupRestore = restorer
 		}
 		if store != nil && store.Root() != "" {
 			requested, resolved := normalizeAllowedDirectorySets([]string{store.Root()})
@@ -144,6 +161,11 @@ func NewHandler(allowedDirs []string, opts ...Option) *Handler {
 		h.maxEditPreviewBytes(),
 		time.Duration(h.editPreviewTTLSeconds())*time.Second,
 	)
+	restoreTTL := 15 * time.Minute
+	if h.backupRestore != nil && h.backupRestore.RestorePlanTTL() > 0 {
+		restoreTTL = h.backupRestore.RestorePlanTTL()
+	}
+	h.restorePreviews = newRestorePreviewStore(restorePreviewMaxEntries, restorePreviewMaxBytes, restoreTTL)
 	h.replaceFile = filesystem.ReplaceFile
 	h.patchPackagePreviews = newPatchPackagePreviewStore(
 		h.maxPatchPackagePreviews(),
@@ -153,6 +175,13 @@ func NewHandler(allowedDirs []string, opts ...Option) *Handler {
 	h.patchPackageStageReplacement = stagePatchPackageReplacement
 	h.patchPackageCommitReplacement = commitPatchPackageReplacement
 	h.patchPackageCleanupReplacement = func(staged *filesystem.StagedReplacement) error { return staged.Cleanup() }
+	h.restoreStageReplacement = func(ctx context.Context, source *backupstore.RestoreSource, target string, mode os.FileMode, modTime *time.Time) (*filesystem.StagedReplacement, error) {
+		return source.Stage(ctx, target, mode, modTime)
+	}
+	h.restoreCommitReplacement = func(staged *filesystem.StagedReplacement, options filesystem.ReplaceOptions) (bool, error) {
+		return staged.Commit(options)
+	}
+	h.restoreCleanupReplacement = func(staged *filesystem.StagedReplacement) error { return staged.Cleanup() }
 	h.verifyGitExecutable = findVerificationGit
 	h.verifyGitRun = h.runVerificationGit
 

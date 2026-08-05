@@ -23,9 +23,15 @@ func TestHandleBackupStoreDisabledStatusAndActionRejection(t *testing.T) {
 		t.Fatalf("disabled status output = %#v", output)
 	}
 
-	result, _, err = h.HandleBackupStore(context.Background(), nil, BackupStoreInput{Action: BackupStoreActionList})
-	if err != nil || !result.IsError || result.Meta[ErrorCodeMetaKey] != ErrCodeInvalidInput {
-		t.Fatalf("disabled list result=%+v err=%v", result, err)
+	for _, input := range []BackupStoreInput{
+		{Action: BackupStoreActionList},
+		{Action: BackupStoreActionRestorePreview, BackupID: strings.Repeat("a", 64)},
+		{Action: BackupStoreActionRestoreApply, PreviewID: strings.Repeat("a", 64)},
+	} {
+		result, _, err = h.HandleBackupStore(context.Background(), nil, input)
+		if err != nil || !result.IsError || result.Meta[ErrorCodeMetaKey] != ErrCodeInvalidInput {
+			t.Fatalf("disabled action %q result=%+v err=%v", input.Action, result, err)
+		}
 	}
 }
 

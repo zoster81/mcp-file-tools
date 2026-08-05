@@ -112,10 +112,10 @@
     {
       "name": "backup_store",
       "title": "Backup Store",
-      "description": "Read bounded metadata from the optional persistent backup store without returning object bytes or internal store paths. status reports redacted format, health, quota, counts, and recovery residue; list returns newest-first currently authorized manifest metadata with exact target/pinned filters and an authenticated generation-bound cursor; inspect verifies one manifest and fully hashes its referenced object before returning metadata; audit runs quick structural checks or a bounded full referenced-object hash audit. The tool is always registered, but only status succeeds when MCP_BACKUP_STORE_DIR is unset. Parameters: action=status|list|inspect|audit, cursor, limit, targetPath, pinned, backupId, auditMode=quick|full, maxObjects, maxBytes.",
+      "description": "Manage the optional persistent backup store without returning object bytes or internal store paths. status, list, inspect, and audit remain bounded read-only metadata/integrity actions. restorePreview verifies one manifest and object, authorizes only its original target, records the exact current or missing target state, preflights the mandatory safety backup for an existing target, and stores one bounded expiring 256-bit capability without mutation. restoreApply accepts only that one-shot previewId, revalidates source, authorization, identity, and fingerprints, stages exact object bytes, durably captures an existing current target with sourceOperation=restore before any permission change or replacement, and commits through optimistic replace or missing-target no-replace. Replay and stale state fail closed; errors preserve safetyBackupId and restored/unchanged/missing/unknown evidence without automatic rollback. The tool is always registered, but only status succeeds when MCP_BACKUP_STORE_DIR is unset. Parameters: action=status|list|inspect|audit|restorePreview|restoreApply, cursor, limit, targetPath, pinned, backupId, previewId, auditMode=quick|full, maxObjects, maxBytes.",
       "annotations": {
-        "readOnlyHint": true,
-        "idempotentHint": true,
+        "readOnlyHint": false,
+        "destructiveHint": true,
         "openWorldHint": false
       }
     },

@@ -100,4 +100,28 @@ func TestRuntimeToolsMatchAuthoritativeCatalog(t *testing.T) {
 			t.Fatalf("patch_package output schema does not expose %s: %s", field, packageOutputSchema)
 		}
 	}
+
+	backupTool := byName["backup_store"]
+	backupInputSchema, err := json.Marshal(backupTool.InputSchema)
+	if err != nil {
+		t.Fatalf("marshal backup_store input schema: %v", err)
+	}
+	backupOutputSchema, err := json.Marshal(backupTool.OutputSchema)
+	if err != nil {
+		t.Fatalf("marshal backup_store output schema: %v", err)
+	}
+	for _, field := range [][]byte{[]byte(`"backupId"`), []byte(`"previewId"`)} {
+		if !bytes.Contains(backupInputSchema, field) {
+			t.Fatalf("backup_store input schema does not expose %s: %s", field, backupInputSchema)
+		}
+	}
+	for _, field := range [][]byte{[]byte(`"restore"`), []byte(`"safetyBackupId"`), []byte(`"actualFingerprint"`)} {
+		if !bytes.Contains(backupOutputSchema, field) {
+			t.Fatalf("backup_store output schema does not expose %s: %s", field, backupOutputSchema)
+		}
+	}
+	if backupTool.Annotations == nil || backupTool.Annotations.ReadOnlyHint ||
+		backupTool.Annotations.DestructiveHint == nil || !*backupTool.Annotations.DestructiveHint {
+		t.Fatalf("backup_store annotations do not reflect restore mutation: %#v", backupTool.Annotations)
+	}
 }

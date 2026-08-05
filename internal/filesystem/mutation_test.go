@@ -47,6 +47,37 @@ func TestCaptureSnapshotWithDigestRejectsDirectory(t *testing.T) {
 	}
 }
 
+func TestStageReplacementExactModePreservesZeroPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows mode bits do not represent Unix permission mode 0000")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "restored.bin")
+	expected, err := CaptureSnapshot(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modTime := time.Unix(1_700_000_000, 0).UTC()
+	staged, err := StageReplacementExactMode(target, strings.NewReader("restored"), 0, &modTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := staged.Commit(ReplaceOptions{Expected: &expected})
+	if err != nil || !changed {
+		t.Fatalf("Commit() changed=%v error=%v", changed, err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0 {
+		t.Fatalf("restored mode=%#o, want 0000", info.Mode().Perm())
+	}
+	if !info.ModTime().Equal(modTime) {
+		t.Fatalf("restored modtime=%v, want %v", info.ModTime(), modTime)
+	}
+}
+
 func TestStageReplacementStreamsAndCommits(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "target.txt")
@@ -154,7 +185,7 @@ func TestStageReplacementDiskFullCleansTempAndPreservesTarget(t *testing.T) {
 		}
 		return int64(written), syscall.ENOSPC
 	}
-	if _, err := stageReplacement(path, strings.NewReader("replacement"), 0o600, nil, ops); !errors.Is(err, syscall.ENOSPC) {
+	if _, err := stageReplacement(path, strings.NewReader("replacement"), 0o600, nil, true, ops); !errors.Is(err, syscall.ENOSPC) {
 		t.Fatalf("error = %v, want ENOSPC", err)
 	}
 	if actual, readErr := os.ReadFile(path); readErr != nil || string(actual) != "original" {

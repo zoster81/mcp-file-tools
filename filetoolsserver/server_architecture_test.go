@@ -121,6 +121,53 @@ func TestBuildServerWiresAndProtectsConfiguredBackupStore(t *testing.T) {
 		t.Fatalf("edited target=%q err=%v", data, err)
 	}
 
+	restorePreview, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "restorePreview", "backupId": capture.Manifest.BackupID},
+	})
+	if err != nil || restorePreview.IsError {
+		t.Fatalf("restore preview result=%#v err=%v", restorePreview, err)
+	}
+	var restorePrepared struct {
+		Restore struct {
+			PreviewID          string `json:"previewId"`
+			CurrentFingerprint string `json:"currentFingerprint"`
+			ResultFingerprint  string `json:"resultFingerprint"`
+		} `json:"restore"`
+	}
+	decodeStructuredOutput(t, restorePreview.StructuredContent, &restorePrepared)
+	if len(restorePrepared.Restore.PreviewID) != 64 || len(restorePrepared.Restore.CurrentFingerprint) != 64 || len(restorePrepared.Restore.ResultFingerprint) != 64 {
+		t.Fatalf("restore preview output=%+v", restorePrepared)
+	}
+	restoreApply, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "restoreApply", "previewId": restorePrepared.Restore.PreviewID},
+	})
+	if err != nil || restoreApply.IsError {
+		t.Fatalf("restore apply result=%#v err=%v", restoreApply, err)
+	}
+	var restored struct {
+		Restore struct {
+			Applied        bool   `json:"applied"`
+			State          string `json:"state"`
+			SafetyBackupID string `json:"safetyBackupId"`
+		} `json:"restore"`
+	}
+	decodeStructuredOutput(t, restoreApply.StructuredContent, &restored)
+	if !restored.Restore.Applied || restored.Restore.State != "restored" || len(restored.Restore.SafetyBackupID) != 64 {
+		t.Fatalf("restore apply output=%+v", restored)
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "backup source bytes" {
+		t.Fatalf("restored target=%q err=%v", data, err)
+	}
+	safetyInspect, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "inspect", "backupId": restored.Restore.SafetyBackupID},
+	})
+	if err != nil || safetyInspect.IsError {
+		t.Fatalf("safety backup inspect result=%#v err=%v", safetyInspect, err)
+	}
+
 	denied, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "read_text_file",
 		Arguments: map[string]any{"path": filepath.Join(storeRoot, "store.json")},

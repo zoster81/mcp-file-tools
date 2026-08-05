@@ -8,17 +8,25 @@ import (
 )
 
 const (
-	BackupStoreActionStatus  = "status"
-	BackupStoreActionList    = "list"
-	BackupStoreActionInspect = "inspect"
-	BackupStoreActionAudit   = "audit"
+	BackupStoreActionStatus         = "status"
+	BackupStoreActionList           = "list"
+	BackupStoreActionInspect        = "inspect"
+	BackupStoreActionAudit          = "audit"
+	BackupStoreActionRestorePreview = "restorePreview"
+	BackupStoreActionRestoreApply   = "restoreApply"
 
 	BackupStoreStateDisabled = "disabled"
 	BackupStoreStateReady    = "ready"
 	BackupStoreStateDegraded = "degraded"
+
+	BackupStoreRestoreStatePrepared  = "prepared"
+	BackupStoreRestoreStateRestored  = "restored"
+	BackupStoreRestoreStateUnchanged = "unchanged"
+	BackupStoreRestoreStateMissing   = "missing"
+	BackupStoreRestoreStateUnknown   = "unknown"
 )
 
-// BackupStoreInput selects one read-only backup management action.
+// BackupStoreInput selects one strict backup management or restore action.
 type BackupStoreInput struct {
 	Action     string `json:"action"`
 	Cursor     string `json:"cursor,omitempty"`
@@ -26,6 +34,7 @@ type BackupStoreInput struct {
 	TargetPath string `json:"targetPath,omitempty"`
 	Pinned     *bool  `json:"pinned,omitempty"`
 	BackupID   string `json:"backupId,omitempty"`
+	PreviewID  string `json:"previewId,omitempty"`
 	AuditMode  string `json:"auditMode,omitempty"`
 	MaxObjects int    `json:"maxObjects,omitempty"`
 	MaxBytes   int64  `json:"maxBytes,omitempty"`
@@ -47,7 +56,7 @@ func (input *BackupStoreInput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// BackupStoreOutput is a strict read-only action union.
+// BackupStoreOutput is the redacted management and restore action union.
 type BackupStoreOutput struct {
 	Action     string                    `json:"action"`
 	Enabled    bool                      `json:"enabled"`
@@ -58,6 +67,7 @@ type BackupStoreOutput struct {
 	NextCursor string                    `json:"nextCursor,omitempty"`
 	Manifest   *BackupStoreInspectOutput `json:"manifest,omitempty"`
 	Audit      *BackupStoreAuditOutput   `json:"audit,omitempty"`
+	Restore    *BackupStoreRestoreOutput `json:"restore,omitempty"`
 }
 
 type BackupStoreLimitsOutput struct {
@@ -115,6 +125,25 @@ type BackupStoreInspectOutput struct {
 	Pinned             bool                        `json:"pinned"`
 	ManifestChecksum   string                      `json:"manifestChecksum"`
 	ObjectVerified     bool                        `json:"objectVerified"`
+}
+
+type BackupStoreRestoreOutput struct {
+	BackupID           string `json:"backupId"`
+	PreviewID          string `json:"previewId,omitempty"`
+	CreatedAt          string `json:"createdAt,omitempty"`
+	ExpiresAt          string `json:"expiresAt,omitempty"`
+	TargetPath         string `json:"targetPath"`
+	TargetExisted      bool   `json:"targetExisted"`
+	CurrentFingerprint string `json:"currentFingerprint,omitempty"`
+	ResultFingerprint  string `json:"resultFingerprint"`
+	ActualFingerprint  string `json:"actualFingerprint,omitempty"`
+	ObjectBytes        int64  `json:"objectBytes"`
+	ObjectVerified     bool   `json:"objectVerified"`
+	Diff               string `json:"diff,omitempty"`
+	SafetyBackupID     string `json:"safetyBackupId,omitempty"`
+	State              string `json:"state"`
+	Applied            bool   `json:"applied"`
+	ReadOnlyCleared    bool   `json:"readOnlyCleared,omitempty"`
 }
 
 type BackupStoreAuditIssue struct {

@@ -786,6 +786,57 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		t.Fatalf("HTTP replay result = %#v err=%v", replayResult, err)
 	}
 
+	restorePreview, err := first.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "restorePreview", "backupId": applyOutput.BackupID},
+	})
+	if err != nil || restorePreview.IsError {
+		t.Fatalf("HTTP restore preview result=%#v err=%v", restorePreview, err)
+	}
+	var restorePreviewOutput struct {
+		Restore struct {
+			PreviewID          string `json:"previewId"`
+			CurrentFingerprint string `json:"currentFingerprint"`
+			ResultFingerprint  string `json:"resultFingerprint"`
+		} `json:"restore"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, restorePreview.StructuredContent)), &restorePreviewOutput); err != nil {
+		t.Fatal(err)
+	}
+	if len(restorePreviewOutput.Restore.PreviewID) != 64 || len(restorePreviewOutput.Restore.CurrentFingerprint) != 64 || len(restorePreviewOutput.Restore.ResultFingerprint) != 64 {
+		t.Fatalf("unexpected restore preview output: %#v", restorePreviewOutput)
+	}
+	restoreApply, err := direct.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "restoreApply", "previewId": restorePreviewOutput.Restore.PreviewID},
+	})
+	if err != nil || restoreApply.IsError {
+		t.Fatalf("direct restore apply result=%#v err=%v", restoreApply, err)
+	}
+	var restoreApplyOutput struct {
+		Restore struct {
+			Applied        bool   `json:"applied"`
+			State          string `json:"state"`
+			SafetyBackupID string `json:"safetyBackupId"`
+		} `json:"restore"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, restoreApply.StructuredContent)), &restoreApplyOutput); err != nil {
+		t.Fatal(err)
+	}
+	if !restoreApplyOutput.Restore.Applied || restoreApplyOutput.Restore.State != "restored" || len(restoreApplyOutput.Restore.SafetyBackupID) != 64 {
+		t.Fatalf("unexpected restore apply output: %#v", restoreApplyOutput)
+	}
+	if data, err := os.ReadFile(previewPath); err != nil || string(data) != "alpha" {
+		t.Fatalf("restored content: %q err=%v", data, err)
+	}
+	restoreSafetyInspect, err := second.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "inspect", "backupId": restoreApplyOutput.Restore.SafetyBackupID},
+	})
+	if err != nil || restoreSafetyInspect.IsError {
+		t.Fatalf("HTTP restore safety inspect result=%#v err=%v", restoreSafetyInspect, err)
+	}
+
 	outside := filepath.Join(filepath.Dir(root), "outside.txt")
 	var expectedErrorCode any
 	var expectedErrorText string
