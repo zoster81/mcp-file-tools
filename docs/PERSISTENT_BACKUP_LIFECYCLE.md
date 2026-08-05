@@ -6,7 +6,7 @@
 
 This document is the authoritative security boundary, storage format, lifecycle, restore contract, garbage-collection model, limits, failure semantics, and verification gate for the persistent backup subsystem. Implementation must remain phased so each durability and recovery boundary can be reviewed and verified independently.
 
-R18 phases 1–6 are implemented in source. Phase 1 provides disabled-by-default configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, and denial of the internal root to ordinary filesystem tools. Phase 2 adds internal exact-byte object capture, strict checksummed manifests, conservative quota reservations, a rebuildable derived index, bounded startup recovery, and quick/full read-only audit primitives. Phase 3 exposes the bounded read-only `backup_store` status/list/inspect/audit surface. Phase 4 binds preview-only `backupPolicy: "required"` into `edit_file`. Phase 5 adds exact manifest-level package policy, side-effect-free aggregate preflight, atomic conservative all-target reservation, and durable capture of every changed package pre-state before the first commit. Phase 6 adds one-shot original-target restore with exact source verification, stale-state rejection, mandatory safety backup for an existing target, and no-replace creation for a missing target. Alternate destinations, garbage collection, mutable pinning, and automatic rollback remain unavailable.
+R18 phases 1–7 are implemented in source. Phase 1 provides disabled-by-default configuration, strict non-overlapping store-path validation, owner-only permissions, a platform-native lifetime writer lock, an immutable versioned descriptor, and denial of the internal root to ordinary filesystem tools. Phase 2 adds internal exact-byte object capture, strict checksummed manifests, conservative quota reservations, a rebuildable derived index, bounded startup recovery, and quick/full read-only audit primitives. Phase 3 exposes the bounded read-only `backup_store` status/list/inspect/audit surface. Phase 4 binds preview-only `backupPolicy: "required"` into `edit_file`. Phase 5 adds exact manifest-level package policy, side-effect-free aggregate preflight, atomic conservative all-target reservation, and durable capture of every changed package pre-state before the first commit. Phase 6 adds one-shot original-target restore with exact source verification, stale-state rejection, mandatory safety backup for an existing target, and no-replace creation for a missing target. Phase 7 adds explicit generation-bound GC with immutable pins, a one-version target floor, retention/version-limit reasons, active-reference exclusion, manifest-first removal, fully verified zero-reference object removal, typed trash, and bounded startup cleanup. Alternate restore destinations, mutable pinning, automatic rollback, background GC, and secure-deletion guarantees remain unavailable.
 
 The existing transactional `.bak` behavior of `convert_encoding` remains unchanged. `edit_file` and `patch_package` create persistent backups only when their approved preview/manifest explicitly binds `backupPolicy: "required"`; omitted policy, direct editing, and logical no-ops continue to create none.
 
@@ -172,9 +172,9 @@ The approved defaults are:
 | `MCP_BACKUP_RETENTION_DAYS` | `30` | Age threshold used by GC planning, not automatic deletion. |
 | `MCP_BACKUP_PLAN_TTL_SECONDS` | `900` | Lifetime of restore and GC preview capabilities. |
 
-All values must be positive and overflow-safe. Configuration loading enforces hard maxima of 1 TiB total bytes, 1 GiB per object, 1,000,000 manifests, 10,000 versions per target, 100,000 pinned manifests, 3,650 retention days, and 86,400 seconds for plan lifetime; environment values above those maxima fall back to the documented defaults, while invalid direct internal store options fail closed. `MCP_MAX_OUTPUT_BYTES` bounds management, restore, and mutation output, while `MCP_MAX_BATCH_FILES` bounds targets in one backup-integrated package operation.
+All values must be positive and overflow-safe. Configuration loading enforces hard maxima of 1 TiB total bytes, 1 GiB per object, 1,000,000 manifests, 10,000 versions per target, 100,000 pinned manifests, 3,650 retention days, and 86,400 seconds for plan lifetime; environment values above those maxima fall back to the documented defaults, while invalid direct internal store options fail closed. `MCP_MAX_OUTPUT_BYTES` bounds management, restore, GC, and mutation output, while `MCP_MAX_BATCH_FILES` bounds targets in one backup-integrated package operation.
 
-Phase 2 consumes total-byte, object-size, manifest-count, per-target-version, and immutable-pin limits through conservative process-local reservations. Configuration alone does not create backups; capture occurs only through approved required edit/package capabilities or the mandatory safety step of an approved restore. Retention remains inactive until GC. `MCP_BACKUP_PLAN_TTL_SECONDS` now bounds restore capabilities. No quota failure triggers implicit garbage collection.
+Phase 2 consumes total-byte, object-size, manifest-count, per-target-version, and immutable-pin limits through conservative process-local reservations. Configuration alone does not create backups; capture occurs only through approved required edit/package capabilities or the mandatory safety step of an approved restore. `MCP_BACKUP_RETENTION_DAYS` and the unpinned per-target version limit are evaluated only by explicit `gcDryRun`; `MCP_BACKUP_PLAN_TTL_SECONDS` bounds both restore and GC capabilities. No quota failure triggers implicit garbage collection.
 
 ## Capture transaction
 
@@ -241,18 +241,18 @@ R18 phase 5 implements exact manifest-level `backupPolicy: "required"` for patch
 
 ## Public management surface
 
-R18 phase 3 introduced one always-registered `backup_store` tool, bringing the unreleased source catalog to 27 tools. Phase 6 extends its strict action union while preserving the original read-only actions:
+R18 phase 3 introduced one always-registered `backup_store` tool, bringing the unreleased source catalog to 27 tools. Phases 6–7 extend its strict action union while preserving the original read-only actions:
 
 - `status`: no additional fields; when disabled it returns `enabled: false`, and when configured it returns redacted version, health, generation, quota, counts, residue, and bounded path-free issues;
 - `list`: optional `cursor`, `limit`, `targetPath`, and `pinned`; pages are newest-first, limited to 100 records, filtered through current root authorization, and use an authenticated keyset cursor bound to filters, the allowed/protected-root policy snapshot, and store generation; target visibility is revalidated on every page;
 - `inspect`: required `backupId`; it validates the manifest, verifies current target authorization, and fully hashes the referenced object before returning metadata without bytes;
 - `audit`: optional `auditMode=quick|full`, `maxObjects`, and `maxBytes`; requested bounds cannot exceed configured store limits, and the operation never repairs or deletes data;
 - `restorePreview`: required `backupId`; it verifies and retains one manifest/object identity, authorizes only the original target, captures current or missing target state, preflights the mandatory existing-target safety backup, and returns a bounded expiring capability without mutation;
-- `restoreApply`: required `previewId`; it consumes the capability, revalidates source and target state, stages exact object bytes, captures an existing target durably before any permission change or replacement, and commits with optimistic replace or missing-target no-replace.
+- `restoreApply`: required `previewId`; it consumes the capability, revalidates source and target state, stages exact object bytes, captures an existing target durably before any permission change or replacement, and commits with optimistic replace or missing-target no-replace;
+- `gcDryRun`: no additional fields; it performs an authoritative bounded scan, rejects active capture reservations, computes the exact generation-bound candidate plan at one fixed UTC policy time, stores it in a separate bounded one-shot capability cache, and returns candidate IDs/digests/reasons/counts without target paths or mutation;
+- `gcApply`: required `previewId`; it consumes the capability, blocks new capture reservations, reconstructs and compares the complete plan, removes manifests before fully verified zero-reference objects, refreshes the derived index after durable progress, and reports cleanup residue or partial state without rollback.
 
-The tool never accepts a store path, object path, executable, shell command, alternate restore destination, caller-selected restore bytes, mutable pin instruction, or deletion instruction. Unknown fields and cross-action parameters are rejected. Every response remains within `MCP_MAX_OUTPUT_BYTES`.
-
-Garbage-collection actions remain deferred. A later phase may extend the same tool with `gcDryRun` and `gcApply` only after their separate generation-bound schemas and safety tests are complete.
+The tool never accepts a store path, object path, executable, shell command, alternate restore destination, caller-selected restore bytes, mutable pin instruction, caller-selected GC policy, or raw deletion instruction. Unknown fields and cross-action parameters are rejected. Every response remains within `MCP_MAX_OUTPUT_BYTES`.
 
 ## Listing and review
 
@@ -301,40 +301,46 @@ A restore never deletes or consumes the source backup.
 
 ## Garbage collection
 
-Garbage collection is always explicit preview/apply.
+R18 phase 7 implements garbage collection as an always-explicit dry-run/apply workflow. It never runs because quota is exhausted, on a timer, or in the background.
 
 ### Policy
 
 A candidate manifest becomes eligible only when all conditions hold:
 
 - it is not pinned;
-- it exceeds the configured age threshold or per-target version limit;
-- deleting it preserves a configured minimum recent-version floor;
-- it is not referenced by an active restore or package reservation;
-- the store generation matches the plan's observed generation.
+- it exceeds the configured age threshold or contributes to unpinned versions above the per-target limit;
+- deleting it preserves the fixed initial floor of one live manifest for that target;
+- it is not retained by an active restore source;
+- planning observes no active capture/package reservation;
+- the store generation and complete candidate evidence match the plan at apply.
 
-Objects become eligible only when no live manifest references them.
+Objects become eligible only when their post-manifest reference count is zero. Existing orphan objects are also eligible. An object retained by an active restore source is excluded even if its live reference count would otherwise reach zero.
 
 ### GC dry run
 
-`gcDryRun` computes a deterministic plan containing bounded manifest IDs, reclaimable unique bytes, object reference changes, and reasons. It stores the exact plan behind a 256-bit expiring capability. It changes nothing on disk.
+`gcDryRun` computes a deterministic oldest-first manifest plan and digest-ordered object plan from an authoritative bounded scan. It records the fixed planning timestamp, generation, retention days, one-version floor, candidate IDs, reasons (`retention` and/or `version_limit`), object reference counts, and reclaimable unique bytes. Target paths remain internal and are omitted from MCP output. The exact plan is retained behind a 256-bit expiring capability in a separate 64-entry/16 MiB cache. Dry run changes nothing on disk or in the derived index.
 
 ### GC apply
 
-`gcApply` consumes only the plan ID and revalidates the store generation, pin state, active reservations, and reference counts.
+`gcApply` consumes only the preview ID and revalidates the complete plan at its original policy timestamp.
 
-- Manifests are atomically renamed into `trash` before removal.
-- Only after manifest references are gone may unreferenced objects be renamed into `trash`.
-- Directory sync occurs after each namespace phase.
-- Deletion from trash is best effort but cleanup failures are surfaced.
-- A crash may leave trash or orphan objects, never a live manifest whose object was intentionally deleted first.
-- A stale plan fails with `CONFLICT`; the client creates a new dry run.
+- Apply holds the store transaction boundary and sets a GC-active gate that rejects new single and batch capture reservations.
+- Any active reservation, new active restore reference, changed generation, changed manifest, changed pin state, changed object evidence, or changed reference count fails before deletion with `CONFLICT` or a typed integrity error.
+- Manifests are moved with no-replace into typed owner-only trash before any object move.
+- Live references are rescanned after the manifest phase.
+- Only zero-reference candidate objects are fully SHA-256 verified and then moved with no-replace into typed trash.
+- Directory sync is part of every namespace move; ambiguous post-move sync errors are classified from source/destination identity and durable progress is returned.
+- Deletion from trash is best effort. Cleanup failures remain MCP errors with counts, reclaimed bytes, and trash residue in structured output.
+- The derived index is rebuilt after success and after every durable partial outcome, using an independent recovery context when the caller context is no longer usable.
+- A crash may leave recognized typed trash or live orphan objects, never a live manifest whose object was intentionally removed first.
+- Startup deletes only recognized valid GC trash after bounded validation and full object verification; unknown or uncertain trash is preserved for audit.
+- A stale or replayed plan fails with `CONFLICT`; the client creates a new dry run.
 
 ## Pinning
 
 Pinning changes retention semantics and therefore requires a crash-consistent design.
 
-The preferred initial choice is immutable pin state at backup creation. Mutable pin/unpin can be added later through append-only pin records or replacement manifests, but must not rewrite the original backup record in place. The final decision requires explicit approval because mutable pinning affects quotas, GC planning, and recovery.
+The implemented initial choice is immutable pin state at backup creation. GC never selects a pinned manifest. Mutable pin/unpin remains unavailable; any future implementation must use append-only pin records or replacement manifests rather than rewriting an original manifest in place, and requires a separate approval because it changes quotas, planning, and recovery.
 
 ## Startup recovery and degraded state
 
@@ -345,9 +351,11 @@ After acquiring the exclusive lock, initialization now performs a bounded struct
 - validate manifest filenames, sizes, schemas, checksums, unique IDs, owner-only permissions, and single-link state;
 - validate referenced object paths and sizes without necessarily hashing every object;
 - rebuild the derived index when missing or stale;
-- identify staging files, trash entries, orphan objects, missing objects, and duplicate manifests.
+- identify staging files, trash entries, orphan objects, missing objects, and duplicate manifests;
+- remove only recognized valid `gc-manifest-<backupId>.json` and `gc-object-<digest>` trash entries when no live manifest references the object;
+- preserve unknown, malformed, linked, permission-unsafe, oversized, or otherwise uncertain trash entries for audit.
 
-Capture and audit revalidate the retained store-root identity. Capture additionally revalidates the internal layout before staging and again before durable object or manifest installation. Audit reports structural entries without deleting or repairing them.
+Capture, audit, restore, and GC revalidate the retained store-root identity. Capture additionally revalidates the internal layout before staging and again before durable object or manifest installation. Audit remains read-only. Startup cleanup is limited to typed GC residue whose identity and integrity can be proven; it never deletes uncertain data.
 
 Full object hashing is performed by internal full audit, public `backup_store.inspect`, every capture dedup verification, restore-source open, and every restore apply revalidation. Restore staging additionally compares the durable staged byte count and SHA-256 digest with the immutable manifest before commit.
 

@@ -71,8 +71,13 @@ type Store struct {
 	reservedManifests int
 	reservedPinned    int
 	reservedTargets   map[string]int
+	gcActive          bool
+
+	activeRestoreManifests map[string]int
+	activeRestoreObjects   map[string]int
 
 	captureHooks captureTestHooks
+	gcHooks      gcTestHooks
 	closeOnce    sync.Once
 	closeErr     error
 }
@@ -103,10 +108,12 @@ func Open(options Options) (_ *Store, err error) {
 		return nil, sanitizedFilesystemError("backup store lock could not be acquired", err)
 	}
 	store := &Store{
-		root:            root,
-		limits:          limits,
-		lock:            lock,
-		reservedTargets: make(map[string]int),
+		root:                   root,
+		limits:                 limits,
+		lock:                   lock,
+		reservedTargets:        make(map[string]int),
+		activeRestoreManifests: make(map[string]int),
+		activeRestoreObjects:   make(map[string]int),
 	}
 	defer func() {
 		if err != nil {
@@ -148,6 +155,9 @@ func Open(options Options) (_ *Store, err error) {
 	}
 	if structuralErr := firstStructuralIssue(scan.report); structuralErr != nil {
 		return nil, structuralErr
+	}
+	if _, err := store.recoverGCTrash(context.Background(), scan.manifests); err != nil {
+		return nil, err
 	}
 	index := buildIndex(descriptor, scan.manifests, scan.objects)
 	persisted, loadErr := loadIndex(root, descriptor)

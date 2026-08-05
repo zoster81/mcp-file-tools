@@ -151,6 +151,11 @@ func main() {
 	restoredData, _ := os.ReadFile(testFile)
 	check("backup_store (restore apply)", !rRestoreApply.IsError && oRestoreApply.Restore != nil && oRestoreApply.Restore.Applied && len(oRestoreApply.Restore.SafetyBackupID) == 64 && store.Index().ManifestCount == 3 && string(restoredData) == "Hello!")
 
+	rGCDryRun, oGCDryRun, _ := h.HandleBackupStore(ctx, nil, handler.BackupStoreInput{Action: handler.BackupStoreActionGCDryRun})
+	check("backup_store (GC dry run)", !rGCDryRun.IsError && oGCDryRun.GC != nil && len(oGCDryRun.GC.PreviewID) == 64 && oGCDryRun.GC.State == handler.BackupStoreGCStatePrepared)
+	rGCApply, oGCApply, _ := h.HandleBackupStore(ctx, nil, handler.BackupStoreInput{Action: handler.BackupStoreActionGCApply, PreviewID: oGCDryRun.GC.PreviewID})
+	check("backup_store (GC apply)", !rGCApply.IsError && oGCApply.GC != nil && (oGCApply.GC.State == handler.BackupStoreGCStateApplied || oGCApply.GC.State == handler.BackupStoreGCStateNoop))
+
 	// Offset/Limit pagination
 	multiFile := filepath.Join(tempDir, "multi.txt")
 	os.WriteFile(multiFile, []byte("a\nb\nc\nd"), 0644)

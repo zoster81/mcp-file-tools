@@ -34,9 +34,10 @@ type RestoreSource struct {
 	objectFile   *os.File
 	objectInfo   os.FileInfo
 
-	mu       sync.Mutex
-	closed   bool
-	closeErr error
+	mu                sync.Mutex
+	closed            bool
+	referenceRetained bool
+	closeErr          error
 }
 
 // OpenRestoreSource authorizes, opens, and fully verifies one immutable backup
@@ -112,6 +113,8 @@ func (store *Store) OpenRestoreSource(ctx context.Context, backupID string, opti
 		_ = source.closeFiles()
 		return nil, err
 	}
+	store.retainRestoreReference(manifest)
+	source.referenceRetained = true
 	return source, nil
 }
 
@@ -268,6 +271,10 @@ func (source *RestoreSource) Close() error {
 	}
 	source.closed = true
 	source.closeErr = source.closeFiles()
+	if source.referenceRetained && source.store != nil {
+		source.store.releaseRestoreReference(source.manifest)
+		source.referenceRetained = false
+	}
 	return source.closeErr
 }
 

@@ -14,6 +14,8 @@ const (
 	BackupStoreActionAudit          = "audit"
 	BackupStoreActionRestorePreview = "restorePreview"
 	BackupStoreActionRestoreApply   = "restoreApply"
+	BackupStoreActionGCDryRun       = "gcDryRun"
+	BackupStoreActionGCApply        = "gcApply"
 
 	BackupStoreStateDisabled = "disabled"
 	BackupStoreStateReady    = "ready"
@@ -24,6 +26,11 @@ const (
 	BackupStoreRestoreStateUnchanged = "unchanged"
 	BackupStoreRestoreStateMissing   = "missing"
 	BackupStoreRestoreStateUnknown   = "unknown"
+
+	BackupStoreGCStatePrepared = "prepared"
+	BackupStoreGCStateApplied  = "applied"
+	BackupStoreGCStatePartial  = "partial"
+	BackupStoreGCStateNoop     = "no_op"
 )
 
 // BackupStoreInput selects one strict backup management or restore action.
@@ -68,6 +75,7 @@ type BackupStoreOutput struct {
 	Manifest   *BackupStoreInspectOutput `json:"manifest,omitempty"`
 	Audit      *BackupStoreAuditOutput   `json:"audit,omitempty"`
 	Restore    *BackupStoreRestoreOutput `json:"restore,omitempty"`
+	GC         *BackupStoreGCOutput      `json:"gc,omitempty"`
 }
 
 type BackupStoreLimitsOutput struct {
@@ -144,6 +152,43 @@ type BackupStoreRestoreOutput struct {
 	State              string `json:"state"`
 	Applied            bool   `json:"applied"`
 	ReadOnlyCleared    bool   `json:"readOnlyCleared,omitempty"`
+}
+
+type BackupStoreGCManifestCandidate struct {
+	BackupID     string                 `json:"backupId"`
+	CreatedAt    string                 `json:"createdAt"`
+	ObjectDigest string                 `json:"objectDigest"`
+	ObjectBytes  int64                  `json:"objectBytes"`
+	Reasons      []backupstore.GCReason `json:"reasons"`
+}
+
+type BackupStoreGCObjectCandidate struct {
+	Digest           string `json:"digest"`
+	Bytes            int64  `json:"bytes"`
+	ReferencesBefore int    `json:"referencesBefore"`
+}
+
+type BackupStoreGCOutput struct {
+	PreviewID                string                           `json:"previewId,omitempty"`
+	CreatedAt                string                           `json:"createdAt,omitempty"`
+	ExpiresAt                string                           `json:"expiresAt,omitempty"`
+	PlannedAt                string                           `json:"plannedAt"`
+	Generation               string                           `json:"generation"`
+	PreviousGeneration       string                           `json:"previousGeneration,omitempty"`
+	RetentionDays            int                              `json:"retentionDays"`
+	MinimumVersionsPerTarget int                              `json:"minimumVersionsPerTarget"`
+	ManifestCount            int                              `json:"manifestCount"`
+	ObjectCount              int                              `json:"objectCount"`
+	ReclaimableBytes         int64                            `json:"reclaimableBytes"`
+	Manifests                []BackupStoreGCManifestCandidate `json:"manifests,omitempty"`
+	Objects                  []BackupStoreGCObjectCandidate   `json:"objects,omitempty"`
+	ManifestsRemoved         int                              `json:"manifestsRemoved,omitempty"`
+	ObjectsRemoved           int                              `json:"objectsRemoved,omitempty"`
+	BytesReclaimed           int64                            `json:"bytesReclaimed,omitempty"`
+	TrashCleanupFailures     int                              `json:"trashCleanupFailures,omitempty"`
+	TrashEntriesRemaining    int                              `json:"trashEntriesRemaining,omitempty"`
+	State                    string                           `json:"state"`
+	Applied                  bool                             `json:"applied"`
 }
 
 type BackupStoreAuditIssue struct {

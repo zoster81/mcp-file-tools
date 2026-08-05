@@ -44,6 +44,13 @@ type BackupStoreRestorer interface {
 	RestoreObjectLimit() int64
 }
 
+// BackupStoreGarbageCollector is the explicit generation-bound GC authority.
+type BackupStoreGarbageCollector interface {
+	PlanGC(context.Context, backupstore.GCOptions) (backupstore.GCPlan, error)
+	ApplyGC(context.Context, backupstore.GCPlan) (backupstore.GCResult, error)
+	GCPlanTTL() time.Duration
+}
+
 // Default permissions for new files and directories
 const (
 	DefaultFileMode os.FileMode = 0644
@@ -64,8 +71,10 @@ type Handler struct {
 	backupCapture                  BackupStoreCapturer
 	backupBatchCapture             BackupStoreBatchCapturer
 	backupRestore                  BackupStoreRestorer
+	backupGC                       BackupStoreGarbageCollector
 	editPreviews                   *editPreviewStore
 	restorePreviews                *restorePreviewStore
+	gcPreviews                     *gcPreviewStore
 	patchPackagePreviews           *patchPackagePreviewStore
 	patchPackageStageReplacement   func(context.Context, string, []byte, os.FileMode) (*filesystem.StagedReplacement, error)
 	patchPackageCommitReplacement  func(int, *filesystem.StagedReplacement, filesystem.ReplaceOptions) (bool, error)
@@ -119,6 +128,7 @@ func WithBackupStore(store BackupStoreReader) Option {
 		h.backupCapture = nil
 		h.backupBatchCapture = nil
 		h.backupRestore = nil
+		h.backupGC = nil
 		if capturer, ok := store.(BackupStoreCapturer); ok {
 			h.backupCapture = capturer
 		}
@@ -127,6 +137,9 @@ func WithBackupStore(store BackupStoreReader) Option {
 		}
 		if restorer, ok := store.(BackupStoreRestorer); ok {
 			h.backupRestore = restorer
+		}
+		if collector, ok := store.(BackupStoreGarbageCollector); ok {
+			h.backupGC = collector
 		}
 		if store != nil && store.Root() != "" {
 			requested, resolved := normalizeAllowedDirectorySets([]string{store.Root()})
@@ -166,6 +179,11 @@ func NewHandler(allowedDirs []string, opts ...Option) *Handler {
 		restoreTTL = h.backupRestore.RestorePlanTTL()
 	}
 	h.restorePreviews = newRestorePreviewStore(restorePreviewMaxEntries, restorePreviewMaxBytes, restoreTTL)
+	gcTTL := 15 * time.Minute
+	if h.backupGC != nil && h.backupGC.GCPlanTTL() > 0 {
+		gcTTL = h.backupGC.GCPlanTTL()
+	}
+	h.gcPreviews = newGCPreviewStore(gcPreviewMaxEntries, gcPreviewMaxBytes, gcTTL)
 	h.replaceFile = filesystem.ReplaceFile
 	h.patchPackagePreviews = newPatchPackagePreviewStore(
 		h.maxPatchPackagePreviews(),

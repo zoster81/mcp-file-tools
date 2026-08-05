@@ -672,7 +672,7 @@ Git receives closed stdin, bounded stdout/stderr, cancellation and process-tree 
 
 ### backup_store
 
-Review and restore from the optional persistent backup store without returning object bytes or internal store paths. `status`, `list`, `inspect`, and `audit` remain read-only. `restorePreview` and `restoreApply` form an approval-bound mutation workflow restricted to the selected manifest's original currently authorized target. The tool is always registered so stdio and Streamable HTTP expose the same schema. When `MCP_BACKUP_STORE_DIR` is unset, `action=status` returns `enabled: false`; the other actions fail with `INVALID_INPUT`.
+Review, restore, and explicitly garbage-collect the optional persistent backup store without returning object bytes or internal store paths. `status`, `list`, `inspect`, and `audit` remain read-only. `restorePreview`/`restoreApply` are restricted to the selected manifest's original currently authorized target. `gcDryRun`/`gcApply` manage only internal backup records and never expose their target paths. The tool is always registered so stdio and Streamable HTTP expose the same schema. When `MCP_BACKUP_STORE_DIR` is unset, `action=status` returns `enabled: false`; the other actions fail with `INVALID_INPUT`.
 
 Actions form a strict union:
 
@@ -682,8 +682,10 @@ Actions form a strict union:
 - `audit`: accepts `auditMode=quick|full`, `maxObjects`, and `maxBytes`. Quick mode validates structure, references, object sizes, recovery residue, orphans, and index consistency. Full mode additionally hashes every referenced object under the requested limits, which cannot exceed the configured store limits. Audit reports issues but never repairs, quarantines, or deletes data.
 - `restorePreview`: requires `backupId` and accepts no other action fields. It authorizes only the immutable manifest's original target, fully verifies the manifest and object, captures the exact current regular-file fingerprint or missing state, and preflights quota for the mandatory safety backup when the target exists. It returns current/result fingerprints, exact object size, an optional bounded diff when both states are safely decodable, and a 256-bit expiring `previewId`. It creates no object, manifest, or target mutation.
 - `restoreApply`: accepts only `previewId`. The capability is atomically consumed before validation, so success, failure, cancellation, stale state, and replay are terminal. Apply revalidates current authorization, source manifest/object identity and digest, target identity/fingerprint or missing state, and the prepared result. Exact source bytes are durably staged. An existing target is then captured as a mandatory durable `sourceOperation=restore` safety backup before any permission change or replacement; a missing target receives no safety backup and is installed with no-replace. Final bytes are fingerprinted before success. Operational errors preserve `safetyBackupId` plus `restored`, `unchanged`, `missing`, or `unknown` evidence without automatic rollback.
+- `gcDryRun`: accepts only `action`. It performs an authoritative bounded scan and returns a deterministic generation-bound plan behind a 256-bit expiring `previewId`. Pinned manifests and active restore sources are never selected. For each target, at least one manifest is preserved; additional unpinned manifests become candidates when they are older than `MCP_BACKUP_RETENTION_DAYS` or exceed `MCP_BACKUP_MAX_VERSIONS_PER_TARGET`. Objects are selected only when all candidate manifests are removed and no live reference remains; pre-existing orphan objects are also eligible. Candidate backup IDs, object digests, reasons, counts, and reclaimable unique bytes are returned, but target paths are omitted. Active capture reservations reject planning.
+- `gcApply`: accepts only `previewId`, consumes it before validation, and reconstructs the complete plan at the original policy timestamp. Any generation, pin, manifest, object, active-restore, reservation, or reference-count change fails with `CONFLICT` before deletion. Apply moves selected manifests into typed trash first, rescans live references, fully verifies each now-unreferenced object, then moves those objects into trash. The derived index is refreshed after every durable partial outcome. Trash deletion is best effort; structured output preserves removed counts, reclaimed bytes, cleanup failures, remaining trash, and the resulting generation. Startup deletes only recognized valid GC trash and leaves unknown entries for review. There is no background GC, implicit quota-triggered GC, mutable pinning, automatic rollback, or secure-deletion guarantee.
 
-Every result and retained restore plan is bounded. `MCP_BACKUP_PLAN_TTL_SECONDS` controls plan lifetime; the process also enforces fixed caps of 64 live restore capabilities, 16 MiB retained restore metadata/diffs, and 1 MiB per-state diff input. `MCP_MAX_OUTPUT_BYTES` bounds responses. Backup target paths are exposed only when they still pass the current allowed-root and protected-root policy. The store itself remains inaccessible through ordinary filesystem tools. Restore never deletes or consumes the source backup, does not accept an alternate destination, and does not imply automatic rollback.
+Every result and retained restore/GC plan is bounded. `MCP_BACKUP_PLAN_TTL_SECONDS` controls both capability lifetimes; the process enforces separate fixed caps of 64 live restore capabilities and 64 live GC capabilities, with 16 MiB retained state for each cache. Restore also limits optional per-state diff input to 1 MiB. `MCP_MAX_OUTPUT_BYTES` bounds responses. Backup target paths are exposed only by authorized list/inspect/restore actions; GC plans never expose them. The store itself remains inaccessible through ordinary filesystem tools. Restore never deletes or consumes the source backup, and GC never mutates public target files.
 
 **Status example:**
 ```json
@@ -739,6 +741,25 @@ A successful preview returns a nested `restore` object with `previewId`, `target
 ```
 
 A successful existing-target apply returns `state: "restored"`, `applied: true`, `actualFingerprint`, and `safetyBackupId`. A successful missing-target restore omits `safetyBackupId`. Any later error retains the safety identifier and classified actual state in structured output.
+
+**GC dry-run example:**
+```json
+{
+  "action": "gcDryRun"
+}
+```
+
+A successful dry run returns a nested `gc` object with `previewId`, `plannedAt`, `generation`, policy values, manifest/object counts, reclaimable bytes, bounded candidate metadata, and `state: "prepared"`. It does not change manifests, objects, the derived index, or public targets.
+
+**GC apply example:**
+```json
+{
+  "action": "gcApply",
+  "previewId": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+}
+```
+
+A successful apply returns `state: "applied"` or `"no_op"`, the previous and resulting generations, removed counts, reclaimed bytes, and any trash residue. A partial operational error remains an MCP error while preserving durable progress in structured output.
 
 ### grep_text_files
 

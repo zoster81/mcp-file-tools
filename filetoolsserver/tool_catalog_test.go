@@ -115,13 +115,16 @@ func TestRuntimeToolsMatchAuthoritativeCatalog(t *testing.T) {
 			t.Fatalf("backup_store input schema does not expose %s: %s", field, backupInputSchema)
 		}
 	}
-	for _, field := range [][]byte{[]byte(`"restore"`), []byte(`"safetyBackupId"`), []byte(`"actualFingerprint"`)} {
+	for _, field := range [][]byte{
+		[]byte(`"restore"`), []byte(`"safetyBackupId"`), []byte(`"actualFingerprint"`),
+		[]byte(`"gc"`), []byte(`"reclaimableBytes"`), []byte(`"trashEntriesRemaining"`),
+	} {
 		if !bytes.Contains(backupOutputSchema, field) {
 			t.Fatalf("backup_store output schema does not expose %s: %s", field, backupOutputSchema)
 		}
 	}
 	if backupTool.Annotations == nil || backupTool.Annotations.ReadOnlyHint ||
 		backupTool.Annotations.DestructiveHint == nil || !*backupTool.Annotations.DestructiveHint {
-		t.Fatalf("backup_store annotations do not reflect restore mutation: %#v", backupTool.Annotations)
+		t.Fatalf("backup_store annotations do not reflect restore/GC mutation: %#v", backupTool.Annotations)
 	}
 }

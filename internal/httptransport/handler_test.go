@@ -837,6 +837,54 @@ func TestStreamableHTTPMatchesSharedServerAcrossAdapters(t *testing.T) {
 		t.Fatalf("HTTP restore safety inspect result=%#v err=%v", restoreSafetyInspect, err)
 	}
 
+	gcDryRun, err := first.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "gcDryRun"},
+	})
+	if err != nil || gcDryRun.IsError {
+		t.Fatalf("HTTP GC dry run result=%#v err=%v", gcDryRun, err)
+	}
+	var gcPreview struct {
+		GC struct {
+			PreviewID     string `json:"previewId"`
+			ManifestCount int    `json:"manifestCount"`
+			ObjectCount   int    `json:"objectCount"`
+			State         string `json:"state"`
+		} `json:"gc"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, gcDryRun.StructuredContent)), &gcPreview); err != nil {
+		t.Fatal(err)
+	}
+	if len(gcPreview.GC.PreviewID) != 64 || gcPreview.GC.State != "prepared" {
+		t.Fatalf("unexpected GC preview: %#v", gcPreview)
+	}
+	gcApply, err := direct.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "gcApply", "previewId": gcPreview.GC.PreviewID},
+	})
+	if err != nil || gcApply.IsError {
+		t.Fatalf("direct GC apply result=%#v err=%v", gcApply, err)
+	}
+	var gcApplied struct {
+		GC struct {
+			State   string `json:"state"`
+			Applied bool   `json:"applied"`
+		} `json:"gc"`
+	}
+	if err := json.Unmarshal([]byte(marshalJSON(t, gcApply.StructuredContent)), &gcApplied); err != nil {
+		t.Fatal(err)
+	}
+	if gcApplied.GC.State == "" {
+		t.Fatalf("unexpected GC apply output: %#v", gcApplied)
+	}
+	gcReplay, err := second.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "gcApply", "previewId": gcPreview.GC.PreviewID},
+	})
+	if err != nil || !gcReplay.IsError || gcReplay.Meta[handler.ErrorCodeMetaKey] != handler.ErrCodeConflict {
+		t.Fatalf("HTTP GC replay result=%#v err=%v", gcReplay, err)
+	}
+
 	outside := filepath.Join(filepath.Dir(root), "outside.txt")
 	var expectedErrorCode any
 	var expectedErrorText string

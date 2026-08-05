@@ -127,6 +127,9 @@ func (store *Store) planBatchReservationsLocked(prepared []preparedCaptureReques
 	if store.closed {
 		return nil, operation.New(operation.KindConflict, "backup store is closed")
 	}
+	if store.gcActive {
+		return nil, operation.New(operation.KindConflict, "backup capture is unavailable while GC is active")
+	}
 	var batchBytes int64
 	batchManifests := 0
 	batchPinned := 0

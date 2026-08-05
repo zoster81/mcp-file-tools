@@ -27,6 +27,8 @@ func TestHandleBackupStoreDisabledStatusAndActionRejection(t *testing.T) {
 		{Action: BackupStoreActionList},
 		{Action: BackupStoreActionRestorePreview, BackupID: strings.Repeat("a", 64)},
 		{Action: BackupStoreActionRestoreApply, PreviewID: strings.Repeat("a", 64)},
+		{Action: BackupStoreActionGCDryRun},
+		{Action: BackupStoreActionGCApply, PreviewID: strings.Repeat("a", 64)},
 	} {
 		result, _, err = h.HandleBackupStore(context.Background(), nil, input)
 		if err != nil || !result.IsError || result.Meta[ErrorCodeMetaKey] != ErrCodeInvalidInput {
@@ -174,6 +176,9 @@ func TestBackupStoreInputStrictUnionAndOutputLimit(t *testing.T) {
 		{Action: BackupStoreActionInspect},
 		{Action: BackupStoreActionInspect, BackupID: strings.Repeat("a", 64), Limit: 1},
 		{Action: BackupStoreActionAudit, Cursor: "cursor"},
+		{Action: BackupStoreActionGCDryRun, BackupID: strings.Repeat("a", 64)},
+		{Action: BackupStoreActionGCApply},
+		{Action: BackupStoreActionGCApply, PreviewID: strings.Repeat("a", 64), Limit: 1},
 	}
 	for _, input := range invalid {
 		result, _, err := fixture.handler.HandleBackupStore(context.Background(), nil, input)

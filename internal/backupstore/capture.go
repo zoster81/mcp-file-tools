@@ -415,6 +415,9 @@ func (store *Store) reserve(bytes int64, request CaptureRequest) (reservation, e
 	if store.closed {
 		return reservation{}, operation.New(operation.KindConflict, "backup store is closed")
 	}
+	if store.gcActive {
+		return reservation{}, operation.New(operation.KindConflict, "backup capture is unavailable while GC is active")
+	}
 	if bytes < 0 || bytes > store.limits.MaxObjectBytes {
 		return reservation{}, operation.New(operation.KindLimit, "backup object size exceeds the configured limit")
 	}
@@ -446,7 +449,9 @@ func (store *Store) reserve(bytes int64, request CaptureRequest) (reservation, e
 	store.reservedBytes += reserved.bytes
 	store.reservedManifests += reserved.manifests
 	store.reservedPinned += reserved.pinned
-	store.reservedTargets[reserved.targetPath]++
+	if reserved.targetPath != "" {
+		store.reservedTargets[reserved.targetPath]++
+	}
 	return reserved, nil
 }
 

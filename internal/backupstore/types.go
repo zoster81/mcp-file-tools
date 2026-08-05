@@ -194,10 +194,73 @@ type reservation struct {
 	targetPath string
 }
 
+// GCReason explains why one unpinned manifest is eligible for explicit GC.
+type GCReason string
+
+const (
+	GCReasonRetention    GCReason = "retention"
+	GCReasonVersionLimit GCReason = "version_limit"
+)
+
+// GCOptions fixes the policy evaluation instant. Zero uses the current UTC time.
+type GCOptions struct {
+	Now time.Time
+}
+
+// GCManifestCandidate is one deterministic manifest removal candidate.
+type GCManifestCandidate struct {
+	BackupID     string     `json:"backupId"`
+	CreatedAt    string     `json:"createdAt"`
+	TargetPath   string     `json:"-"`
+	ObjectDigest string     `json:"objectDigest"`
+	ObjectBytes  int64      `json:"objectBytes"`
+	Pinned       bool       `json:"pinned"`
+	Reasons      []GCReason `json:"reasons"`
+}
+
+// GCObjectCandidate becomes unreferenced after every selected manifest is removed.
+type GCObjectCandidate struct {
+	Digest           string `json:"digest"`
+	Bytes            int64  `json:"bytes"`
+	ReferencesBefore int    `json:"referencesBefore"`
+}
+
+// GCPlan is an immutable generation-bound dry-run result. It contains no store paths.
+type GCPlan struct {
+	PlannedAt                string                `json:"plannedAt"`
+	Generation               string                `json:"generation"`
+	RetentionDays            int                   `json:"retentionDays"`
+	MinimumVersionsPerTarget int                   `json:"minimumVersionsPerTarget"`
+	ManifestCount            int                   `json:"manifestCount"`
+	ObjectCount              int                   `json:"objectCount"`
+	ReclaimableBytes         int64                 `json:"reclaimableBytes"`
+	Manifests                []GCManifestCandidate `json:"manifests,omitempty"`
+	Objects                  []GCObjectCandidate   `json:"objects,omitempty"`
+}
+
+// GCResult reports durable namespace removal and best-effort trash cleanup.
+type GCResult struct {
+	PreviousGeneration    string `json:"previousGeneration"`
+	Generation            string `json:"generation"`
+	ManifestsRemoved      int    `json:"manifestsRemoved"`
+	ObjectsRemoved        int    `json:"objectsRemoved"`
+	BytesReclaimed        int64  `json:"bytesReclaimed"`
+	TrashCleanupFailures  int    `json:"trashCleanupFailures"`
+	TrashEntriesRemaining int    `json:"trashEntriesRemaining"`
+}
+
 type captureTestHooks struct {
 	afterStage           func() error
 	beforeManifestCommit func() error
 	beforeIndexPersist   func() error
+}
+
+type gcTestHooks struct {
+	beforeManifestTrash func(string) error
+	afterManifestTrash  func(string) error
+	beforeObjectTrash   func(string) error
+	afterObjectTrash    func(string) error
+	beforeTrashDelete   func(string, string) error
 }
 
 func utcTimestamp(value time.Time) string {

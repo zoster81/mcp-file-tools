@@ -129,6 +129,12 @@ func (h *Handler) HandleBackupStore(ctx context.Context, _ *mcp.CallToolRequest,
 	case BackupStoreActionRestoreApply:
 		return h.handleBackupStoreRestoreApply(ctx, input.PreviewID)
 
+	case BackupStoreActionGCDryRun:
+		return h.handleBackupStoreGCDryRun(ctx)
+
+	case BackupStoreActionGCApply:
+		return h.handleBackupStoreGCApply(ctx, input.PreviewID)
+
 	case BackupStoreActionAudit:
 		audit, err := h.backupStore.Audit(ctx, backupstore.AuditOptions{
 			Mode:       backupstore.AuditMode(input.AuditMode),
@@ -157,30 +163,30 @@ func (h *Handler) HandleBackupStore(ctx context.Context, _ *mcp.CallToolRequest,
 func validateBackupStoreInput(input BackupStoreInput) error {
 	hasListFields := input.Cursor != "" || input.Limit != 0 || input.TargetPath != "" || input.Pinned != nil
 	hasInspectFields := input.BackupID != ""
-	hasRestoreApplyFields := input.PreviewID != ""
+	hasPreviewFields := input.PreviewID != ""
 	hasAuditFields := input.AuditMode != "" || input.MaxObjects != 0 || input.MaxBytes != 0
 
 	switch input.Action {
 	case BackupStoreActionStatus:
-		if hasListFields || hasInspectFields || hasRestoreApplyFields || hasAuditFields {
+		if hasListFields || hasInspectFields || hasPreviewFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "status accepts only action")
 		}
 	case BackupStoreActionList:
-		if hasInspectFields || hasRestoreApplyFields || hasAuditFields {
+		if hasInspectFields || hasPreviewFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "list accepts only cursor, limit, targetPath, and pinned")
 		}
 	case BackupStoreActionInspect:
 		if input.BackupID == "" {
 			return operation.New(operation.KindInvalidInput, "inspect requires backupId")
 		}
-		if hasListFields || hasRestoreApplyFields || hasAuditFields {
+		if hasListFields || hasPreviewFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "inspect accepts only backupId")
 		}
 	case BackupStoreActionRestorePreview:
 		if input.BackupID == "" {
 			return operation.New(operation.KindInvalidInput, "restorePreview requires backupId")
 		}
-		if hasListFields || hasRestoreApplyFields || hasAuditFields {
+		if hasListFields || hasPreviewFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "restorePreview accepts only backupId")
 		}
 	case BackupStoreActionRestoreApply:
@@ -190,15 +196,26 @@ func validateBackupStoreInput(input BackupStoreInput) error {
 		if hasListFields || hasInspectFields || hasAuditFields {
 			return operation.New(operation.KindInvalidInput, "restoreApply accepts only previewId")
 		}
+	case BackupStoreActionGCDryRun:
+		if hasListFields || hasInspectFields || hasPreviewFields || hasAuditFields {
+			return operation.New(operation.KindInvalidInput, "gcDryRun accepts only action")
+		}
+	case BackupStoreActionGCApply:
+		if !validGCPreviewID(input.PreviewID) {
+			return operation.New(operation.KindInvalidInput, "previewId must be 64 hexadecimal characters")
+		}
+		if hasListFields || hasInspectFields || hasAuditFields {
+			return operation.New(operation.KindInvalidInput, "gcApply accepts only previewId")
+		}
 	case BackupStoreActionAudit:
-		if hasListFields || hasInspectFields || hasRestoreApplyFields {
+		if hasListFields || hasInspectFields || hasPreviewFields {
 			return operation.New(operation.KindInvalidInput, "audit accepts only auditMode, maxObjects, and maxBytes")
 		}
 		if input.AuditMode != "" && input.AuditMode != string(backupstore.AuditQuick) && input.AuditMode != string(backupstore.AuditFull) {
 			return operation.New(operation.KindInvalidInput, "auditMode must be quick or full")
 		}
 	default:
-		return operation.New(operation.KindInvalidInput, "action must be status, list, inspect, audit, restorePreview, or restoreApply")
+		return operation.New(operation.KindInvalidInput, "action must be status, list, inspect, audit, restorePreview, restoreApply, gcDryRun, or gcApply")
 	}
 	return nil
 }
