@@ -39,6 +39,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Changed
 
+- Fixed disabled `backup_store status` calls so a typed nil store passed through server bootstrap is treated as unconfigured and returns the documented `enabled: false` result instead of `INVALID_INPUT`.
 - Expanded the current unreleased source catalog from 23 to 27 tools while preserving identical stdio and Streamable HTTP schemas and behavior.
 - Extended `edit_file` additively with `action=direct|preview|apply`, structured approval metadata, and preview-only `backupPolicy: "required"` while preserving omitted-action direct editing and the existing no-backup default.
 - Extended `patch_package` additively with manifest-level `backupPolicy: "required"`, aggregate admission, retained package policy, backup summary fields, and per-target identifiers while preserving omitted-policy behavior, deterministic commit order, and explicit partial-state classification.

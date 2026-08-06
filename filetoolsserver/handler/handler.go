@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 
@@ -124,11 +125,15 @@ func WithProtectedDirectories(dirs []string) Option {
 // the same store also provides the internal capture authority.
 func WithBackupStore(store BackupStoreReader) Option {
 	return func(h *Handler) {
-		h.backupStore = store
+		h.backupStore = nil
 		h.backupCapture = nil
 		h.backupBatchCapture = nil
 		h.backupRestore = nil
 		h.backupGC = nil
+		if backupStoreReaderIsNil(store) {
+			return
+		}
+		h.backupStore = store
 		if capturer, ok := store.(BackupStoreCapturer); ok {
 			h.backupCapture = capturer
 		}
@@ -146,6 +151,19 @@ func WithBackupStore(store BackupStoreReader) Option {
 			h.protectedRequestedDirs = mergeUniqueDirectories(h.protectedRequestedDirs, requested)
 			h.protectedDirs = mergeUniqueDirectories(h.protectedDirs, resolved)
 		}
+	}
+}
+
+func backupStoreReaderIsNil(store BackupStoreReader) bool {
+	if store == nil {
+		return true
+	}
+	value := reflect.ValueOf(store)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
 	}
 }
 

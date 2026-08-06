@@ -16,6 +16,39 @@ import (
 	"github.com/zoster81/mcp-file-tools/internal/config"
 )
 
+func TestBuildServerTreatsTypedNilBackupStoreAsDisabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var store *backupstore.Store
+	server := BuildServer(ServerOptions{
+		Version:            "disabled-backup-architecture-test",
+		AllowedDirectories: []string{t.TempDir()},
+		BackupStore:        store,
+		Config:             config.Load(),
+		EnableClientRoots:  false,
+		LifecycleContext:   ctx,
+	})
+	session := connectTestClient(t, ctx, server, "disabled-backup-architecture")
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "backup_store",
+		Arguments: map[string]any{"action": "status"},
+	})
+	if err != nil || result.IsError {
+		t.Fatalf("disabled backup status result=%#v err=%v", result, err)
+	}
+	var output struct {
+		Action  string `json:"action"`
+		Enabled bool   `json:"enabled"`
+		State   string `json:"state"`
+	}
+	decodeStructuredOutput(t, result.StructuredContent, &output)
+	if output.Action != "status" || output.Enabled || output.State != "disabled" {
+		t.Fatalf("disabled backup status output=%+v", output)
+	}
+}
+
 func TestBuildServerWiresAndProtectsConfiguredBackupStore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

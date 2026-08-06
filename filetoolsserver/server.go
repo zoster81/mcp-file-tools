@@ -93,9 +93,6 @@ func BuildServer(options ServerOptions) *mcp.Server {
 	}
 
 	protectedDirectories := append([]string(nil), options.ProtectedDirectories...)
-	if options.BackupStore != nil && options.BackupStore.Root() != "" {
-		protectedDirectories = append(protectedDirectories, options.BackupStore.Root())
-	}
 	handlerOptions := []handler.Option{
 		handler.WithConfig(cfg),
 		handler.WithProtectedDirectories(protectedDirectories),
