@@ -57,3 +57,47 @@ func TestOpenRejectsAndDoesNotRepairPermissiveUnixMode(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenExistingForDiagnosisRejectsAndDoesNotRepairPermissiveUnixMode(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		relative string
+		mode     os.FileMode
+	}{
+		{name: "store root", mode: 0o755},
+		{name: "lock file", relative: "store.lock", mode: 0o644},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := filepath.Join(canonicalTempDir(t), "backup-store")
+			store, err := Open(Options{Directory: root})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Close(); err != nil {
+				t.Fatal(err)
+			}
+			path := root
+			if tc.relative != "" {
+				path = filepath.Join(root, tc.relative)
+			}
+			if err := os.Chmod(path, tc.mode); err != nil {
+				t.Fatal(err)
+			}
+
+			diagnostic, err := OpenExistingForDiagnosis(DiagnosticOpenOptions{Directory: root})
+			if diagnostic != nil {
+				_ = diagnostic.Close()
+			}
+			if err == nil {
+				t.Fatal("diagnostic opener accepted permissive permissions")
+			}
+			info, statErr := os.Stat(path)
+			if statErr != nil {
+				t.Fatal(statErr)
+			}
+			if info.Mode().Perm() != tc.mode {
+				t.Fatalf("diagnostic opener changed mode to %04o, want %04o", info.Mode().Perm(), tc.mode)
+			}
+		})
+	}
+}

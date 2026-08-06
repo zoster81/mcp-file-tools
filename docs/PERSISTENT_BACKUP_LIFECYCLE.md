@@ -363,7 +363,7 @@ Structural corruption must not be repaired automatically. The approved fail-clos
 
 - if the store is configured and structurally corrupt, server startup fails;
 - no ordinary mutation silently proceeds under a configured required-backup policy;
-- a future offline repair utility, if added, requires a separate design and never deletes uncertain data by default.
+- R19 defines a separate diagnostic-only offline command design in [OFFLINE_BACKUP_DIAGNOSTICS.md](OFFLINE_BACKUP_DIAGNOSTICS.md); it authorizes no repair, deletion, quarantine, salvage, or migration, and any later mutation capability still requires another explicit design.
 
 This favors safety over availability. Maintainers may revise this to an online degraded read-only mode only after defining clear operator recovery behavior.
 

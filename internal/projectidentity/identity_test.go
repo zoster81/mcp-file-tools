@@ -276,6 +276,7 @@ func TestBackupStoreFuzzTargetsRunInCI(t *testing.T) {
 		"FuzzDecodeIndex",
 		"FuzzDecodeListCursor",
 		"FuzzValidateGCPlan",
+		"FuzzParseBackupDiagnosticCommand",
 	} {
 		assertFileContains(t, root, workflow, target)
 	}

@@ -17,6 +17,7 @@ Do not copy private workstation state, local process details, credentials, or op
 - Streamable HTTP security design: [`docs/HTTP_SECURITY.md`](docs/HTTP_SECURITY.md)
 - R16 verified-change design: [`docs/VERIFIED_CHANGE_WORKFLOWS.md`](docs/VERIFIED_CHANGE_WORKFLOWS.md)
 - Approved R17 persistent-backup lifecycle design and R18 implementation contract: [`docs/PERSISTENT_BACKUP_LIFECYCLE.md`](docs/PERSISTENT_BACKUP_LIFECYCLE.md)
+- R19 offline backup-store diagnostics design: [`docs/OFFLINE_BACKUP_DIAGNOSTICS.md`](docs/OFFLINE_BACKUP_DIAGNOSTICS.md)
 - Authoritative MCP tool metadata: [`internal/toolcatalog/catalog.json`](internal/toolcatalog/catalog.json)
 
 Link to these documents instead of duplicating their detailed content.

@@ -107,3 +107,43 @@ func setPermissiveWindowsACL(path string, directory bool) error {
 	runtime.KeepAlive(acl)
 	return err
 }
+
+func TestOpenExistingForDiagnosisRejectsAndDoesNotRepairPermissiveWindowsACL(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		relative  string
+		directory bool
+	}{
+		{name: "store root", directory: true},
+		{name: "lock file", relative: "store.lock"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := filepath.Join(canonicalTempDir(t), "backup-store")
+			store, err := Open(Options{Directory: root})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Close(); err != nil {
+				t.Fatal(err)
+			}
+			path := root
+			if tc.relative != "" {
+				path = filepath.Join(root, tc.relative)
+			}
+			if err := setPermissiveWindowsACL(path, tc.directory); err != nil {
+				t.Fatal(err)
+			}
+
+			diagnostic, err := OpenExistingForDiagnosis(DiagnosticOpenOptions{Directory: root})
+			if diagnostic != nil {
+				_ = diagnostic.Close()
+			}
+			if err == nil {
+				t.Fatal("diagnostic opener accepted a permissive ACL")
+			}
+			if err := validatePathPermissions(path, tc.directory); err == nil {
+				t.Fatal("diagnostic opener silently repaired the permissive ACL")
+			}
+		})
+	}
+}

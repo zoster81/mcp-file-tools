@@ -38,6 +38,15 @@ func runCommand(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		return 0
 	}
 
+	diagnosticOptions, diagnosticCommand, err := parseBackupDiagnosticCommand(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	if diagnosticCommand {
+		return runBackupDiagnosticCommand(ctx, diagnosticOptions, stdout, stderr, getenv)
+	}
+
 	options, err := parseCommandOptions(args, loadCommandDefaults(getenv))
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)

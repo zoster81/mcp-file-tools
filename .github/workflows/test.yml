@@ -64,6 +64,7 @@ jobs:
           go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeIndex$' -fuzztime=5s
           go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeListCursor$' -fuzztime=5s
           go test ./internal/backupstore -run '^$' -fuzz '^FuzzValidateGCPlan$' -fuzztime=5s
+          go test ./cmd/mcp-file-tools -run '^$' -fuzz '^FuzzParseBackupDiagnosticCommand$' -fuzztime=5s
 
       - name: Lint GitHub Actions workflows
         if: matrix.os == 'ubuntu-latest'

@@ -11,12 +11,13 @@ This guide applies to `internal/backupstore/`. Follow the repository root [`AGEN
 - Create directories and files with owner-only permissions where supported and never expose internal paths or stored bytes through ordinary logs or MCP results.
 - Preserve the ordering invariant that durable objects precede manifests and manifest removal precedes object removal.
 - Never add background deletion, implicit quota-triggered garbage collection, automatic rollback, or multi-process writers without a separately approved design.
+- R19 diagnostics are existing-store-only and mutation-free. The diagnostic dependency graph must not reach descriptor/layout creation, index persistence, GC cleanup, capture, restore, or target mutation helpers.
 
 ## Implementation guidance
 
 Keep path validation, locking, descriptor handling, object storage, manifests, indexing, restore, and garbage collection in separate small components. Use bounded streaming reads and bounded directory enumeration with explicit size and count limits. Revalidate the retained store-root identity, internal layout, file type, owner-only permissions, and single-link state around every no-replace install or immutable read.
 
-Platform-specific locking, reparse detection, and directory synchronization belong in build-tagged files. Failure injection must cover write, sync, close, rename, cleanup, lock, corruption, and crash-recovery boundaries.
+Platform-specific locking, reparse detection, and directory synchronization belong in build-tagged files. Existing-only diagnostic lock acquisition must never use create flags and must retain/revalidate lock identity. Failure injection must cover write, sync, close, rename, cleanup, lock, corruption, and crash-recovery boundaries.
 
 ## Verification
 

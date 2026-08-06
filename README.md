@@ -61,6 +61,21 @@ R16 is complete and verified in source. `fingerprint_paths` provides determinist
 
 R17 approved the persistent-backup lifecycle, and R18 is complete and verified in source. An operator may configure `MCP_BACKUP_STORE_DIR` to initialize a separate non-overlapping internal store with owner-only permissions, one lifetime writer lock, an immutable descriptor, bounded recovery, and a rebuildable index. Internal code captures exact bytes into verified SHA-256 objects and strict checksummed manifests under conservative quotas. `backup_store` exposes bounded read-only status/list/inspect/audit, approval-bound original-target restore, and explicit generation-bound `gcDryRun`/`gcApply`. Restore uses a 256-bit one-shot capability, exact source revalidation, a mandatory safety backup before replacing an existing target, and no-replace creation for a missing target. GC preserves immutable pins and at least one version per target, applies retention and unpinned version-limit policy, removes manifests before fully verified unreferenced objects, recovers only recognized typed trash, and never runs automatically or in the background. `edit_file` preview and `patch_package` manifests may bind `backupPolicy: "required"`; their mutation paths capture approved pre-states before commit. Policy omission, direct editing, and logical no-ops still create no persistent backup. Alternate restore destinations, mutable pinning, automatic rollback, and secure-deletion guarantees remain unavailable.
 
+R19 is complete in source and implements the offline `backup-store diagnose` command. It is read-only and existing-store-only: it acquires the pre-existing exclusive lock without create flags, emits bounded deterministic path-free JSON, and never rebuilds the index, cleans trash, removes staging/orphan data, repairs permissions, or otherwise mutates the store. Quick mode checks metadata; full mode additionally hashes referenced object bytes under explicit bounds. Repair, quarantine, salvage, migration, and every MCP/server behavior remain unavailable.
+
+Run offline diagnosis only after stopping every server that owns the store:
+
+```bash
+mcp-file-tools backup-store diagnose \
+  --store /absolute/path/to/backup-store \
+  --mode full \
+  --max-objects 10000 \
+  --max-bytes 1073741824 \
+  --pretty
+```
+
+The command never reads `MCP_BACKUP_STORE_DIR`. It writes exactly one JSON report to stdout and uses exit code `0` for a complete clean report, `2` for diagnosed issues or maintenance such as a rebuildable index, and `1` when no trustworthy report can be emitted. The complete contract is [docs/OFFLINE_BACKUP_DIAGNOSTICS.md](docs/OFFLINE_BACKUP_DIAGNOSTICS.md).
+
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
 ## What It Does

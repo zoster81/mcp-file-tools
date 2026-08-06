@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15, R16, and R18 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 implements that contract through a disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, bounded review/audit, approval-bound edit/package capture, one-shot original-target restore, and explicit generation-bound GC with no background deletion.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15, R16, R18, and R19 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 implements that contract through a disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, bounded review/audit, approval-bound edit/package capture, one-shot original-target restore, and explicit generation-bound GC with no background deletion. R19 adds mutation-free offline diagnosis for an existing store without creating, rebuilding, repairing, cleaning, renaming, or deleting store state.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -34,6 +34,7 @@ Product identity and the fork's independent relationship to upstream are defined
 | R16 | COMPLETE | Added verified change workflows through deterministic fingerprints, one-shot edit preview/apply, declared patch packages, and structured verification. |
 | R17 | COMPLETE | Approved the bounded persistent-backup lifecycle, security boundary, quotas, restore safety, explicit GC, and non-rollback decisions. |
 | R18 | COMPLETE | Implemented and verified the approved persistent-backup subsystem in phased, failure-injected, cross-platform increments. |
+| R19 | COMPLETE | Added bounded deterministic mutation-free offline diagnostics for an existing persistent backup store. |
 
 ---
 
@@ -577,3 +578,46 @@ R18 is complete only when every phase is implemented and reviewed, live manifest
 ## Completion record
 
 Completed on 2026-08-05. A full lifecycle regression verifies approval-bound edit capture, original-target restore with a durable safety backup, generation-bound GC, full audit, and repeated store reopen while public target bytes remain unchanged by GC. The complete package suite and race detector passed in deterministic shards where the remote tunnel timeout prevented one monolithic invocation; `go mod tidy -diff`, module verification, vet, Staticcheck, govulncheck, workflow linting, manual MCP checks, Node release tests, and all five persistent-format fuzz targets passed. Six Windows/Linux/macOS amd64/arm64 binaries and backup-store test executables compiled, the generated six-package Registry manifest passed MCP Publisher 1.7.9 validation, and native Windows stdio smoke exposed all 27 tools. A temporary Linux/amd64 container passed UID 10001, read-only-root, dropped-capability, `no-new-privileges`, bounded-tmpfs, stdio MCP, direct-TLS HTTP readiness, `401`/`403`/`405`, no-CORS, and clean shutdown checks. Temporary binaries, manifests, images, containers, volumes, certificates, and the OCI engine were removed or restored to their initial state. No push, tag, release, deployment, launcher change, or runtime restart occurred.
+
+---
+
+# R19 — Offline backup store diagnostics
+
+## Status
+
+Completed on 2026-08-06. The authoritative contract is [OFFLINE_BACKUP_DIAGNOSTICS.md](OFFLINE_BACKUP_DIAGNOSTICS.md). The milestone provides the approved diagnostic-only design, mutation-free existing-store opener, bounded fail-soft scanner, strict offline JSON CLI, and complete verification gate. Repair behavior and MCP/server runtime behavior remain unchanged and unavailable.
+
+## Goal
+
+Provide deterministic bounded path-free diagnosis of an already existing persistent backup store when normal server startup rejects it, without creating, rebuilding, repairing, cleaning, renaming, or deleting any store state.
+
+## Design constraints
+
+- Diagnostics run offline and outside MCP transports.
+- The store must already exist and must expose an existing owner-only single-link lock file.
+- The command acquires the same exclusive writer boundary without create semantics and rejects an active server.
+- The diagnostic path never calls normal mutating startup helpers such as descriptor/layout creation, index persistence, or GC-trash recovery.
+- Quick mode remains metadata-only; full mode hashes referenced object bytes under explicit bounds.
+- Output is one versioned deterministic JSON document containing fixed issue codes and no store paths, target paths, labels, raw manifests, temporary names, or object bytes.
+- Any skipped, truncated, or limited check prevents a healthy result.
+- Normal stdio, Streamable HTTP, MCP schemas, backup behavior, restore, and GC remain unchanged.
+- Repair, quarantine, salvage, clone, migration, or other mutation requires a separate later design decision.
+
+## Implementation phases
+
+- [x] Phase 1 — Define the command boundary, existing-only lock semantics, output schema, bounds, compatibility, non-goals, tests, and completion gate.
+- [x] Phase 2 — Add a non-creating existing-store opener with retained root/lock identity and mutation-negative tests.
+- [x] Phase 3 — Add fail-soft bounded diagnostic scanning without weakening normal fail-closed startup.
+- [x] Phase 4 — Add strict `backup-store diagnose` CLI parsing, deterministic JSON, exit codes, cancellation, and compatibility tests.
+- [x] Phase 5 — Complete failure injection, race, fuzz, six-target compilation, native CLI smoke, documentation, and security gates.
+- [x] Phase 6 — Review diagnostic evidence before deciding whether any separate recovery or repair design is justified. **No repair, quarantine, salvage, clone, or migration capability is justified or authorized without future operator evidence and a separate milestone.**
+
+## Completion gate
+
+R19 is complete only when healthy and corrupt existing stores can be diagnosed on Windows, Linux, and macOS without any filesystem mutation; active stores are rejected by the same exclusive lock boundary; reports remain deterministic, bounded, and path-free; limited scans never claim health; normal server behavior remains unchanged; and all focused, regression, race, static-analysis, vulnerability, six-target, native smoke, documentation, and security checks pass.
+
+## Completion record
+
+Completed on 2026-08-06. `backup-store diagnose` requires an explicit existing store, acquires the pre-existing owner-only single-link lock without create flags, validates root/lock/descriptor/layout identity, and emits one bounded deterministic `backup-diagnostic-v1` JSON document. Quick mode performs metadata validation; full mode additionally hashes referenced objects. Missing or stale derived index state is reported as maintenance without being rebuilt, while descriptor, layout, manifest, object, permission, link, limit, cancellation, and concurrent-change evidence fail closed. Mutation-negative tests prove that missing descriptor/index state, incomplete layout, staging, trash, orphan data, bytes, modes, modification times, and namespace remain unchanged.
+
+Verification passed on the definitive source tree: `go mod tidy -diff`, `go mod verify`, the complete Go suite, complete race detector, vet, Staticcheck, govulncheck with no vulnerabilities, six bounded fuzz campaigns, Node release tests 7/7, manual 27-tool MCP harness, GoReleaser configuration, actionlint/ShellCheck workflow checks, Windows/Linux/macOS amd64/arm64 command and test compilation, and a native Windows CLI smoke proving exit `0` for a healthy store and exit `2` for a missing rebuildable index without recreating it. Project-identity/catalog tests, strict UTF-8/no-BOM/LF/trailing-whitespace checks, 126 local Markdown links, Gitleaks working-tree plus 336-commit history scans, and clean diff checks passed. No push, tag, release, deployment, launcher edit, runtime restart, repair, quarantine, salvage, clone, or migration occurred.
