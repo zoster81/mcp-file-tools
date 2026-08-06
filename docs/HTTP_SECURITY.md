@@ -8,6 +8,8 @@ R12 defines the trust model, secure defaults, configuration contract, request pi
 
 R12 approved this design before implementation. R13 implements it with the pinned MCP Go SDK while preserving stdio.
 
+R20 defines the future MCP `2026-07-28` adoption boundary in [MCP_2026_07_28_ADOPTION.md](MCP_2026_07_28_ADOPTION.md). Until its stable-SDK and implementation gates pass, this document's stateful `2025-11-25` behavior remains authoritative. R20 must add any stateless handler behind the same Host, Origin, authentication, proxy, rate, body, concurrency, timeout, logging, execution, readiness, and shutdown controls; it must not weaken or bypass the verified R13 path.
+
 ## Security objectives
 
 The HTTP transport must:
@@ -243,7 +245,7 @@ Failures are rejected at the earliest safe stage and must not initialize an MCP 
 
 ## Session policy
 
-R13 uses stateful sessions with these rules:
+R13 uses stateful sessions with these rules. These rules remain authoritative for legacy protocol requests after R20; future `2026-07-28` stateless requests must bypass session admission entirely rather than emulate a hidden protocol session.
 
 - session identifiers use the pinned SDK default `crypto/rand.Text` generator and are not replaced by predictable application IDs;
 - a session identifier is routing state, not authentication;
@@ -472,6 +474,8 @@ The following risks are explicit and accepted for the initial native HTTP profil
 
 ## References
 
+- [R20 MCP 2026-07-28 adoption design](MCP_2026_07_28_ADOPTION.md)
+- [MCP 2026-07-28 specification announcement](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
 - [MCP Streamable HTTP transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 - [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
 - [MCP security best practices](https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices)

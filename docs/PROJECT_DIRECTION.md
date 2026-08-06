@@ -14,6 +14,7 @@ The fork is a secure, encoding-aware MCP filesystem service for local, tunneled,
 - durable staged mutations with practical concurrent-change detection, no-replace creation, backup rollback, and platform-specific synchronization;
 - an optional dedicated persistent backup store with immutable content-addressed objects, checksummed manifests, bounded management/audit, approval-bound pre-state capture for prepared edits and patch packages, one-shot original-target restore, explicit generation-bound garbage collection, and a separate mutation-free offline diagnostic command for existing stores;
 - transport-independent error categories and tool metadata;
+- a controlled MCP `2026-07-28` adoption path that preserves legacy stdio and stateful HTTP until a stable official Go SDK can provide stateless compatibility without weakening the shared security boundary;
 - optional `run_script` and unrestricted `shell` tools, both disabled by default, with an additional execution gate for HTTP;
 - reproducible multi-platform releases, checksum-driven MCP Registry publication, and a non-root transport-neutral container.
 

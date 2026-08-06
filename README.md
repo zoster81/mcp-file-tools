@@ -76,6 +76,8 @@ mcp-file-tools backup-store diagnose \
 
 The command never reads `MCP_BACKUP_STORE_DIR`. It writes exactly one JSON report to stdout and uses exit code `0` for a complete clean report, `2` for diagnosed issues or maintenance such as a rebuildable index, and `1` when no trustworthy report can be emitted. The complete contract is [docs/OFFLINE_BACKUP_DIAGNOSTICS.md](docs/OFFLINE_BACKUP_DIAGNOSTICS.md).
 
+R20 is an active design/readiness milestone for MCP `2026-07-28`. The current runtime remains on the stable Go SDK `v1.6.1` and the existing `2025-11-25` transport behavior. No pre-release SDK is permitted in the main dependency graph. The approved direction is same-endpoint dual-generation HTTP with one shared security pipeline, stateful legacy sessions, stateless new-protocol requests, and stdio version gating that never relies on deprecated client roots for `2026-07-28`. No dependency or runtime behavior has changed yet; see [docs/MCP_2026_07_28_ADOPTION.md](docs/MCP_2026_07_28_ADOPTION.md).
+
 The feature set and relevant implementation approaches were reviewed in the [original project](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange) and are credited as reciprocal cross-project engineering exchange. This fork's code is reworked for its bounded-memory, secure-walker, durable-mutation, stable-schema, and dual-transport requirements rather than mechanically synchronized; see [Project lineage and independence](#project-lineage-and-independence) and [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md#reciprocal-feature-exchange).
 
 ## What It Does

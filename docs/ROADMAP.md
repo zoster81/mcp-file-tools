@@ -2,7 +2,7 @@
 
 This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
 
-Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15, R16, R18, and R19 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 implements that contract through a disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, bounded review/audit, approval-bound edit/package capture, one-shot original-target restore, and explicit generation-bound GC with no background deletion. R19 adds mutation-free offline diagnosis for an existing store without creating, rebuilding, repairing, cleaning, renaming, or deleting store state.
+Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15, R16, R18, and R19 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 implements that contract through a disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, bounded review/audit, approval-bound edit/package capture, one-shot original-target restore, and explicit generation-bound GC with no background deletion. R19 adds mutation-free offline diagnosis for an existing store without creating, rebuilding, repairing, cleaning, renaming, or deleting store state. R20 is active as a design/readiness milestone for adopting MCP `2026-07-28` only through a stable official Go SDK while preserving legacy stdio and stateful HTTP compatibility.
 
 Product identity and the fork's independent relationship to upstream are defined in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md). Current milestone status and completion gates live in this document. Reusable engineering checks live in [DEVELOPMENT_CHECKLIST.md](DEVELOPMENT_CHECKLIST.md), contributor workflow in [`CONTRIBUTING.md`](../CONTRIBUTING.md), scoped agent guidance in [`AGENTS.md`](../AGENTS.md), and completed R1-R6 engineering outcomes in [ROADMAP_HISTORY.md](ROADMAP_HISTORY.md).
 
@@ -35,6 +35,7 @@ Product identity and the fork's independent relationship to upstream are defined
 | R17 | COMPLETE | Approved the bounded persistent-backup lifecycle, security boundary, quotas, restore safety, explicit GC, and non-rollback decisions. |
 | R18 | COMPLETE | Implemented and verified the approved persistent-backup subsystem in phased, failure-injected, cross-platform increments. |
 | R19 | COMPLETE | Added bounded deterministic mutation-free offline diagnostics for an existing persistent backup store. |
+| R20 | ACTIVE | Design and qualify backward-compatible MCP `2026-07-28` adoption without pre-release runtime dependencies. |
 
 ---
 
@@ -621,3 +622,40 @@ R19 is complete only when healthy and corrupt existing stores can be diagnosed o
 Completed on 2026-08-06. `backup-store diagnose` requires an explicit existing store, acquires the pre-existing owner-only single-link lock without create flags, validates root/lock/descriptor/layout identity, and emits one bounded deterministic `backup-diagnostic-v1` JSON document. Quick mode performs metadata validation; full mode additionally hashes referenced objects. Missing or stale derived index state is reported as maintenance without being rebuilt, while descriptor, layout, manifest, object, permission, link, limit, cancellation, and concurrent-change evidence fail closed. Mutation-negative tests prove that missing descriptor/index state, incomplete layout, staging, trash, orphan data, bytes, modes, modification times, and namespace remain unchanged.
 
 Verification passed on the definitive source tree: `go mod tidy -diff`, `go mod verify`, the complete Go suite, complete race detector, vet, Staticcheck, govulncheck with no vulnerabilities, six bounded fuzz campaigns, Node release tests 7/7, manual 27-tool MCP harness, GoReleaser configuration, actionlint/ShellCheck workflow checks, Windows/Linux/macOS amd64/arm64 command and test compilation, and a native Windows CLI smoke proving exit `0` for a healthy store and exit `2` for a missing rebuildable index without recreating it. Project-identity/catalog tests, strict UTF-8/no-BOM/LF/trailing-whitespace checks, 126 local Markdown links, Gitleaks working-tree plus 336-commit history scans, and clean diff checks passed. No push, tag, release, deployment, launcher edit, runtime restart, repair, quarantine, salvage, clone, or migration occurred.
+
+---
+
+# R20 — MCP 2026-07-28 adoption readiness
+
+## Status
+
+Active design milestone since 2026-08-06. The authoritative contract is [MCP_2026_07_28_ADOPTION.md](MCP_2026_07_28_ADOPTION.md). Phase 1 defines the stable-SDK gate, stdio version policy, same-endpoint HTTP architecture, security invariants, compatibility matrix, and completion gate. No dependency, protocol, configuration, handler, tool schema, or runtime behavior has changed.
+
+## Goal
+
+Adopt final MCP protocol version `2026-07-28` through an official stable Go SDK while preserving supported legacy protocol behavior, the existing 27-tool source catalog, process-wide filesystem authority, and every stdio and HTTP security boundary.
+
+## Design constraints
+
+- The main dependency graph must not use a pre-release or pseudo-version SDK.
+- Current stable SDK `v1.6.1` and `2025-11-25` runtime behavior remain authoritative until the qualification gate passes.
+- Stdio may offer `2026-07-28` only when startup roots are configured; deprecated client roots remain a legacy-only compatibility path.
+- HTTP keeps one endpoint and one outer security/admission pipeline, with separate stateful legacy and stateless new-protocol SDK handlers.
+- Authentication, Host, Origin, proxy trust, rate, body budgets, concurrency, timeouts, logging, execution gates, readiness, and shutdown stay common across versions.
+- Stateless requests create no session, emit no session ID, use no event store, and consume no legacy session capacity.
+- `Mcp-Method` and `Mcp-Name` remain untrusted routing hints and never become authorization inputs.
+- R20 adds no Apps, Tasks, MRTR workflow, OAuth server, cache hint, tracing export, tool, prompt, resource, or schema.
+- Push, release, deployment, launcher changes, and runtime restart remain separately authorized operations.
+
+## Implementation phases
+
+- [x] Phase 1 — Define the compatibility boundary, stable-SDK adoption gate, transport architecture, roots deprecation strategy, tests, risks, and completion gate.
+- [ ] Phase 2 — Qualify the first stable Go SDK release supporting final `2026-07-28` through a reversible temporary module change and complete API/security review.
+- [ ] Phase 3 — Implement stdio version gating and discovery without allowing the new protocol to depend on deprecated client roots.
+- [ ] Phase 4 — Implement same-endpoint dual-generation HTTP behind the existing hardened middleware, with stateful legacy sessions and stateless new-protocol cancellation.
+- [ ] Phase 5 — Complete conformance, downgrade, malformed-header, interoperability, security failure-injection, race, fuzz, six-target, native, and container gates.
+- [ ] Phase 6 — Align migration, security, publishing, and completion documentation without changing the published runtime unless separately authorized.
+
+## Completion gate
+
+R20 is complete only when an official stable Go SDK supports final `2026-07-28`; stdio and HTTP accept the new version without relying on deprecated roots or protocol sessions; supported legacy clients retain current behavior; stateful and stateless HTTP share every security and resource-control boundary; tool catalogs, prompts, schemas, and representative results remain equivalent; malformed, unsupported, and downgrade cases fail deterministically; and the complete focused, regression, race, static, vulnerability, conformance, six-target, native, container, documentation, and security verification matrix passes.

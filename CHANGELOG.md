@@ -35,6 +35,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 - Added the R19 offline backup-store diagnostics design baseline. The proposed command is existing-store-only, lock-exclusive, deterministic, bounded, path-free, and strictly non-mutating; repair, cleanup, quarantine, salvage, and migration remain outside the authorized scope.
 - Added the R19 existing-store diagnostic opener. It requires a pre-existing owner-only root and single-link lock, acquires the lock without create flags, retains and revalidates root/lock identity, rejects active writers, and exposes no capture, restore, GC, index-persistence, cleanup, or initialization methods. Mutation-negative tests prove that incomplete layout, missing descriptor/index, staging, trash, bytes, modes, timestamps, and namespace remain unchanged.
 - Added the offline `backup-store diagnose` command with strict unambiguous options, quick/full bounded scanning, deterministic versioned path-free JSON, output limits, cancellation, active-lock rejection, descriptor/layout revalidation, and exit codes `0`, `2`, and `1`. The command never reads `MCP_BACKUP_STORE_DIR`, starts no MCP transport, and performs no repair or filesystem mutation.
+- Added the R20 MCP `2026-07-28` adoption design baseline. It blocks pre-release SDK dependencies, preserves legacy stdio and stateful HTTP, defines same-endpoint stateful/stateless routing behind one security pipeline, prevents the new protocol from relying on deprecated client roots, and adds no dependency or runtime change yet.
 
 ### Changed
 
