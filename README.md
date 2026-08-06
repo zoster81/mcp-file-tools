@@ -196,6 +196,8 @@ go build -o scripthold_windows_amd64.exe ./cmd/scripthold
 
 The Go module is `github.com/zoster81/scripthold`, and all internal imports resolve through the fork namespace. Build from source for development commits; use only fork-owned release tags with matching assets for packaged installations.
 
+Until the first Scripthold-named release is tagged, `go install github.com/zoster81/scripthold/cmd/scripthold@main` installs the current rebranded command. Do not use `@latest` yet: Go resolves it to a historical pre-rebrand tag.
+
 #### Download a fork release
 
 Published fork releases provide a directly downloadable Windows binary. The currently published 2.0.0 release retains the historical remote asset filename; the command below saves it locally with the Scripthold name:
