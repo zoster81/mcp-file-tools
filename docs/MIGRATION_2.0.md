@@ -1,6 +1,6 @@
 # Migration from 1.8 to 2.0
 
-This guide records the intentional public API and deployment changes in `mcp-file-tools` `v2.0.0`.
+This guide records the intentional public API and deployment changes in `scripthold` `v2.0.0`.
 
 ## Breaking-change table
 
@@ -14,7 +14,7 @@ This guide records the intentional public API and deployment changes in `mcp-fil
 | `MCP_MEMORY_THRESHOLD` controlled several unrelated limits. | Separate hard limits control file input, decoded characters, lines, batches, matches, output, and future HTTP sessions. | Set the specific variables below. `MCP_MEMORY_THRESHOLD` remains a deprecated fallback for file and output byte limits during migration. |
 | UTF-32 BOMs could be detected or added/removed but UTF-32 was not a registered text encoding. | UTF-32 remains BOM-management only. | Use `manage_bom` for UTF-32 signatures. Convert UTF-32 content externally before calling read, edit, grep, or conversion tools. |
 | The fork shipped an optional Claude Code marketplace plugin that downloaded and cached release binaries. | The fork-owned downloader plugin and marketplace metadata are removed. | Configure the released binary directly as a normal stdio MCP server, or use native Streamable HTTP. |
-| The container used an unpinned Alpine runtime, ran as root, and exposed `./server` from `/app`. | The image uses pinned bases, runs as UID/GID `10001`, installs the binary at `/usr/local/bin/mcp-file-tools`, and uses `/data` as its working directory. | Mount allowed roots explicitly under `/data`, grant UID/GID `10001` the required permissions, and update orchestration commands and health checks. |
+| The container used an unpinned Alpine runtime, ran as root, and exposed `./server` from `/app`. | The image uses pinned bases, runs as UID/GID `10001`, installs the binary at `/usr/local/bin/scripthold`, and uses `/data` as its working directory. | Mount allowed roots explicitly under `/data`, grant UID/GID `10001` the required permissions, and update orchestration commands and health checks. |
 
 ## Stable error codes
 
@@ -108,7 +108,7 @@ docker run --rm -i \
   --security-opt=no-new-privileges \
   --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   --mount type=bind,source=/absolute/project,target=/data \
-  mcp-file-tools:2.0.0 --transport=stdio /data
+  scripthold:2.0.0 --transport=stdio /data
 ```
 
 The mounted directory must be accessible to UID/GID `10001`. HTTP deployments should mount token and TLS files read-only, publish the configured port, and probe `/healthz` for liveness and `/readyz` for readiness. The image declares `SIGTERM`; supervisors should allow the documented graceful-shutdown interval before forcing termination.

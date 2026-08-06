@@ -1,15 +1,23 @@
-# MCP File Tools
+# Scripthold
 
-<!-- mcp-name: io.github.zoster81/mcp-file-tools -->
+<!-- mcp-name: io.github.zoster81/scripthold -->
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/zoster81/mcp-file-tools)](https://goreportcard.com/report/github.com/zoster81/mcp-file-tools)
-[![Release](https://img.shields.io/github/v/release/zoster81/mcp-file-tools)](https://github.com/zoster81/mcp-file-tools/releases/latest)
-[![License: GPL-3.0](https://img.shields.io/github/license/zoster81/mcp-file-tools)](LICENSE)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.zoster81%2Fmcp--file--tools-blue)](https://registry.modelcontextprotocol.io/?search=io.github.zoster81%2Fmcp-file-tools)
+[![Go Report Card](https://goreportcard.com/badge/github.com/zoster81/scripthold)](https://goreportcard.com/report/github.com/zoster81/scripthold)
+[![Release](https://img.shields.io/github/v/release/zoster81/scripthold)](https://github.com/zoster81/scripthold/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/github/license/zoster81/scripthold)](LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-next_release-lightgrey)](https://registry.modelcontextprotocol.io/?search=io.github.zoster81%2Fscripthold)
+
+**Code from the web. Work locally. Recover safely.**
+
+Scripthold is a secure, encoding-aware local workspace runtime for AI agents. It lets web-based and local LLM clients read, edit, convert, execute, test, back up, and restore work inside explicitly authorized directories through stdio, authenticated Streamable HTTP, or a secure tunnel.
+
+**Scripthold was built with Scripthold.** The project has been developed and verified through the same web-to-local workflow it provides to its users.
+
+> **Lineage:** Scripthold originated from the [original project](docs/PROJECT_DIRECTION.md#relationship-to-upstream), created by **Dimitar Grigorov**. The project retains its GPL-3.0 lineage and permanent attribution.
 
 AI clients see `Настройки` — not `????` or `Íàñòðîéêè`.
 
-Secure, encoding-aware MCP filesystem service with two first-class transports: local **stdio** and native stateful **MCP Streamable HTTP**. It detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
+Scripthold detects text encodings from bytes rather than filenames, presents UTF-8 to the client, and preserves or deliberately converts encoding, BOM, and line endings through bounded-memory and durable filesystem operations.
 
 - **27 tools and 3 guided prompts over both transports** — one catalog, one process-wide root policy, one error model, and equivalent behavior through stdio and Streamable HTTP.
 - **Agent-oriented repository workflows** — optional read line numbers, paged/multi-mode grep, `.gitignore` traversal, bounded sorting, batch conversion previews, approval-bound one-shot edits, strict patches, and ambiguity-safe fuzzy matching.
@@ -22,7 +30,7 @@ Secure, encoding-aware MCP filesystem service with two first-class transports: l
 
 ## Project Direction
 
-This repository began as a deployment-oriented fork for ChatGPT Web, but version 2.0 is an independently versioned downstream project rather than a thin synchronization branch. It owns its Go module, MCP Registry identity, release pipeline, public API decisions, transport architecture, container contract, and security documentation.
+Scripthold began as a deployment-oriented fork for ChatGPT Web, but version 2.0 established an independently versioned downstream project rather than a thin synchronization branch. It owns its Go module, MCP Registry identity, release pipeline, public API decisions, transport architecture, container contract, and security documentation.
 
 | Transport | Typical deployment | Security boundary | Roots behavior |
 |---|---|---|---|
@@ -66,7 +74,7 @@ R19 is complete in source and implements the offline `backup-store diagnose` com
 Run offline diagnosis only after stopping every server that owns the store:
 
 ```bash
-mcp-file-tools backup-store diagnose \
+scripthold backup-store diagnose \
   --store /absolute/path/to/backup-store \
   --mode full \
   --max-objects 10000 \
@@ -180,23 +188,23 @@ The official client is the customer-run agent that connects a private or localho
 #### Build the fork locally
 
 ```powershell
-git clone https://github.com/zoster81/mcp-file-tools.git
-Set-Location .\mcp-file-tools
+git clone https://github.com/zoster81/scripthold.git
+Set-Location .\scripthold
 go test ./...
-go build -o mcp-file-tools_windows_amd64.exe ./cmd/mcp-file-tools
+go build -o scripthold_windows_amd64.exe ./cmd/scripthold
 ```
 
-The Go module is `github.com/zoster81/mcp-file-tools`, and all internal imports resolve through the fork namespace. Build from source for development commits; use only fork-owned release tags with matching assets for packaged installations.
+The Go module is `github.com/zoster81/scripthold`, and all internal imports resolve through the fork namespace. Build from source for development commits; use only fork-owned release tags with matching assets for packaged installations.
 
 #### Download a fork release
 
-Published fork releases provide a directly downloadable Windows binary:
+Published fork releases provide a directly downloadable Windows binary. The currently published 2.0.0 release retains the historical remote asset filename; the command below saves it locally with the Scripthold name:
 
 ```powershell
-New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Programs\mcp-file-tools" | Out-Null
+New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Programs\scripthold" | Out-Null
 Invoke-WebRequest `
-    "https://github.com/zoster81/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" `
-    -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools_windows_amd64.exe"
+    "https://github.com/zoster81/scripthold/releases/latest/download/mcp-file-tools_windows_amd64.exe" `
+    -OutFile "$env:LOCALAPPDATA\Programs\scripthold\scripthold_windows_amd64.exe"
 ```
 
 For unreleased development commits, build from source as shown above.
@@ -209,7 +217,7 @@ Place these files in the same private working directory:
 
 ```text
 tunnel-client.exe
-mcp-file-tools_windows_amd64.exe
+scripthold_windows_amd64.exe
 start-openai-tunnel.ps1
 ```
 
@@ -219,7 +227,7 @@ Copy the example outside the Git checkout before entering credentials:
 $runDirectory = "$env:LOCALAPPDATA\OpenAI-Mcp-Tunnel"
 New-Item -ItemType Directory -Force $runDirectory | Out-Null
 Copy-Item .\examples\start-openai-tunnel.ps1 $runDirectory
-Copy-Item .\mcp-file-tools_windows_amd64.exe $runDirectory
+Copy-Item .\scripthold_windows_amd64.exe $runDirectory
 # Copy tunnel-client.exe from your OpenAI tunnel installation into the same directory.
 notepad "$runDirectory\start-openai-tunnel.ps1"
 ```
@@ -269,9 +277,9 @@ The same binary can be used directly by clients that launch local stdio MCP serv
 ```json
 {
   "mcpServers": {
-    "file-tools": {
+    "scripthold": {
       "type": "stdio",
-      "command": "C:\\Tools\\mcp-file-tools_windows_amd64.exe",
+      "command": "C:\\Tools\\scripthold_windows_amd64.exe",
       "args": ["D:\\Projects", "C:\\Users\\YOUR_NAME\\Documents"]
     }
   }
@@ -287,7 +295,7 @@ The native HTTP transport is stateful, bearer-authenticated, and bound to loopba
 Create a private token file and start the endpoint from PowerShell:
 
 ```powershell
-$tokenPath = Join-Path $env:TEMP "mcp-file-tools.token"
+$tokenPath = Join-Path $env:TEMP "scripthold.token"
 $tokenBytes = New-Object byte[] 32
 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 try { $rng.GetBytes($tokenBytes) } finally { $rng.Dispose() }
@@ -299,7 +307,7 @@ try { $rng.GetBytes($tokenBytes) } finally { $rng.Dispose() }
 
 $env:MCP_HTTP_TOKEN_FILE = $tokenPath
 $env:MCP_HTTP_ADDR = "127.0.0.1:8765"
-.\mcp-file-tools_windows_amd64.exe --transport=streamable-http D:\Projects
+.\scripthold_windows_amd64.exe --transport=streamable-http D:\Projects
 ```
 
 The MCP endpoint is `http://127.0.0.1:8765/mcp`. Clients must send the token as `Authorization: Bearer <token>` on every MCP `POST`, `GET`, and `DELETE` request. `/healthz` and `/readyz` expose only minimal liveness/readiness status. A complete sanitized Windows launcher with loopback defaults, optional TLS/proxy settings, environment restoration, and both execution gates disabled is available at [`examples/start-streamable-http.ps1`](examples/start-streamable-http.ps1).
@@ -310,12 +318,12 @@ Do not put tokens in command-line arguments, URLs, cookies, or query parameters.
 
 ### Container image
 
-The repository Dockerfile uses the Go version declared by `go.mod`, a version-pinned Alpine runtime, a statically linked binary, and an unprivileged runtime identity (`10001:10001`). The container working directory is `/data`; cache and temporary files use `/tmp/mcp-file-tools`. The image remains transport-neutral, so its entry point is the server binary and callers select stdio or Streamable HTTP explicitly.
+The repository Dockerfile uses the Go version declared by `go.mod`, a version-pinned Alpine runtime, a statically linked binary, and an unprivileged runtime identity (`10001:10001`). The container working directory is `/data`; cache and temporary files use `/tmp/scripthold`. The image remains transport-neutral, so its entry point is the server binary and callers select stdio or Streamable HTTP explicitly.
 
 Build a development image with an explicit embedded version:
 
 ```bash
-docker build --build-arg VERSION=dev -t mcp-file-tools:dev .
+docker build --build-arg VERSION=dev -t scripthold:dev .
 ```
 
 A hardened stdio invocation mounts exactly one allowed root and keeps the rest of the container filesystem read-only:
@@ -327,7 +335,7 @@ docker run --rm -i \
   --security-opt=no-new-privileges \
   --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   --mount type=bind,source=/absolute/project,target=/data \
-  mcp-file-tools:dev --transport=stdio /data
+  scripthold:dev --transport=stdio /data
 ```
 
 The mounted directory must be accessible to UID/GID `10001`. For native HTTP, mount the workspace at `/data`, mount the bearer token and TLS files read-only under `/run/secrets`, publish port `8765`, and supply the fail-closed non-loopback/TLS settings documented above. A direct-TLS deployment can use an orchestration health check equivalent to:
@@ -340,7 +348,7 @@ The Dockerfile intentionally does not bake in a health check because stdio has n
 
 ### Updating the fork
 
-The update checker is notification-only and checks releases from `zoster81/mcp-file-tools`. It never downloads or replaces a binary.
+The update checker is notification-only and checks releases from `zoster81/scripthold`. It never downloads or replaces a binary.
 
 To update a manual Windows installation:
 
@@ -351,8 +359,8 @@ To update a manual Windows installation:
 
 ```powershell
 Invoke-WebRequest `
-    "https://github.com/zoster81/mcp-file-tools/releases/latest/download/mcp-file-tools_windows_amd64.exe" `
-    -OutFile "$env:LOCALAPPDATA\Programs\mcp-file-tools\mcp-file-tools_windows_amd64.exe"
+    "https://github.com/zoster81/scripthold/releases/latest/download/mcp-file-tools_windows_amd64.exe" `
+    -OutFile "$env:LOCALAPPDATA\Programs\scripthold\scripthold_windows_amd64.exe"
 ```
 
 Set `MCP_NO_UPDATE_CHECK=1` before starting the server to disable release checks.
@@ -441,8 +449,8 @@ To override, set environment variables in the tunnel launcher or another stdio c
 ```json
 {
   "mcpServers": {
-    "file-tools": {
-      "command": "C:\\Tools\\mcp-file-tools_windows_amd64.exe",
+    "scripthold": {
+      "command": "C:\\Tools\\scripthold_windows_amd64.exe",
       "args": ["D:\\Projects"],
       "env": {
         "MCP_DEFAULT_ENCODING": "utf-8"
@@ -485,7 +493,7 @@ Contributor workflow is documented in [`CONTRIBUTING.md`](CONTRIBUTING.md). The 
 go test ./...
 
 # Build
-go build -o mcp-file-tools ./cmd/mcp-file-tools
+go build -o scripthold ./cmd/scripthold
 ```
 
 ### Debugging with MCP Inspector
@@ -496,10 +504,10 @@ go build -o mcp-file-tools ./cmd/mcp-file-tools
 
 ```bash
 # Run with allowed directory (required)
-npx @modelcontextprotocol/inspector go run ./cmd/mcp-file-tools -- /path/to/allowed/dir
+npx @modelcontextprotocol/inspector go run ./cmd/scripthold -- /path/to/allowed/dir
 
 # Or with built binary
-npx @modelcontextprotocol/inspector ./mcp-file-tools.exe C:\Projects
+npx @modelcontextprotocol/inspector ./scripthold.exe C:\Projects
 ```
 
 Opens a browser where you can view tools, call them with custom arguments, and inspect responses.
@@ -510,7 +518,7 @@ Run the server with an allowed directory and send JSON-RPC commands via stdin:
 
 ```bash
 # Specify transport and allowed directory
-go run ./cmd/mcp-file-tools --transport=stdio /path/to/project
+go run ./cmd/scripthold --transport=stdio /path/to/project
 ```
 
 Example commands (paste into terminal):

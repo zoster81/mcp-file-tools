@@ -1,4 +1,4 @@
-// Package config provides configuration management for MCP file tools server.
+// Package config provides configuration management for the Scripthold server.
 package config
 
 import (
@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/scripthold/internal/encoding"
 )
 
 const (

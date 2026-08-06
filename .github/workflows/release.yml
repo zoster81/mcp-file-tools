@@ -36,7 +36,7 @@ jobs:
         run: go mod tidy && git diff --exit-code go.mod go.sum
 
       - name: Verify HTTP transport integration
-        run: go test ./internal/httptransport ./cmd/mcp-file-tools -count=1
+        run: go test ./internal/httptransport ./cmd/scripthold -count=1
 
       - name: Run tests with race detector
         run: go test -race ./... -count=1
@@ -63,20 +63,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          binary="${PWD}/mcp-file-tools-smoke"
+          binary="${PWD}/scripthold-smoke"
           if [[ "${RUNNER_OS}" == "Windows" ]]; then
             binary="${binary}.exe"
           fi
           version="${GITHUB_REF_NAME#v}"
           go build -trimpath \
-            -ldflags="-s -w -X main.version=${version} -X github.com/zoster81/mcp-file-tools/filetoolsserver.Version=${version}" \
+            -ldflags="-s -w -X main.version=${version} -X github.com/zoster81/scripthold/filetoolsserver.Version=${version}" \
             -o "${binary}" \
-            ./cmd/mcp-file-tools
+            ./cmd/scripthold
           export MCP_EXTERNAL_SMOKE_EXECUTABLE="${binary}"
           export MCP_EXTERNAL_SMOKE_ARGS_JSON='["--transport=stdio","{TEMP_ROOT}"]'
           export MCP_EXTERNAL_SMOKE_EXPECTED_VERSION="${version}"
           export MCP_EXTERNAL_SMOKE_EXPECTED_ROOT='{TEMP_ROOT}'
-          go test ./cmd/mcp-file-tools -run '^TestExternalStdioBinarySmoke$' -count=1 -v
+          go test ./cmd/scripthold -run '^TestExternalStdioBinarySmoke$' -count=1 -v
 
   release:
     needs: test

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/config"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 func TestHandlePatchPackageInspectAndDryRun(t *testing.T) {

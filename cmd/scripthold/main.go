@@ -11,10 +11,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/zoster81/mcp-file-tools/filetoolsserver"
-	"github.com/zoster81/mcp-file-tools/internal/backupstore"
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/filetoolsserver"
+	"github.com/zoster81/scripthold/internal/backupstore"
+	"github.com/zoster81/scripthold/internal/config"
+	"github.com/zoster81/scripthold/internal/security"
 )
 
 // version is set at build time via ldflags.

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/scripthold/internal/config"
 )
 
 func TestHandleFingerprintPaths(t *testing.T) {

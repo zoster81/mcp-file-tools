@@ -15,8 +15,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/config"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 func TestPatchPackageDryRunApplyVerifyOneShot(t *testing.T) {

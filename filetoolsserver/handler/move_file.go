@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 // HandleMoveFile moves or renames a file or directory.

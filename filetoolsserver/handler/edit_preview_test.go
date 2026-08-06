@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/config"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 func TestHandleEditFilePreviewApplyIsExactAndOneShot(t *testing.T) {

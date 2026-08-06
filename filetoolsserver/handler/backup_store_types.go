@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/zoster81/mcp-file-tools/internal/backupstore"
+	"github.com/zoster81/scripthold/internal/backupstore"
 )
 
 const (

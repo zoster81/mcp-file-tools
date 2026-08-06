@@ -3,7 +3,7 @@ package handler
 import (
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/internal/security"
 )
 
 // normDir normalizes a directory the way the roots handler does before merging.

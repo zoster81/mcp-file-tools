@@ -7,7 +7,7 @@ const test = require('node:test');
 const { verifyReleaseVersion } = require('./verify-release-version');
 
 function createChangelogFixture(t, content) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-file-tools-release-version-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scripthold-release-version-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'CHANGELOG.md'), content, 'utf8');
   return root;

@@ -1,6 +1,6 @@
 package handler
 
-import "github.com/zoster81/mcp-file-tools/internal/operation"
+import "github.com/zoster81/scripthold/internal/operation"
 
 // Sentinel errors for handler operations.
 // Use errors.Is() to check for specific error types.

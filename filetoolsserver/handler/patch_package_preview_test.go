@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/scripthold/internal/config"
 )
 
 func TestPatchPackageApplyRejectsStaleAndSameContentReplacement(t *testing.T) {

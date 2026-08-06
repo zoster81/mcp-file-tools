@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
 )
 
 func TestHandleChangeLineEndings_CRLFtoLF(t *testing.T) {

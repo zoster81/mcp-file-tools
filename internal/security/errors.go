@@ -1,6 +1,6 @@
 package security
 
-import "github.com/zoster81/mcp-file-tools/internal/operation"
+import "github.com/zoster81/scripthold/internal/operation"
 
 // Sentinel errors for path validation and security operations.
 // Use errors.Is() to check for specific error types.

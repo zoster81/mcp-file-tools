@@ -1,4 +1,4 @@
-# Repository Agent Guide
+# Scripthold Repository Agent Guide
 
 ## Scope and precedence
 
@@ -25,7 +25,7 @@ Link to these documents instead of duplicating their detailed content.
 
 ## Repository map
 
-- `cmd/mcp-file-tools`: CLI entry point and transport bootstrap.
+- `cmd/scripthold`: CLI entry point and transport bootstrap.
 - `filetoolsserver`: MCP server construction, roots, and tool registration.
 - `filetoolsserver/handler`: MCP adapters and shared text-document behavior.
 - `internal/encoding`: encoding registry and content-based detection.

@@ -5,9 +5,9 @@ import (
 	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	"github.com/zoster81/mcp-file-tools/internal/toolcatalog"
+	"github.com/zoster81/scripthold/filetoolsserver/handler"
+	"github.com/zoster81/scripthold/internal/config"
+	"github.com/zoster81/scripthold/internal/toolcatalog"
 )
 
 // Version is set at build time via ldflags
@@ -104,7 +104,7 @@ func BuildServer(options ServerOptions) *mcp.Server {
 	h := handler.NewHandler(options.AllowedDirectories, handlerOptions...)
 	logger := options.Logger
 	impl := &mcp.Implementation{
-		Name:    "mcp-file-tools",
+		Name:    "scripthold",
 		Version: version,
 	}
 

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/internal/security"
 )
 
 const (

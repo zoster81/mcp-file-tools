@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
-	"github.com/zoster81/mcp-file-tools/internal/textstream"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
+	"github.com/zoster81/scripthold/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/textstream"
 )
 
 func readFileHead(path string, maxBytes int) ([]byte, error) {

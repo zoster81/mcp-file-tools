@@ -1,4 +1,4 @@
-module github.com/zoster81/mcp-file-tools
+module github.com/zoster81/scripthold
 
 go 1.26.5
 

@@ -16,7 +16,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	internalexecution "github.com/zoster81/mcp-file-tools/internal/execution"
+	internalexecution "github.com/zoster81/scripthold/internal/execution"
 )
 
 const (

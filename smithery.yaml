@@ -1,6 +1,6 @@
 # Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
-# Encoding-aware filesystem MCP server with 27 tools, secure traversal,
-# durable mutations, typed errors, and content-based support for 24 encodings.
+# Scripthold: encoding-aware local workspace MCP server with 27 tools,
+# secure traversal, durable mutations, typed errors, and 24 encodings.
 
 runtime: container
 
@@ -31,7 +31,7 @@ startCommand:
       if (Array.isArray(config.additionalDirectories)) {
         args.push(...config.additionalDirectories);
       }
-      return { command: '/usr/local/bin/mcp-file-tools', args };
+      return { command: '/usr/local/bin/scripthold', args };
     }
   exampleConfig:
     allowedDirectory: /data

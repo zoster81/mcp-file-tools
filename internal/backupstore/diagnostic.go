@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 // DiagnosticOpenOptions configures a mutation-free handle to an existing store.

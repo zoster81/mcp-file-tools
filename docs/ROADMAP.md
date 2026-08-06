@@ -1,6 +1,6 @@
-# Development Roadmap
+# Scripthold Development Roadmap
 
-This is the authoritative product roadmap for `zoster81/mcp-file-tools`.
+This is the authoritative product roadmap for Scripthold, currently maintained in `zoster81/scripthold`.
 
 Version `2.0.0` is published and deployed through both supported transports. The live stdio connector and an authenticated stateful Streamable HTTP session have each verified the complete 23-tool catalog from the published binary. R14 is complete after the controlled active rollback and final restoration of the published runtime. R15, R16, R18, and R19 are complete in source and remain unreleased. R17 is complete after approval of the ten persistent-backup lifecycle decisions. R18 implements that contract through a disabled-by-default store foundation, internal capture/recovery/indexing/quota primitives, bounded review/audit, approval-bound edit/package capture, one-shot original-target restore, and explicit generation-bound GC with no background deletion. R19 adds mutation-free offline diagnosis for an existing store without creating, rebuilding, repairing, cleaning, renaming, or deleting store state. R20 is active as a design/readiness milestone for adopting MCP `2026-07-28` only through a stable official Go SDK while preserving legacy stdio and stateful HTTP compatibility.
 
@@ -346,7 +346,7 @@ The controlled active rollback and restoration were completed on 2026-08-03.
 
 ## Publication record
 
-Published on 2026-08-02. Fork tag `v2.0.0` resolves to commit `1530fbb1eab529a1ef7236b4b3df8ab84a9a0d1d`. The tag workflow passed the complete Linux, Windows, and macOS test matrix, produced six raw binaries, six deterministic platform archives, and `checksums.txt`, and published `io.github.zoster81/mcp-file-tools` version `2.0.0` to the MCP Registry through GitHub OIDC. All 12 published binary/archive checksums were independently verified against the release checksum file. No separate signature assets were emitted by the configured release pipeline.
+Published on 2026-08-02. Fork tag `v2.0.0` resolves to commit `1530fbb1eab529a1ef7236b4b3df8ab84a9a0d1d`. The tag workflow passed the complete Linux, Windows, and macOS test matrix, produced six raw binaries, six deterministic platform archives, and `checksums.txt`, and published the historical `io.github.zoster81/mcp-file-tools` version `2.0.0` to the MCP Registry through GitHub OIDC. All 12 published binary/archive checksums were independently verified against the release checksum file. No separate signature assets were emitted by the configured release pipeline.
 
 Operator deployment completed on 2026-08-02. The published Windows amd64 `2.0.0` binary now runs through both the stdio tunnel path and the native loopback Streamable HTTP path. Live verification confirmed the embedded version, HTTP health/readiness, unauthenticated `401`, authenticated session initialization, and the complete 23-tool catalog. On 2026-08-03, a controlled active rollback to the retained R10 build verified the complete 23-tool stdio catalog while the later HTTP transport was intentionally absent. The published `2.0.0` runtime was then restored and reverified over stdio and authenticated Streamable HTTP, including the complete tool catalog and expected health, readiness, and authentication responses.
 

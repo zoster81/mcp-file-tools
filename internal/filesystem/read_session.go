@@ -9,7 +9,7 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 var ErrIncompleteRead = errors.New("read session did not consume the complete file")

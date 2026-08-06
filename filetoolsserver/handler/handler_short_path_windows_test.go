@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/internal/security"
 	"golang.org/x/sys/windows"
 )
 

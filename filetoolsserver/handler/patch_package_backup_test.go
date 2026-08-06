@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/backupstore"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/backupstore"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 func TestPatchPackageRequiredBackupCapturesAllChangedTargetsBeforeCommit(t *testing.T) {

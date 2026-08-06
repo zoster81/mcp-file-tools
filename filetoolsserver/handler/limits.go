@@ -1,6 +1,6 @@
 package handler
 
-import "github.com/zoster81/mcp-file-tools/internal/config"
+import "github.com/zoster81/scripthold/internal/config"
 
 func (h *Handler) maxFileBytes() int64 {
 	if h != nil && h.config != nil && h.config.Limits.MaxFileBytes > 0 {

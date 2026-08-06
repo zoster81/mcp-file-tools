@@ -1,6 +1,6 @@
-# Contributing to mcp-file-tools
+# Contributing to Scripthold
 
-Thank you for contributing to `zoster81/mcp-file-tools`.
+Thank you for contributing to Scripthold, currently maintained in `zoster81/scripthold`.
 
 ## Before you start
 

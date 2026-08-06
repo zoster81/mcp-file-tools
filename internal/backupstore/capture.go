@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/scripthold/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 // Capture durably installs or verifies an immutable object, then commits one

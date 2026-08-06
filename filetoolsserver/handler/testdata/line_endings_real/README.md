@@ -4,7 +4,7 @@ This directory contains unmodified upstream files used by the integration tests 
 
 ## Coverage
 
-The fixtures cover every canonical encoding registered by `mcp-file-tools`:
+The fixtures cover every canonical encoding registered by `scripthold`:
 
 - UTF-8, UTF-16 LE, and UTF-16 BE;
 - Windows-1250 through Windows-1258 and Windows-874;

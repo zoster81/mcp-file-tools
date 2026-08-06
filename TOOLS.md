@@ -1,6 +1,6 @@
-# Tools Reference
+# Scripthold Tool Reference
 
-The authoritative 27-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
+Scripthold's authoritative 27-tool catalog and 3 guided prompts are transport-independent. Stdio and native stateful Streamable HTTP expose the same schemas, annotations, process-wide allowed directories, limits, execution policy, typed errors, and prompt workflows. Transport setup and security differ, but tool behavior does not; see [README.md](README.md), [docs/PROJECT_DIRECTION.md](docs/PROJECT_DIRECTION.md), and [docs/HTTP_SECURITY.md](docs/HTTP_SECURITY.md).
 
 ## Guided Prompts
 
@@ -1025,7 +1025,7 @@ Returns directories the server is allowed to access. If empty, add paths as args
 
 ### check_for_updates
 
-Checks the latest GitHub release of the `zoster81/mcp-file-tools` fork and returns the current version, latest version, and an update message when applicable.
+Checks the latest GitHub release of the `zoster81/scripthold` fork and returns the current version, latest version, and an update message when applicable.
 
 **Parameters:**
 

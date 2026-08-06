@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
+	"github.com/zoster81/scripthold/filetoolsserver/handler"
 )
 
 func TestUpdateAllowedDirectoriesFromRoots_ValidRoots(t *testing.T) {

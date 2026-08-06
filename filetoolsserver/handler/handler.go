@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zoster81/mcp-file-tools/internal/backupstore"
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	"github.com/zoster81/mcp-file-tools/internal/execution"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
-	"github.com/zoster81/mcp-file-tools/internal/operation"
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/internal/backupstore"
+	"github.com/zoster81/scripthold/internal/config"
+	"github.com/zoster81/scripthold/internal/execution"
+	"github.com/zoster81/scripthold/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/operation"
+	"github.com/zoster81/scripthold/internal/security"
 )
 
 // BackupStoreReader is the read-only management contract exposed publicly.

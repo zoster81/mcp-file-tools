@@ -11,16 +11,16 @@ const repositoryRoot = path.resolve(__dirname, '..');
 const generator = path.join(repositoryRoot, 'scripts', 'generate-server-json.js');
 const toolCatalog = path.join(repositoryRoot, 'internal', 'toolcatalog', 'catalog.json');
 const expectedFiles = [
-  'mcp-file-tools_windows_amd64.exe',
-  'mcp-file-tools_windows_arm64.exe',
-  'mcp-file-tools_linux_amd64',
-  'mcp-file-tools_linux_arm64',
-  'mcp-file-tools_darwin_amd64',
-  'mcp-file-tools_darwin_arm64',
+  'scripthold_windows_amd64.exe',
+  'scripthold_windows_arm64.exe',
+  'scripthold_linux_amd64',
+  'scripthold_linux_arm64',
+  'scripthold_darwin_amd64',
+  'scripthold_darwin_arm64',
 ];
 
 function createWorkspace(t) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-file-tools-registry-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'scripthold-registry-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
@@ -34,7 +34,7 @@ test('generates a fork-owned manifest from release checksums', (t) => {
   const checksumsPath = path.join(directory, 'checksums.txt');
   const outputPath = path.join(directory, 'server.json');
   const lines = expectedFiles.map((filename, index) => `${checksumFor(index)}  ${filename}`);
-  lines.push(`${'f'.repeat(64)}  mcp-file-tools_windows_amd64.zip`);
+  lines.push(`${'f'.repeat(64)}  scripthold_windows_amd64.zip`);
   fs.writeFileSync(checksumsPath, `${lines.join('\n')}\n`, 'utf8');
 
   const result = spawnSync(process.execPath, [generator, 'v2.3.4', checksumsPath, outputPath], {
@@ -44,12 +44,12 @@ test('generates a fork-owned manifest from release checksums', (t) => {
   assert.equal(result.status, 0, result.stderr);
 
   const manifest = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
-  assert.equal(manifest.name, 'io.github.zoster81/mcp-file-tools');
+  assert.equal(manifest.name, 'io.github.zoster81/scripthold');
   assert.equal(manifest.version, '2.3.4');
-  assert.equal(manifest.repository.url, 'https://github.com/zoster81/mcp-file-tools');
+  assert.equal(manifest.repository.url, 'https://github.com/zoster81/scripthold');
   assert.equal(manifest.packages.length, expectedFiles.length);
   manifest.packages.forEach((pkg, index) => {
-    assert.equal(pkg.identifier, `https://github.com/zoster81/mcp-file-tools/releases/download/v2.3.4/${expectedFiles[index]}`);
+    assert.equal(pkg.identifier, `https://github.com/zoster81/scripthold/releases/download/v2.3.4/${expectedFiles[index]}`);
     assert.equal(pkg.fileSha256, checksumFor(index));
   });
 

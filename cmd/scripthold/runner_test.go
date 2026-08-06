@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/filetoolsserver"
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	"github.com/zoster81/mcp-file-tools/internal/httptransport"
+	"github.com/zoster81/scripthold/filetoolsserver"
+	"github.com/zoster81/scripthold/internal/config"
+	"github.com/zoster81/scripthold/internal/httptransport"
 )
 
 func TestSelectRunnerPreservesStdioPolicy(t *testing.T) {

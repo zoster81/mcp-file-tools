@@ -15,10 +15,10 @@ import (
 
 const (
 	// UpdateCheckURL is the GitHub API endpoint for the latest fork release.
-	UpdateCheckURL = "https://api.github.com/repos/zoster81/mcp-file-tools/releases/latest"
+	UpdateCheckURL = "https://api.github.com/repos/zoster81/scripthold/releases/latest"
 
 	// RepoURL is the custom fork repository URL.
-	RepoURL = "https://github.com/zoster81/mcp-file-tools"
+	RepoURL = "https://github.com/zoster81/scripthold"
 
 	// ReleaseURL is the human-facing latest release page for this fork.
 	ReleaseURL = RepoURL + "/releases/latest"
@@ -81,7 +81,7 @@ func fetchLatestVersion(ctx context.Context) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "mcp-file-tools-update-checker")
+	req.Header.Set("User-Agent", "scripthold-update-checker")
 
 	client := &http.Client{Timeout: httpTimeout}
 	resp, err := client.Do(req)
@@ -106,7 +106,7 @@ func fetchLatestVersion(ctx context.Context) (string, error) {
 // getCacheFile returns the path to the cache file in user's cache directory
 func getCacheFile() string {
 	if dir, err := os.UserCacheDir(); err == nil {
-		return filepath.Join(dir, "mcp-file-tools", "update-check.json")
+		return filepath.Join(dir, "scripthold", "update-check.json")
 	}
 	return ""
 }
@@ -140,7 +140,7 @@ func cacheMatchesSource(c *cache) bool {
 
 func updateMessage(currentVersion, latestVersion string) string {
 	return fmt.Sprintf(
-		"mcp-file-tools fork update available: %s → %s\n"+
+		"scripthold fork update available: %s → %s\n"+
 			"Stop the tunnel or MCP client using the binary before replacing it.\n"+
 			"Release: %s",
 		currentVersion, latestVersion, ReleaseURL)

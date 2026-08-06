@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	forkModule       = "github.com/zoster81/mcp-file-tools"
-	forkRegistryName = "io.github.zoster81/mcp-file-tools"
-	forkRepository   = "https://github.com/zoster81/mcp-file-tools"
+	forkModule       = "github.com/zoster81/scripthold"
+	forkRegistryName = "io.github.zoster81/scripthold"
+	forkRepository   = "https://github.com/zoster81/scripthold"
 )
 
 func repositoryRoot(t *testing.T) string {
@@ -139,7 +139,7 @@ func TestTrackedTextExcludesPrivateOperatorState(t *testing.T) {
 func TestOperationalMetadataTargetsFork(t *testing.T) {
 	root := repositoryRoot(t)
 	assertFileContains(t, root, ".goreleaser.yml", "-X "+forkModule+"/filetoolsserver.Version={{.Version}}")
-	assertFileContains(t, root, filepath.FromSlash(".github/workflows/publish-registry.yml"), "github.repository == 'zoster81/mcp-file-tools'")
+	assertFileContains(t, root, filepath.FromSlash(".github/workflows/publish-registry.yml"), "github.repository == 'zoster81/scripthold'")
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/release.yml"), "uses: ./.github/workflows/publish-registry.yml")
 	assertFileContains(t, root, filepath.FromSlash(".github/workflows/release.yml"), "node scripts/verify-release-version.js")
 	assertFileContains(t, root, filepath.FromSlash("scripts/generate-server-json.js"), "const forkRepository = '"+forkRepository+"'")
@@ -204,8 +204,8 @@ func TestContainerAndSmitheryMetadataMatchTheRuntimeContract(t *testing.T) {
 	assertFileContains(t, root, "Dockerfile", "FROM golang:1.26.5-alpine3.24 AS builder")
 	assertFileContains(t, root, "Dockerfile", "FROM alpine:3.24.1")
 	assertFileContains(t, root, "Dockerfile", "USER 10001:10001")
-	assertFileContains(t, root, "Dockerfile", `ENTRYPOINT ["/usr/local/bin/mcp-file-tools"]`)
-	assertFileContains(t, root, "smithery.yaml", "command: '/usr/local/bin/mcp-file-tools'")
+	assertFileContains(t, root, "Dockerfile", `ENTRYPOINT ["/usr/local/bin/scripthold"]`)
+	assertFileContains(t, root, "smithery.yaml", "command: '/usr/local/bin/scripthold'")
 	assertFileContains(t, root, "smithery.yaml", "const args = ['--transport=stdio', config.allowedDirectory]")
 }
 

@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 func (h *Handler) HandleWriteFile(ctx context.Context, req *mcp.CallToolRequest, input WriteFileInput) (*mcp.CallToolResult, WriteFileOutput, error) {

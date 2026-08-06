@@ -1,12 +1,12 @@
 .PHONY: build test lint clean install run help
 
-BINARY_NAME=mcp-file-tools
+BINARY_NAME=scripthold
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
 
 ## build: Build the binary
 build:
-	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/mcp-file-tools
+	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/scripthold
 
 ## test: Run tests
 test:
@@ -30,7 +30,7 @@ clean:
 
 ## install: Install binary to GOPATH/bin
 install:
-	go install $(LDFLAGS) ./cmd/mcp-file-tools
+	go install $(LDFLAGS) ./cmd/scripthold
 
 ## run: Build and run
 run: build
@@ -43,12 +43,12 @@ tidy:
 ## build-all: Build for all platforms
 build-all:
 	mkdir -p dist
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-amd64.exe ./cmd/mcp-file-tools
-	GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-arm64.exe ./cmd/mcp-file-tools
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-amd64 ./cmd/mcp-file-tools
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-arm64 ./cmd/mcp-file-tools
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-amd64 ./cmd/mcp-file-tools
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-arm64 ./cmd/mcp-file-tools
+	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-amd64.exe ./cmd/scripthold
+	GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-arm64.exe ./cmd/scripthold
+	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-amd64 ./cmd/scripthold
+	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-arm64 ./cmd/scripthold
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-amd64 ./cmd/scripthold
+	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-arm64 ./cmd/scripthold
 
 ## help: Show this help
 help:

@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	internalexecution "github.com/zoster81/mcp-file-tools/internal/execution"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	internalexecution "github.com/zoster81/scripthold/internal/execution"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 // RunScriptInput executes a script located inside an allowed directory.

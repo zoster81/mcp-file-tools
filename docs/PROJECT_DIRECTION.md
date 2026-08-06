@@ -1,12 +1,20 @@
-# Project Direction and Upstream Relationship
+# Scripthold Project Direction and Upstream Relationship
 
-`zoster81/mcp-file-tools` is an independently versioned downstream fork of [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools). It preserves the original project's encoding-aware text-file purpose and GPL-3.0 lineage, while maintaining its own module path, MCP Registry identity, release pipeline, public API decisions, transport architecture, and deployment documentation.
+**Scripthold** is the product identity of `zoster81/scripthold`, an independently versioned downstream fork of [`dimitar-grigorov/mcp-file-tools`](https://github.com/dimitar-grigorov/mcp-file-tools), created by **Dimitar Grigorov**. It preserves the original project's encoding-aware text-file purpose and GPL-3.0 lineage, while maintaining its own module path, MCP Registry identity, release pipeline, public API decisions, transport architecture, and deployment documentation.
 
 This repository is not a compatibility branch intended for routine merging with upstream. Both projects may develop useful ideas independently, but changes must be reviewed and implemented against each project's current architecture rather than copied or synchronized mechanically.
 
+## Product identity
+
+**Code from the web. Work locally. Recover safely.**
+
+Scripthold is a secure local workspace runtime that lets web-based and local AI agents work with real source code and text files inside explicitly authorized directories.
+
+**Scripthold was built with Scripthold.** Its own development has used the same web-to-local workflow offered to users.
+
 ## Product scope
 
-The fork is a secure, encoding-aware MCP filesystem service for local, tunneled, containerized, and explicitly secured network deployments. Its supported scope includes:
+Scripthold is a secure, encoding-aware MCP filesystem service for local, tunneled, containerized, and explicitly secured network deployments. Its supported scope includes:
 
 - the same authoritative 27-tool unreleased source catalog over stdio and native stateful Streamable HTTP;
 - process-wide allowed-directory policy with symlink, junction, reparse-point, and missing-ancestor validation;
@@ -31,7 +39,7 @@ Both transports construct the server through the same `BuildServer` path and exp
 
 ## Relationship to upstream
 
-Upstream remains the source of the original encoding-aware file-tool implementation and continues to evolve as its own product. This fork retains attribution and tracks upstream developments for ideas, bug reports, and security lessons, but it does not promise source-level or schema compatibility with later upstream releases.
+The original project created by Dimitar Grigorov remains the source of the encoding-aware file-tool implementation and continues to evolve as its own product. This fork retains attribution and tracks upstream developments for ideas, bug reports, and security lessons, but it does not promise source-level or schema compatibility with later upstream releases.
 
 Potential upstream suggestions should be concept-level and narrowly scoped to the original project's product boundaries. Features that depend on this fork's native HTTP service, execution tools, process-wide multi-transport policy, fork-owned Registry identity, or deployment infrastructure should remain fork-specific unless upstream independently chooses those directions.
 

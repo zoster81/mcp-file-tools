@@ -11,10 +11,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/zoster81/mcp-file-tools/filetoolsserver"
-	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
-	"github.com/zoster81/mcp-file-tools/internal/backupstore"
-	"github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/scripthold/filetoolsserver"
+	"github.com/zoster81/scripthold/filetoolsserver/handler"
+	"github.com/zoster81/scripthold/internal/backupstore"
+	"github.com/zoster81/scripthold/internal/encoding"
 )
 
 var failed = 0

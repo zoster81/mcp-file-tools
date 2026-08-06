@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/internal/encoding"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/internal/encoding"
+	"github.com/zoster81/scripthold/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/security"
 )
 
 const defaultMaxFiles = 1000

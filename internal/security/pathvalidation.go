@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 // AllowedDirectorySet keeps both the requested spelling of each configured

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/scripthold/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 func TestPlanGCDeterministicRetentionFloorPinsAndReferenceCounts(t *testing.T) {

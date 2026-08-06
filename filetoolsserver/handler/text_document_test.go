@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
 )
 
 func encodeUTF16WithoutBOM(t *testing.T, charset, content string) []byte {

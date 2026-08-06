@@ -8,7 +8,7 @@ import (
 	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/internal/security"
 )
 
 // HandleListDirectory lists files in a directory with optional pattern filtering

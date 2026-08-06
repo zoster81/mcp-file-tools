@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
+	"github.com/zoster81/scripthold/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 type bomInfo struct {

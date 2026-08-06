@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zoster81/mcp-file-tools/internal/filesystem"
+	"github.com/zoster81/scripthold/internal/filesystem"
 )
 
 func FuzzDecodeDescriptor(f *testing.F) {

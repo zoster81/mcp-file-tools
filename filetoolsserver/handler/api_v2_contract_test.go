@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/scripthold/internal/config"
 
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 func TestV2PublicJSONTagsUseCamelCase(t *testing.T) {

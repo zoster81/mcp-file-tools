@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/zoster81/mcp-file-tools/internal/operation"
+	"github.com/zoster81/scripthold/internal/operation"
 )
 
 // FileIdentity retains an open reference to one regular file so callers can

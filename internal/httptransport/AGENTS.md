@@ -26,7 +26,7 @@ Start with:
 
 ```bash
 go test ./internal/httptransport -count=1
-go test ./cmd/mcp-file-tools ./filetoolsserver ./filetoolsserver/handler -count=1
+go test ./cmd/scripthold ./filetoolsserver ./filetoolsserver/handler -count=1
 ```
 
 Security-sensitive changes require negative tests for authentication, Host/Origin, proxy trust, body and aggregate limits, concurrency, session admission/cleanup, cancellation, logging redaction, and shutdown. Run the complete race suite before completion.

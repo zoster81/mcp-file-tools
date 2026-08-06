@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/backupstore"
-	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/scripthold/internal/backupstore"
+	"github.com/zoster81/scripthold/internal/config"
 )
 
 func TestParseBackupDiagnosticCommandIsStrictAndUnambiguous(t *testing.T) {

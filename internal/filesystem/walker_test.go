@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/security"
+	"github.com/zoster81/scripthold/internal/security"
 )
 
 func TestWalk_DeterministicOrderAndMetadata(t *testing.T) {

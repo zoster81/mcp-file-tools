@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zoster81/mcp-file-tools/filetoolsserver"
+	"github.com/zoster81/scripthold/filetoolsserver"
 )
 
 func TestRunnerRedactsTLSFilePaths(t *testing.T) {

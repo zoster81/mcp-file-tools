@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Verify HTTP transport integration
-        run: go test ./internal/httptransport ./cmd/mcp-file-tools -count=1
+        run: go test ./internal/httptransport ./cmd/scripthold -count=1
 
       - name: Run tests with race detector
         run: go test -race ./... -count=1
@@ -64,7 +64,7 @@ jobs:
           go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeIndex$' -fuzztime=5s
           go test ./internal/backupstore -run '^$' -fuzz '^FuzzDecodeListCursor$' -fuzztime=5s
           go test ./internal/backupstore -run '^$' -fuzz '^FuzzValidateGCPlan$' -fuzztime=5s
-          go test ./cmd/mcp-file-tools -run '^$' -fuzz '^FuzzParseBackupDiagnosticCommand$' -fuzztime=5s
+          go test ./cmd/scripthold -run '^$' -fuzz '^FuzzParseBackupDiagnosticCommand$' -fuzztime=5s
 
       - name: Lint GitHub Actions workflows
         if: matrix.os == 'ubuntu-latest'
@@ -77,20 +77,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          binary="${PWD}/mcp-file-tools-smoke"
+          binary="${PWD}/scripthold-smoke"
           if [[ "${RUNNER_OS}" == "Windows" ]]; then
             binary="${binary}.exe"
           fi
           version="ci-${GITHUB_SHA::12}"
           go build -trimpath \
-            -ldflags="-s -w -X main.version=${version} -X github.com/zoster81/mcp-file-tools/filetoolsserver.Version=${version}" \
+            -ldflags="-s -w -X main.version=${version} -X github.com/zoster81/scripthold/filetoolsserver.Version=${version}" \
             -o "${binary}" \
-            ./cmd/mcp-file-tools
+            ./cmd/scripthold
           export MCP_EXTERNAL_SMOKE_EXECUTABLE="${binary}"
           export MCP_EXTERNAL_SMOKE_ARGS_JSON='["--transport=stdio","{TEMP_ROOT}"]'
           export MCP_EXTERNAL_SMOKE_EXPECTED_VERSION="${version}"
           export MCP_EXTERNAL_SMOKE_EXPECTED_ROOT='{TEMP_ROOT}'
-          go test ./cmd/mcp-file-tools -run '^TestExternalStdioBinarySmoke$' -count=1 -v
+          go test ./cmd/scripthold -run '^TestExternalStdioBinarySmoke$' -count=1 -v
 
       - name: Test all server operations
         run: go run test_server.go

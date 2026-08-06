@@ -59,7 +59,7 @@ A future repair or salvage workflow requires a separate approved design after di
 The implemented command namespace is:
 
 ```text
-mcp-file-tools backup-store diagnose --store <absolute-path> [options]
+scripthold backup-store diagnose --store <absolute-path> [options]
 ```
 
 The command is selected before transport parsing and never starts an MCP server. It does not read `MCP_BACKUP_STORE_DIR`; the store path must be supplied explicitly so ambient server configuration cannot select a diagnostic target accidentally.

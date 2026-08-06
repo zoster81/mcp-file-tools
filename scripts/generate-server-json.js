@@ -4,8 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const forkRepository = 'https://github.com/zoster81/mcp-file-tools';
-const forkRegistryName = 'io.github.zoster81/mcp-file-tools';
+const forkRepository = 'https://github.com/zoster81/scripthold';
+const forkRegistryName = 'io.github.zoster81/scripthold';
 const zeroSha256 = '0'.repeat(64);
 
 function fail(message) {
@@ -95,7 +95,7 @@ for (const pkg of manifest.packages) {
   pkg.fileSha256 = checksum;
 }
 
-const rawBinaryPattern = /^mcp-file-tools_(?:windows|linux|darwin)_(?:amd64|arm64)(?:\.exe)?$/;
+const rawBinaryPattern = /^scripthold_(?:windows|linux|darwin)_(?:amd64|arm64)(?:\.exe)?$/;
 const unexpected = [...checksums.keys()].filter((filename) => rawBinaryPattern.test(filename) && !seenPackages.has(filename));
 if (unexpected.length > 0) {
   fail(`release contains unrepresented MCP binaries: ${unexpected.join(', ')}`);

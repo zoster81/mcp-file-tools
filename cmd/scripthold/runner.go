@@ -6,8 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
-	"github.com/zoster81/mcp-file-tools/internal/httptransport"
+	"github.com/zoster81/scripthold/filetoolsserver/handler"
+	"github.com/zoster81/scripthold/internal/httptransport"
 )
 
 type serverRunner interface {

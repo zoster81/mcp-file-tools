@@ -1,6 +1,6 @@
 # Streamable HTTP Security Design
 
-This document is the approved R12 security design for native MCP Streamable HTTP in `mcp-file-tools`. R13 must implement these requirements without weakening the process-wide filesystem policy established in R11.
+This document is the approved R12 security design for native MCP Streamable HTTP in `scripthold`. R13 must implement these requirements without weakening the process-wide filesystem policy established in R11.
 
 ## Scope
 

@@ -23,7 +23,7 @@ Platform-specific locking, reparse detection, and directory synchronization belo
 
 ```bash
 go test ./internal/backupstore -count=1
-go test ./internal/security ./internal/config ./filetoolsserver/handler ./cmd/mcp-file-tools -count=1
+go test ./internal/security ./internal/config ./filetoolsserver/handler ./cmd/scripthold -count=1
 go test ./... -count=1
 git diff --check
 ```

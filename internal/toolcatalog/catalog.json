@@ -257,7 +257,7 @@
     {
       "name": "check_for_updates",
       "title": "Check for Updates",
-      "description": "Check if a newer version of mcp-file-tools is available. Returns current version, latest version, and update instructions if outdated. Uses cached result (max 1 GitHub API call per 30 minutes). Call once at the start of each session.",
+      "description": "Check if a newer version of scripthold is available. Returns current version, latest version, and update instructions if outdated. Uses cached result (max 1 GitHub API call per 30 minutes). Call once at the start of each session.",
       "annotations": {
         "readOnlyHint": true
       }

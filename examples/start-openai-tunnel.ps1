@@ -30,7 +30,7 @@
 
     # Place both executables next to this script, or change these paths.
     $TunnelClient = Join-Path $PSScriptRoot "tunnel-client.exe"
-    $McpServer = Join-Path $PSScriptRoot "mcp-file-tools_windows_amd64.exe"
+    $McpServer = Join-Path $PSScriptRoot "scripthold_windows_amd64.exe"
 
     function Assert-FileExists {
         param(
@@ -90,7 +90,7 @@
     $AllowedDirectory = $allowedItem.FullName
 
     Assert-FileExists -Path $TunnelClient -Description "OpenAI tunnel client"
-    Assert-FileExists -Path $McpServer -Description "mcp-file-tools server"
+    Assert-FileExists -Path $McpServer -Description "scripthold server"
 
     # The tunnel mcp.command parser treats backslashes as escape characters.
     # Forward slashes preserve Windows paths and are accepted by Windows APIs.

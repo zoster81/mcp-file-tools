@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/filetoolsserver"
-	"github.com/zoster81/mcp-file-tools/filetoolsserver/handler"
-	"github.com/zoster81/mcp-file-tools/internal/backupstore"
-	"github.com/zoster81/mcp-file-tools/internal/config"
+	"github.com/zoster81/scripthold/filetoolsserver"
+	"github.com/zoster81/scripthold/filetoolsserver/handler"
+	"github.com/zoster81/scripthold/internal/backupstore"
+	"github.com/zoster81/scripthold/internal/config"
 )
 
 func TestHandlerHealthAndReadinessExposeNoSensitiveState(t *testing.T) {
@@ -42,7 +42,7 @@ func TestHandlerHealthAndReadinessExposeNoSensitiveState(t *testing.T) {
 		if rec.Code != test.status || rec.Body.String() != test.body {
 			t.Fatalf("%s = %d %q, want %d %q", test.path, rec.Code, rec.Body.String(), test.status, test.body)
 		}
-		if strings.Contains(rec.Body.String(), "mcp-file-tools") || strings.Contains(rec.Body.String(), "root") {
+		if strings.Contains(rec.Body.String(), "scripthold") || strings.Contains(rec.Body.String(), "root") {
 			t.Fatalf("health response leaked details: %q", rec.Body.String())
 		}
 	}

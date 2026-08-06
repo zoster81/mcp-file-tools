@@ -67,8 +67,8 @@ func TestCheckDevVersion(t *testing.T) {
 }
 
 func TestForkUpdateSource(t *testing.T) {
-	const expectedAPI = "https://api.github.com/repos/zoster81/mcp-file-tools/releases/latest"
-	const expectedRepo = "https://github.com/zoster81/mcp-file-tools"
+	const expectedAPI = "https://api.github.com/repos/zoster81/scripthold/releases/latest"
+	const expectedRepo = "https://github.com/zoster81/scripthold"
 
 	if UpdateCheckURL != expectedAPI {
 		t.Fatalf("UpdateCheckURL = %q, want %q", UpdateCheckURL, expectedAPI)

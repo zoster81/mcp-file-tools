@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/scripthold/internal/config"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
 )
 
 // Helper to extract text from MCP content

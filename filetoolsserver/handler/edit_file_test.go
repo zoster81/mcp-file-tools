@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoster81/mcp-file-tools/internal/config"
-	fileEncoding "github.com/zoster81/mcp-file-tools/internal/encoding"
+	"github.com/zoster81/scripthold/internal/config"
+	fileEncoding "github.com/zoster81/scripthold/internal/encoding"
 )
 
 func TestHandleEditFileRejectsFileAboveFullDocumentLimit(t *testing.T) {

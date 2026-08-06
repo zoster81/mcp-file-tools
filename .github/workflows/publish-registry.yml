@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   publish:
-    if: github.repository == 'zoster81/mcp-file-tools'
+    if: github.repository == 'zoster81/scripthold'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

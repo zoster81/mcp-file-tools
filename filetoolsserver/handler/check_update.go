@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/zoster81/mcp-file-tools/internal/updater"
+	"github.com/zoster81/scripthold/internal/updater"
 )
 
 // CheckUpdateInput is the input for check_for_updates.

@@ -5,9 +5,9 @@ before:
     - go mod verify
 
 builds:
-  - id: mcp-file-tools
-    main: ./cmd/mcp-file-tools
-    binary: mcp-file-tools
+  - id: scripthold
+    main: ./cmd/scripthold
+    binary: scripthold
     env:
       - CGO_ENABLED=0
     goos:
@@ -24,12 +24,12 @@ builds:
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
-      - -X github.com/zoster81/mcp-file-tools/filetoolsserver.Version={{.Version}}
+      - -X github.com/zoster81/scripthold/filetoolsserver.Version={{.Version}}
 
 archives:
   - id: default
     ids:
-      - mcp-file-tools
+      - scripthold
     formats:
       - tar.gz
     format_overrides:
@@ -83,7 +83,7 @@ archives:
 # Also publish raw binaries for MCP registry (GoReleaser adds .exe automatically for Windows)
   - id: binaries
     ids:
-      - mcp-file-tools
+      - scripthold
     formats:
       - binary
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
@@ -103,7 +103,7 @@ changelog:
 release:
   github:
     owner: zoster81
-    name: mcp-file-tools
+    name: scripthold
 
 # MCP Registry publication is handled by publish-registry.yml after the release
 # workflow verifies checksums and generates the release-specific server.json.

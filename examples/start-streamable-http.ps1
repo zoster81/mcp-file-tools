@@ -14,9 +14,9 @@
     # --------------------------------------------------------------------------
     # Required configuration
     # --------------------------------------------------------------------------
-    $McpServer = Join-Path $PSScriptRoot "mcp-file-tools_windows_amd64.exe"
+    $McpServer = Join-Path $PSScriptRoot "scripthold_windows_amd64.exe"
     $AllowedDirectory = "C:\Path\To\AllowedProject"
-    $TokenFile = "C:\Path\To\mcp-file-tools.token"
+    $TokenFile = "C:\Path\To\scripthold.token"
 
     # --------------------------------------------------------------------------
     # Listener policy
