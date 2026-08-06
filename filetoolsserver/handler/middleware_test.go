@@ -169,40 +169,46 @@ func TestWrap_CombinesMiddleware(t *testing.T) {
 
 func TestUnstringifyJSONArgs(t *testing.T) {
 	tests := []struct {
-		name string
-		in   string
-		want string
+		name     string
+		toolName string
+		in       string
+		want     string
 	}{
 		{
-			name: "edits sent as JSON string",
-			in:   `{"path":"a.txt","edits":"[{\"oldText\":\"x\",\"newText\":\"y\"}]"}`,
-			want: `{"edits":[{"oldText":"x","newText":"y"}],"path":"a.txt"}`,
+			name:     "edits sent as JSON string",
+			toolName: "edit_file",
+			in:       `{"path":"a.txt","edits":"[{\"oldText\":\"x\",\"newText\":\"y\"}]"}`,
+			want:     `{"edits":[{"oldText":"x","newText":"y"}],"path":"a.txt"}`,
 		},
 		{
-			name: "paths sent as JSON string",
-			in:   `{"paths":"[\"a\",\"b\"]"}`,
-			want: `{"paths":["a","b"]}`,
+			name:     "paths sent as JSON string",
+			toolName: "read_multiple_files",
+			in:       `{"paths":"[\"a\",\"b\"]"}`,
+			want:     `{"paths":["a","b"]}`,
 		},
 		{
-			name: "proper array left unchanged",
-			in:   `{"paths":["a","b"]}`,
-			want: `{"paths":["a","b"]}`,
+			name:     "proper array left unchanged",
+			toolName: "read_multiple_files",
+			in:       `{"paths":["a","b"]}`,
+			want:     `{"paths":["a","b"]}`,
 		},
 		{
-			name: "plain string field left unchanged",
-			in:   `{"path":"C:/dir/file.txt"}`,
-			want: `{"path":"C:/dir/file.txt"}`,
+			name:     "plain string field left unchanged",
+			toolName: "write_file",
+			in:       `{"path":"C:/dir/file.txt"}`,
+			want:     `{"path":"C:/dir/file.txt"}`,
 		},
 		{
-			name: "invalid json returned as-is",
-			in:   `not json`,
-			want: `not json`,
+			name:     "invalid json returned as-is",
+			toolName: "read_multiple_files",
+			in:       `not json`,
+			want:     `not json`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := string(unstringifyJSONArgs(json.RawMessage(tt.in)))
+			got := string(unstringifyJSONArgs(tt.toolName, json.RawMessage(tt.in)))
 			if !jsonEqual(got, tt.want) {
 				t.Errorf("unstringifyJSONArgs(%s) = %s, want %s", tt.in, got, tt.want)
 			}
@@ -210,25 +216,99 @@ func TestUnstringifyJSONArgs(t *testing.T) {
 	}
 }
 
+func TestStringifiedJSONArgumentFieldAllowlist(t *testing.T) {
+	tests := []struct {
+		toolName string
+		field    string
+		wrapped  string
+	}{
+		{toolName: "read_multiple_files", field: "paths", wrapped: `["a"]`},
+		{toolName: "grep_text_files", field: "patterns", wrapped: `["x"]`},
+		{toolName: "grep_text_files", field: "paths", wrapped: `["a"]`},
+		{toolName: "grep_text_files", field: "includes", wrapped: `["*.go"]`},
+		{toolName: "grep_text_files", field: "excludes", wrapped: `["vendor/**"]`},
+		{toolName: "tree", field: "exclude", wrapped: `[".git"]`},
+		{toolName: "search_files", field: "excludePatterns", wrapped: `["*.tmp"]`},
+		{toolName: "fingerprint_paths", field: "paths", wrapped: `["a"]`},
+		{toolName: "verify_state", field: "checks", wrapped: `[{"type":"json"}]`},
+		{toolName: "edit_file", field: "edits", wrapped: `[{"oldText":"x","newText":"y"}]`},
+		{toolName: "patch_package", field: "manifest", wrapped: `{"formatVersion":"patch-package-v1"}`},
+		{toolName: "convert_encoding", field: "paths", wrapped: `["a"]`},
+		{toolName: "run_script", field: "args", wrapped: `["--flag"]`},
+	}
+
+	allowedCount := 0
+	for _, fields := range stringifiedJSONArgumentFields {
+		allowedCount += len(fields)
+	}
+	if allowedCount != len(tests) {
+		t.Fatalf("allowlist contains %d fields, test covers %d", allowedCount, len(tests))
+	}
+
+	for _, test := range tests {
+		t.Run(test.toolName+"/"+test.field, func(t *testing.T) {
+			if _, ok := stringifiedJSONArgumentFields[test.toolName][test.field]; !ok {
+				t.Fatalf("missing allowlist entry for %s.%s", test.toolName, test.field)
+			}
+			raw, err := json.Marshal(map[string]string{test.field: test.wrapped})
+			if err != nil {
+				t.Fatal(err)
+			}
+			repaired := unstringifyJSONArgs(test.toolName, raw)
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(repaired, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if string(fields[test.field]) != test.wrapped {
+				t.Fatalf("repaired %s.%s = %s, want %s", test.toolName, test.field, fields[test.field], test.wrapped)
+			}
+		})
+	}
+}
+
 func TestRepairStringifiedArrayArgs(t *testing.T) {
-	req := &mcp.CallToolRequest{
-		Params: &mcp.CallToolParamsRaw{
-			Name:      "read_multiple_files",
-			Arguments: json.RawMessage(`{"paths":"[\"a\",\"b\"]"}`),
+	tests := []struct {
+		name     string
+		toolName string
+		input    string
+		want     string
+	}{
+		{
+			name:     "repairs declared array argument",
+			toolName: "read_multiple_files",
+			input:    `{"paths":"[\"a\",\"b\"]"}`,
+			want:     `{"paths":["a","b"]}`,
+		},
+		{
+			name:     "preserves JSON document string content",
+			toolName: "write_file",
+			input:    `{"path":"state.json","content":"{\"ok\":true}","encoding":"utf-8"}`,
+			want:     `{"path":"state.json","content":"{\"ok\":true}","encoding":"utf-8"}`,
 		},
 	}
 
-	var seen json.RawMessage
-	next := func(ctx context.Context, method string, r mcp.Request) (mcp.Result, error) {
-		seen = r.(*mcp.CallToolRequest).Params.Arguments
-		return nil, nil
-	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := &mcp.CallToolRequest{
+				Params: &mcp.CallToolParamsRaw{
+					Name:      test.toolName,
+					Arguments: json.RawMessage(test.input),
+				},
+			}
 
-	if _, err := RepairStringifiedArrayArgs(next)(context.Background(), "tools/call", req); err != nil {
-		t.Fatalf("middleware returned error: %v", err)
-	}
-	if !jsonEqual(string(seen), `{"paths":["a","b"]}`) {
-		t.Errorf("downstream saw %s, want repaired array", seen)
+			var seen json.RawMessage
+			next := func(ctx context.Context, method string, r mcp.Request) (mcp.Result, error) {
+				seen = r.(*mcp.CallToolRequest).Params.Arguments
+				return nil, nil
+			}
+
+			if _, err := RepairStringifiedArrayArgs(next)(context.Background(), "tools/call", req); err != nil {
+				t.Fatalf("middleware returned error: %v", err)
+			}
+			if !jsonEqual(string(seen), test.want) {
+				t.Errorf("downstream saw %s, want %s", seen, test.want)
+			}
+		})
 	}
 }
 

@@ -49,6 +49,40 @@ func TestBuildServerTreatsTypedNilBackupStoreAsDisabled(t *testing.T) {
 	}
 }
 
+func TestBuildServerPreservesJSONTextInStringArguments(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	root := t.TempDir()
+	path := filepath.Join(root, "state.json")
+	server := BuildServer(ServerOptions{
+		Version:            "json-string-architecture-test",
+		AllowedDirectories: []string{root},
+		Config:             config.Load(),
+		EnableClientRoots:  false,
+		LifecycleContext:   ctx,
+	})
+	session := connectTestClient(t, ctx, server, "json-string-architecture")
+
+	content := "{\"ok\":true}\n"
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "write_file",
+		Arguments: map[string]any{
+			"path": path, "content": content, "encoding": "utf-8",
+		},
+	})
+	if err != nil || result.IsError {
+		t.Fatalf("write JSON text result=%#v err=%v", result, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != content {
+		t.Fatalf("written bytes=%q, want %q", data, content)
+	}
+}
+
 func TestBuildServerWiresAndProtectsConfiguredBackupStore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

@@ -39,6 +39,7 @@ The upstream baseline for the first fork-specific changes is commit `52665aa080b
 
 ### Changed
 
+- Fixed MCP compatibility argument repair so JSON-looking string fields such as `write_file.content` remain strings, while only the exact declared top-level array/object fields for each tool are decoded from stringified JSON.
 - Fixed disabled `backup_store status` calls so a typed nil store passed through server bootstrap is treated as unconfigured and returns the documented `enabled: false` result instead of `INVALID_INPUT`.
 - Expanded the current unreleased source catalog from 23 to 27 tools while preserving identical stdio and Streamable HTTP schemas and behavior.
 - Extended `edit_file` additively with `action=direct|preview|apply`, structured approval metadata, and preview-only `backupPolicy: "required"` while preserving omitted-action direct editing and the existing no-backup default.

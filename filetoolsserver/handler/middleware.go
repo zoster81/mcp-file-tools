@@ -61,20 +61,47 @@ func Wrap[In, Out any](logger *slog.Logger, toolName string, handler mcp.ToolHan
 	return wrapped
 }
 
-// RepairStringifiedArrayArgs decodes array/object tool args that some MCP
-// clients send as a JSON-encoded string, so schema validation succeeds.
+// RepairStringifiedArrayArgs decodes declared array/object tool args that some
+// MCP clients send as a JSON-encoded string, so schema validation succeeds.
+// String-valued fields are never inferred from their contents: valid JSON text
+// remains text unless the exact tool schema declares that top-level field as an
+// array or object.
 func RepairStringifiedArrayArgs(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		if r, ok := req.(*mcp.CallToolRequest); ok && r.Params != nil {
-			r.Params.Arguments = unstringifyJSONArgs(r.Params.Arguments)
+			r.Params.Arguments = unstringifyJSONArgs(r.Params.Name, r.Params.Arguments)
 		}
 		return next(ctx, method, req)
 	}
 }
 
-// unstringifyJSONArgs decodes top-level fields whose value is a JSON string
-// wrapping an array or object. Returns input unchanged if nothing needs repair.
-func unstringifyJSONArgs(raw json.RawMessage) json.RawMessage {
+// stringifiedJSONArgumentFields lists the public top-level array/object fields
+// for which compatibility repair is safe. The tool name is part of the key so
+// an identically named string field in another schema cannot be reinterpreted.
+var stringifiedJSONArgumentFields = map[string]map[string]struct{}{
+	"read_multiple_files": {"paths": {}},
+	"grep_text_files": {
+		"patterns": {}, "paths": {}, "includes": {}, "excludes": {},
+	},
+	"tree":              {"exclude": {}},
+	"search_files":      {"excludePatterns": {}},
+	"fingerprint_paths": {"paths": {}},
+	"verify_state":      {"checks": {}},
+	"edit_file":         {"edits": {}},
+	"patch_package":     {"manifest": {}},
+	"convert_encoding":  {"paths": {}},
+	"run_script":        {"args": {}},
+}
+
+// unstringifyJSONArgs decodes only declared top-level array/object fields whose
+// value is a JSON string wrapping an array or object. It returns input unchanged
+// if the tool has no compatible fields or nothing needs repair.
+func unstringifyJSONArgs(toolName string, raw json.RawMessage) json.RawMessage {
+	allowedFields := stringifiedJSONArgumentFields[toolName]
+	if len(allowedFields) == 0 {
+		return raw
+	}
+
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {
 		return raw
@@ -82,6 +109,9 @@ func unstringifyJSONArgs(raw json.RawMessage) json.RawMessage {
 
 	changed := false
 	for name, val := range fields {
+		if _, allowed := allowedFields[name]; !allowed {
+			continue
+		}
 		var s string
 		if json.Unmarshal(val, &s) != nil {
 			continue // not a JSON string
